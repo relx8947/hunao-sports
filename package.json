@@ -1,0 +1,13 @@
+{
+  "name": "hunao-sports",
+  "version": "1.0.0",
+  "description": "胡闹运动会 —— 多人实时网页竞速桌游（房间码联机 + AI 补位）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/rules.js && node test/sim.js 1000"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": { "ws": "^8.18.0" },
+  "license": "MIT"
+}

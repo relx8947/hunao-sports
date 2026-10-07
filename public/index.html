@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#FBF6EC">
+  <title>胡闹运动会</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='52' height='52' rx='12' fill='%23FFC53D' stroke='%23231F33' stroke-width='5'/%3E%3Ccircle cx='22' cy='22' r='5' fill='%23231F33'/%3E%3Ccircle cx='42' cy='42' r='5' fill='%23231F33'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23231F33'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 首页 -->
+    <section id="home" class="screen">
+      <div class="home-stripes" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="home-inner">
+        <header class="logo">
+          <div class="logo-badge">联机试玩版 · 3-6 名选手 · 36 名运动员</div>
+          <h1 class="logo-text" aria-label="胡闹运动会">
+            <span class="lt" style="--i:0">胡</span><span class="lt" style="--i:1">闹</span><span class="lt" style="--i:2">运</span><span class="lt" style="--i:3">动</span><span class="lt" style="--i:4">会</span>
+          </h1>
+          <p class="tagline">掷骰子、放技能、互相使坏 —— 史上最乱来的赛跑</p>
+        </header>
+        <div class="parade" id="parade" aria-hidden="true"></div>
+        <div class="home-card card">
+          <label class="field">
+            <span>你的昵称</span>
+            <input id="nameInput" maxlength="12" placeholder="起个响亮的名字" autocomplete="off">
+          </label>
+          <div class="quick-row">
+            <button id="quickBtn" class="btn primary big">
+              <span class="ico" data-icon="play"></span>和 AI 开一局
+            </button>
+            <div class="seg" id="aiCount" role="radiogroup" aria-label="AI 对手数">
+              <span class="seg-label">对手</span>
+              <button data-v="2">2</button><button data-v="3" class="on">3</button><button data-v="4">4</button><button data-v="5">5</button>
+            </div>
+          </div>
+          <div class="divider"><span>或者和朋友联机</span></div>
+          <div class="join-row">
+            <button id="createBtn" class="btn"><span class="ico" data-icon="users"></span>创建房间</button>
+            <div class="code-join">
+              <input id="codeInput" maxlength="4" placeholder="房间码" autocomplete="off" spellcheck="false">
+              <button id="joinBtn" class="btn">加入</button>
+            </div>
+          </div>
+        </div>
+        <footer class="home-foot">
+          <button class="link" data-open="rules"><span class="ico" data-icon="book"></span>玩法说明</button>
+          <button class="link" data-open="gallery"><span class="ico" data-icon="users"></span>运动员图鉴</button>
+        </footer>
+      </div>
+    </section>
+
+    <!-- 房间 -->
+    <section id="lobby" class="screen" hidden>
+      <div class="lobby-inner">
+        <button class="btn ghost back" id="leaveLobby"><span class="ico" data-icon="door"></span>离开</button>
+        <div class="room-head">
+          <div class="room-label">房间码</div>
+          <div class="room-code" id="roomCode">----</div>
+          <button class="btn small" id="copyLink"><span class="ico" data-icon="link"></span>复制邀请链接</button>
+          <div class="invite-link" id="inviteLinkBox" hidden>
+            <label for="inviteLinkInput">邀请链接</label>
+            <input id="inviteLinkInput" readonly aria-describedby="inviteLinkTip">
+            <span id="inviteLinkTip">点击全选，长按或按 Ctrl/Cmd+C 复制给朋友</span>
+          </div>
+        </div>
+        <div class="seats" id="seats"></div>
+        <div class="lobby-actions">
+          <button class="btn" id="addAI"><span class="ico" data-icon="robot"></span>加一个 AI</button>
+          <button class="btn primary big" id="startBtn"><span class="ico" data-icon="flag"></span>开始比赛</button>
+        </div>
+        <p class="lobby-tip" id="lobbyTip">把房间码发给朋友，人不够可以加 AI。3-6 人开赛。</p>
+      </div>
+    </section>
+
+    <!-- 对局 -->
+    <section id="game" class="screen" hidden>
+      <header class="topbar">
+        <div class="races" id="races"></div>
+        <div class="top-title" id="topTitle">选秀阶段</div>
+        <div class="top-actions">
+          <button class="icon-btn" id="speedBtn" title="动画速度"><span class="ico" data-icon="bolt"></span><b id="speedLabel">1x</b></button>
+          <button class="icon-btn" id="autoBtn" title="托管"><span class="ico" data-icon="robot"></span><b>托管</b></button>
+          <button class="icon-btn" id="soundBtn" title="声音"><span class="ico" data-icon="sound"></span></button>
+          <button class="icon-btn" data-open="rules" title="玩法说明"><span class="ico" data-icon="book"></span></button>
+          <button class="icon-btn" id="leaveGame" title="离开"><span class="ico" data-icon="door"></span></button>
+        </div>
+      </header>
+      <main class="stage">
+        <div class="rankbar" id="rankbar" hidden></div>
+        <div class="board-wrap">
+          <div class="board" id="board">
+            <svg id="trackSvg" viewBox="0 0 964 392" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+            <div class="center" id="center">
+              <div class="center-main">
+                <div class="center-track" id="centerTrack"></div>
+                <div class="dice-zone" id="diceZone"></div>
+                <div class="commentary" id="commentary"></div>
+              </div>
+              <div class="turn-card" id="turnCard" hidden></div>
+            </div>
+            <div class="tokens" id="tokens"></div>
+            <div class="floaters" id="floaters"></div>
+          </div>
+        </div>
+        <div class="draft" id="draft" hidden>
+          <div class="draft-head">
+            <h2 id="draftTitle">组建你的队伍</h2>
+            <p id="draftSub">蛇形选秀：每人选 4 名运动员，四场比赛各派一名上场</p>
+          </div>
+          <div class="draft-order" id="draftOrder"></div>
+          <div class="draft-cards" id="draftCards"></div>
+          <div class="my-team" id="myTeam"></div>
+        </div>
+      </main>
+      <aside class="side">
+        <div class="players" id="players"></div>
+        <div class="emotes" id="emotes"></div>
+        <div class="feed-wrap">
+          <div class="feed-title">赛况</div>
+          <div class="feed" id="feed"></div>
+        </div>
+      </aside>
+      <div class="dock" id="dock"></div>
+    </section>
+  </div>
+
+  <div class="overlay" id="overlay" hidden></div>
+  <div class="modal" id="modal" hidden></div>
+  <div class="toasts" id="toasts"></div>
+  <div class="tip" id="tip" hidden></div>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <script src="timing.js"></script>
+  <script src="art.js"></script>
+  <script src="sound.js"></script>
+  <script src="racers-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
