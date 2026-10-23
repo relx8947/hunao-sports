@@ -39,6 +39,26 @@ const { decide } = require('../game/ai');
     assert.equal(await page.locator('#refreshRooms').isDisabled(), true);
     assert.equal(await page.locator('#watchCount [data-v="4"]').getAttribute('aria-checked'), 'true');
     assert.equal(await page.locator('#spectatorStatus').isVisible(), false);
+    // 「返回大厅」只在挂到桌游大厅的 /hunao/ 下出现（指向大厅首页）；根路径原入口不显示。
+    assert.equal(await page.locator('#hallBack').isVisible(), false, '根路径不显示返回大厅');
+    {
+      const origin = `http://127.0.0.1:${server.address().port}`;
+      const mounted = /^http:\/\/127\.0\.0\.1:\d+\/hunao\//;
+      await context.route(mounted, route => route.continue({ url: route.request().url().replace('/hunao/', '/') }));
+      const hallPage = await context.newPage();
+      hallPage.on('pageerror', error => errors.push(error.message));
+      await hallPage.goto(`${origin}/hunao/`, { waitUntil: 'load' });
+      const back = hallPage.locator('#hallBack');
+      await back.waitFor({ state: 'visible' });
+      assert.equal(await back.evaluate(a => a.href), `${origin}/`);
+      assert.match(await back.textContent(), /返回大厅/);
+      assert.equal(await back.locator('svg').count(), 1, '返回大厅用 SVG 图标');
+      const box = await back.boundingBox();
+      assert(box.height >= 44 && box.width >= 44, '返回大厅触控目标不小于 44px');
+      assert.equal(await hallPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, '返回大厅不造成横向溢出');
+      await hallPage.close();
+      await context.unroute(mounted);
+    }
     const emit = message => page.evaluate(m => window.__fakeSocket.emit(m), message);
     await emit({ type: 'hello', token: 'a'.repeat(32), id: 'p0', name: '本人', room: null });
     assert.equal(await page.locator('#quickBtn').isDisabled(), false);
@@ -676,7 +696,7 @@ const { decide } = require('../game/ai');
     await emit({ type: 'error', for: 'hello', msg: '身份凭证无效' });
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('hn_me')).token), undefined);
     assert.equal(errors.length, 0, errors.join('\n'));
-    console.log('前端回归通过：公开房间首次订阅/手动刷新/空与多房间/合法code/XSS字面显示/加入与观看与返回/满席与进行中禁用/失败刷新/断线旧列表禁用与重连刷新/隐藏无轮询/活动game隔离/真实WS建房加入离线推送与AI观战 + 普通模式原回归 + 观战3–6AI/独立人数/选秀暗选无个人操作/按序亮牌/真实四场技能与结算/房主移交/replay与retry/旧gameId隔离/断线刷新恢复/320、390、844x390、568x320无溢出');
+    console.log('前端回归通过：/hunao/ 下显示返回大厅且根路径隐藏/公开房间首次订阅/手动刷新/空与多房间/合法code/XSS字面显示/加入与观看与返回/满席与进行中禁用/失败刷新/断线旧列表禁用与重连刷新/隐藏无轮询/活动game隔离/真实WS建房加入离线推送与AI观战 + 普通模式原回归 + 观战3–6AI/独立人数/选秀暗选无个人操作/按序亮牌/真实四场技能与结算/房主移交/replay与retry/旧gameId隔离/断线刷新恢复/320、390、844x390、568x320无溢出');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

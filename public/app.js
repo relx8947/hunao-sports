@@ -1955,8 +1955,17 @@
   window.__hn = () => ({ pending: snap && snap.pending, phase: vs && vs.phase, playing, queue: queue.length, overlayKind, you, locked, mode: gameMode, gameId, navigationPending });
 
   /* ================= 启动 ================= */
+  // 同源挂在桌游大厅的 /hunao/ 下时才显示「返回大厅」，指向大厅首页；18160 原入口在根路径，保持隐藏。
+  function initHallBack() {
+    const link = $('#hallBack');
+    const m = location.pathname.match(/^(.*\/)hunao\/(?:index\.html)?$/);
+    if (!link || !m) return;
+    link.href = m[1];
+    link.hidden = false;
+  }
   function init() {
     fillIcons();
+    initHallBack();
     initTips();
     const swirl = icon('swirl').replace(/currentColor/g, INK);
     if (swirl) document.documentElement.style.setProperty('--swirl', `url("data:image/svg+xml,${encodeURIComponent(swirl)}")`);
