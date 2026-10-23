@@ -48,11 +48,12 @@ function inside(root, file) {
 
 function boundedString(value, max) { return typeof value === 'string' && value.length <= max; }
 function optionalString(value, max) { return value == null || boundedString(value, max); }
-const NO_PAYLOAD = new Set(['create', 'leave', 'addAI', 'start', 'speed', 'lobby']);
+const NO_PAYLOAD = new Set(['create', 'leave', 'addAI', 'start', 'speed', 'lobby', 'replay']);
 
 // 不将数组/对象/字符串数字强制转换成业务字段，避免非法输入绕过席位、决策或开关校验。
 function messageError(msg) {
   if (!msg || typeof msg !== 'object' || Array.isArray(msg) || !boundedString(msg.type, 32) || !msg.type) return '消息格式不正确';
+  if (msg.type === 'listRooms') return Object.keys(msg).every((key) => key === 'type') ? null : '指令参数不正确';
   if (NO_PAYLOAD.has(msg.type)) return null;
   let valid;
   switch (msg.type) {
@@ -61,6 +62,7 @@ function messageError(msg) {
     case 'join': valid = boundedString(msg.code, 16) && /^[a-z2-9]{4}$/i.test(msg.code); break;
     case 'removeAI': valid = Number.isInteger(msg.seat) && msg.seat >= 0 && msg.seat < 6; break;
     case 'quick': valid = msg.ai === undefined || (Number.isInteger(msg.ai) && msg.ai >= 2 && msg.ai <= 5); break;
+    case 'watch': valid = msg.ai === undefined || (Number.isSafeInteger(msg.ai) && msg.ai >= 3 && msg.ai <= 6); break;
     case 'act':
       valid = boundedString(msg.gameId, 64) && msg.gameId.length > 0 &&
         Number.isSafeInteger(msg.id) && msg.id > 0 &&

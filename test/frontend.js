@@ -30,14 +30,122 @@ const { decide } = require('../game/ai');
     });
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
+    page.on('console', message => { if (message.type() === 'error' && message.text().includes('播放事件出错')) errors.push(message.text()); });
     await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
     assert.equal(await page.locator('#quickBtn').isDisabled(), true);
     assert.equal(await page.locator('#createBtn').isDisabled(), true);
     assert.equal(await page.locator('#joinBtn').isDisabled(), true);
+    assert.equal(await page.locator('#watchBtn').isDisabled(), true);
+    assert.equal(await page.locator('#refreshRooms').isDisabled(), true);
+    assert.equal(await page.locator('#watchCount [data-v="4"]').getAttribute('aria-checked'), 'true');
+    assert.equal(await page.locator('#spectatorStatus').isVisible(), false);
     const emit = message => page.evaluate(m => window.__fakeSocket.emit(m), message);
     await emit({ type: 'hello', token: 'a'.repeat(32), id: 'p0', name: '本人', room: null });
     assert.equal(await page.locator('#quickBtn').isDisabled(), false);
+    // 公开房间目录只订阅列表；首次 hello、返回首页及重连都请求一次，无常驻轮询。
+    const listRequests = () => page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'listRooms').length);
+    assert((await listRequests()) >= 1, '首页 ready 后应立即请求公开房间');
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.find(m => m.type === 'listRooms')), { type: 'listRooms' });
+    assert.match(await page.locator('#roomListStatus').textContent(), /加载/);
+    assert.equal(await page.locator('#roomListStatus').getAttribute('role'), 'status');
+    await emit({ type: 'roomList', rooms: [] });
+    assert.equal(await page.locator('#roomList button[data-room-code]').count(), 0);
+    assert.match(await page.locator('#roomListStatus').textContent(), /暂无在线房间/);
+    const beforeRefresh = await listRequests();
+    await page.locator('#refreshRooms').click();
+    assert.equal(await listRequests(), beforeRefresh + 1);
+    assert.equal(await page.locator('#roomList').getAttribute('aria-busy'), 'true');
+    const entry = (code, extra = {}) => ({ code, mode: 'play', status: 'lobby', hostName: '一起开赛', playerCount: 6, aiCount: 3, humanCount: 3, onlineCount: 3, maxPlayers: 6, spectatorCount: 0, onlineSpectatorCount: 0, canJoin: true, isMember: false, ...extra });
+    const xssName = `<img src=x onerror="window.__roomXSS=1"> & " ' <script>window.__roomXSS=1</script>`;
+    const directoryRows = [
+      entry('WAIT', { hostName: '昵称很长也不会把手机屏幕挤到横向滚动的房主' }),
+      entry('VIEW', { mode: 'spectator', status: 'playing', hostName: 'AI 观战房', playerCount: 4, aiCount: 4, humanCount: 0, onlineCount: 0, spectatorCount: 3, onlineSpectatorCount: 2 }),
+      entry('BACK', { status: 'playing', isMember: true }),
+      entry('BUSY', { status: 'playing', canJoin: false }),
+      entry('DONE', { status: 'over', canJoin: false }),
+      entry('FULL', { aiCount: 0, humanCount: 6, onlineCount: 6, canJoin: false }),
+      entry('EVIL', { hostName: xssName }),
+    ];
+    const listButton = code => page.locator(`#roomList button[data-room-code="${code}"]`);
+    const publishDirectory = () => emit({ type: 'roomList', rooms: directoryRows });
+    await emit({ type: 'roomList', rooms: [...directoryRows, entry('WAIT'), entry('BAD'), entry('TOOLONG'), entry('"<x>'), entry('bad!'), entry('BADM', { mode: '<img>' }), entry('BADS', { status: '<img>' }), null] });
+    assert.equal(await page.locator('#roomList button[data-room-code]').count(), 7, '仅渲染合法且不重复的四位房间码');
+    assert.match(await page.locator('#roomListStatus').textContent(), /当前 7 个公开房间/);
+    assert.equal(await listButton('WAIT').textContent(), '加入');
+    assert.equal(await listButton('VIEW').textContent(), '观看');
+    assert.equal(await listButton('BACK').textContent(), '返回房间');
+    assert.match(await listButton('WAIT').locator('..').textContent(), /替换 AI/);
+    assert.match(await page.locator('#roomList .watch-room').textContent(), /真人 0 \/ AI 4[\s\S]*观众 3 人 · 2 人在线/);
+    for (const code of ['BUSY', 'DONE', 'FULL']) assert.equal(await listButton(code).isDisabled(), true);
+    assert.match(await listButton('BUSY').locator('..').textContent(), /比赛中，暂不可加入/);
+    assert.match(await listButton('DONE').locator('..').textContent(), /已结束，暂不可加入/);
+    assert.match(await listButton('FULL').locator('..').textContent(), /真人已满/);
+    const xssHost = listButton('EVIL').locator('xpath=ancestor::li').locator('.room-list-host');
+    assert.equal(await xssHost.textContent(), xssName);
+    assert.equal(await xssHost.getAttribute('title'), xssName);
+    assert.equal(await page.locator('#roomList img, #roomList script, #roomList [onerror]').count(), 0);
+    assert.equal(await page.evaluate(() => window.__roomXSS), undefined);
+    for (const [width, height] of [[320, 740], [390, 844], [844, 390]]) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const geometry = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight, viewportHeight: innerHeight, boxes: Array.from(document.querySelectorAll('.room-directory, #roomList, .room-list-item, .room-list-action, #roomList button, #refreshRooms')).map(e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, height: r.height, button: e.tagName === 'BUTTON' }; }) }));
+      assert(geometry.scroll <= geometry.width + 1, `${width}x${height} 首页目录不得横向溢出：${JSON.stringify(geometry)}`);
+      assert(geometry.boxes.every(r => r.left >= -1 && r.right <= geometry.width + 1), `${width}x${height} 目录控件越界`);
+      assert(geometry.boxes.filter(r => r.button).every(r => r.height >= 44), '房间与刷新按钮点击高度至少 44px');
+      assert(geometry.scrollHeight > geometry.viewportHeight, '首页扩展应允许纵向滚动');
+      await listButton('EVIL').scrollIntoViewIfNeeded();
+      assert.equal(await listButton('EVIL').isVisible(), true);
+      if (process.env.HUNAO_FRONTEND_SCREENSHOTS) await page.screenshot({ path: `/tmp/hunao-room-directory-${width}.png`, fullPage: true });
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    const ordinaryAi = await page.locator('#aiCount .on').getAttribute('data-v');
+    const watchAi = await page.locator('#watchCount .on').getAttribute('data-v');
+    await page.locator('#nameInput').fill('大厅昵称');
+    await listButton('WAIT').click();
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').at(-1)), { type: 'join', code: 'WAIT' });
+    assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'setName').at(-1).name), '大厅昵称');
+    assert.equal(await page.locator('#aiCount .on').getAttribute('data-v'), ordinaryAi);
+    assert.equal(await page.locator('#watchCount .on').getAttribute('data-v'), watchAi);
+    const beforeJoinError = await listRequests();
+    await emit({ type: 'error', for: 'join', msg: '房间已开始比赛，请刷新大厅' });
+    assert.equal(await page.locator('#home').isVisible(), true);
+    assert.equal(await listRequests(), beforeJoinError + 1);
+    assert.match(await page.locator('#roomListStatus').textContent(), /加载/);
+    await publishDirectory();
+    await listButton('VIEW').click();
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').at(-1)), { type: 'join', code: 'VIEW' });
+    await listButton('BACK').click();
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').at(-1)), { type: 'join', code: 'BACK' });
+    const beforeDisabledJoin = await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').length);
+    await listButton('BUSY').evaluate(b => b.click());
+    await listButton('WAIT').evaluate(b => { const code = b.dataset.roomCode; b.dataset.roomCode = '"<x>'; b.click(); b.dataset.roomCode = code; });
+    assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').length), beforeDisabledJoin);
+    const beforeReconnectList = await listRequests();
+    await page.evaluate(() => window.__fakeSocket.close());
+    assert.match(await page.locator('#roomListStatus').textContent(), /已离线.*上次列表/);
+    assert.equal(await page.locator('#refreshRooms').isDisabled(), true);
+    assert.equal(await page.locator('#roomList button[data-room-code]:not(:disabled)').count(), 0);
+    assert.doesNotMatch(await page.locator('#roomList').textContent(), /人在线|实时更新/);
+    await listButton('VIEW').evaluate(b => b.click());
+    assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').length), beforeDisabledJoin);
+    await page.waitForFunction(() => window.__fakeSocket.readyState === 1);
+    assert.equal(await listButton('WAIT').isDisabled(), true, '新 socket 未 hello 时不可使用旧列表');
+    await emit({ type: 'hello', token: 'a'.repeat(32), id: 'p0', name: '本人', room: null });
+    assert.equal(await listRequests(), beforeReconnectList + 1);
+    assert.equal(await listButton('WAIT').isDisabled(), true, '重连后等待新的权威列表');
+    await publishDirectory();
+    assert.equal(await listButton('WAIT').isDisabled(), false);
+    const beforeIdleList = await listRequests();
+    await page.waitForTimeout(1200);
+    assert.equal(await listRequests(), beforeIdleList, '无列表 interval 轮询');
+    await page.locator('#nameInput').fill('本人');
     const room = { code: 'TEST', host: 'p0', status: 'playing', seats: [0, 1, 2].map(seat => ({ seat, pid: `p${seat}`, name: `玩家${seat}`, ai: false, online: true })) };
+    await emit({ type: 'room', room });
+    const lobbyBeforeDirectory = { ...room, status: 'lobby' };
+    await emit({ type: 'room', room: lobbyBeforeDirectory });
+    await publishDirectory();
+    assert.equal(await page.locator('#lobby').isVisible(), true, 'roomList 不能将房间切回首页');
+    assert.equal(new URL(page.url()).searchParams.get('room'), room.code);
     await emit({ type: 'room', room });
     const game = new Game({ players: room.seats, seed: 73 });
     game.start();
@@ -52,6 +160,21 @@ const { decide } = require('../game/ai');
     const full = (snap, extra = {}) => emit({ type: 'game', gameId, you: 0, snap, full: true, events: [], auto: [false, false, false], speed: 1, deadlineIn: 45000, ...extra });
     await full(pick);
     await page.locator('#pickCards .pickable').first().waitFor();
+    const activeBeforeList = await page.evaluate(() => window.__hn());
+    const gameUrlBeforeList = page.url();
+    const requestsBeforeGameList = await listRequests();
+    await publishDirectory();
+    assert.deepEqual(await page.evaluate(() => window.__hn()), activeBeforeList, '目录更新不能清当前 game、pending、队列或浮层');
+    assert.equal(await page.locator('#game').isVisible(), true);
+    assert.equal(await page.locator('#home').isVisible(), false);
+    assert.equal(page.url(), gameUrlBeforeList);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.waitForTimeout(1100);
+    assert.equal(await listRequests(), requestsBeforeGameList, '隐藏页面不轮询房间列表');
+    await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
     // 非 OPEN 时动作不应发送、锁定或展示成功。
     await page.evaluate(() => { window.__fakeSocket.readyState = 3; });
     await page.locator('#pickCards .pickable').first().click();
@@ -241,11 +364,319 @@ const { decide } = require('../game/ai');
     await emit({ type: 'error', for: 'join', msg: '房间不存在' });
     assert.equal(new URL(page.url()).searchParams.get('room'), null);
 
+    // 独立观战入口：3–6 AI、默认 4、单独持久化，不改变真人的 AI 对手数。
+    assert.equal(await page.locator('#watchBtn').isDisabled(), false);
+    await page.locator('#watchBtn').click();
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'watch').at(-1)), { type: 'watch', ai: 4 });
+    const aiBefore = await page.locator('#aiCount .on').getAttribute('data-v');
+    for (const n of [3, 4, 5, 6]) {
+      await page.locator(`#watchCount [data-v="${n}"]`).click();
+      await page.locator('#watchBtn').click();
+      assert.equal(await page.locator(`#watchCount [data-v="${n}"]`).getAttribute('aria-checked'), 'true');
+      assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'watch').at(-1).ai), n);
+      assert.equal(await page.locator('#aiCount .on').getAttribute('data-v'), aiBefore);
+    }
+    await page.locator('#watchCount [data-v="6"]').focus();
+    await page.keyboard.press('ArrowLeft'); await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.locator('#watchCount .on').getAttribute('data-v'), '4');
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('hn_watch_ai'))), 4);
+    const noOverflow = async (label, board = false) => {
+      if (board) await page.waitForFunction(() => {
+        const e = document.getElementById('board');
+        return e.classList.contains('tall') === (innerHeight > innerWidth * 1.05 && innerWidth < 900) && e.getBoundingClientRect().width > 180;
+      });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const sizes = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth, overflow: Array.from(document.querySelectorAll('#game .topbar, #game .top-actions, #game .races, #spectatorStatus, #spectatorLabel, #spectatorCode, #dock, .home-card')).filter(e => e.getClientRects().length).map(e => { const r = e.getBoundingClientRect(); return { id: e.id || e.className, left: r.left, right: r.right }; }), board: document.getElementById('board').getBoundingClientRect().width }));
+      assert(sizes.scroll <= sizes.width + 1, `${label} 页面溢出：${JSON.stringify(sizes)}`);
+      assert(sizes.overflow.every(r => r.left >= -1 && r.right <= sizes.width + 1), `${label} 控件溢出：${JSON.stringify(sizes)}`);
+      if (board) assert(sizes.board > 180, `${label} 赛道过小：${JSON.stringify(sizes)}`);
+      if (await page.locator('#spectatorStatus').isVisible()) {
+        const controls = await page.evaluate(() => [...document.querySelectorAll('#game .races, #spectatorLabel, #spectatorViewers, #spectatorCode, #game .top-actions')].filter(e => e.getClientRects().length).map(e => {
+          const r = e.getBoundingClientRect(); return { id: e.id || e.className, left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+        }));
+        for (let i = 0; i < controls.length; i++) for (let j = i + 1; j < controls.length; j++) {
+          const a = controls[i], b = controls[j];
+          assert(Math.min(a.right, b.right) - Math.max(a.left, b.left) <= 1 || Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) <= 1, `${label} 顶栏兄弟控件重叠：${JSON.stringify([a, b])}`);
+        }
+      }
+    };
+    for (const [width, height] of [[320, 740], [390, 844], [844, 390], [568, 320]]) {
+      await page.setViewportSize({ width, height }); await noOverflow(`首页 ${width}x${height}`);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    if (process.env.HUNAO_FRONTEND_SCREENSHOTS) await page.screenshot({ path: '/tmp/hunao-spectator-home.png', fullPage: true });
+
+    const spectatorRoom = { code: 'VIEW', mode: 'spectator', host: 'p0', status: 'playing', spectators: [{ id: 'p0', name: '本人', online: true }, { id: 'guest', name: '一起看', online: true }], seats: Array.from({ length: 4 }, (_, seat) => ({ seat, pid: `ai${seat}`, name: `AI选手${seat + 1}`, ai: true, online: true })) };
+    const spectatorGame = new Game({ players: spectatorRoom.seats, seed: 20261023 });
+    spectatorGame.start(); spectatorGame.drain();
+    const spectatorId = 'spectator-frontend-game';
+    const spectatorFull = (state, extra = {}) => full(state, { gameId: spectatorId, mode: 'spectator', you: -1, auto: [true, true, true, true], deadlineIn: null, ...extra });
+    const playerActionCount = () => page.evaluate(() => window.__fakeMessages.filter(m => ['act', 'auto', 'emote'].includes(m.type)).length);
+    const actionsBeforeWatch = await playerActionCount();
+    let turnPings = 0;
+    await page.exposeFunction('__spectatorTurnPing', () => { turnPings++; });
+    await page.evaluate(() => { Sound.yourTurn = () => window.__spectatorTurnPing(); });
+    await emit({ type: 'room', room: spectatorRoom });
+    await spectatorFull(spectatorGame.snapshot(-1));
+    assert.equal((await page.evaluate(() => window.__hn())).you, -1);
+    assert.equal(await page.locator('#spectatorStatus').getAttribute('role'), 'status');
+    assert.match(await page.locator('#spectatorStatus').textContent(), /正在观战 · 4名AI/);
+    assert.match(await page.locator('#spectatorCode').textContent(), /VIEW/);
+    assert.match(await page.locator('#spectatorViewers').textContent(), /2人观看/);
+    assert.equal(await page.locator('#autoBtn').isVisible(), false);
+    assert.equal(await page.locator('#emotes').isVisible(), false);
+    assert.equal(await page.locator('#players .prow').count(), 4);
+    assert.equal(await page.locator('#players .you, #players .me, #draftCards .pickable').count(), 0);
+    assert.equal(await page.locator('#myTeam').textContent(), '');
+    for (const width of [1001, 1024]) {
+      await page.setViewportSize({ width, height: 900 }); await noOverflow(`窄桌面观战 ${width}x900`);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.doesNotMatch(await page.locator('#draftSub').textContent(), /轮到你|点击选人/);
+    await page.locator('#draftCards .rcard').first().click();
+    assert.equal(await page.locator('#tip').isVisible(), true, '观众可以读卡但不能选人');
+    await page.evaluate(() => { document.querySelector('#autoBtn').click(); document.querySelector('#emotes button').click(); });
+    for (const [width, height] of [[320, 740], [390, 844], [844, 390], [568, 320]]) {
+      await page.setViewportSize({ width, height }); await noOverflow(`观战选秀 ${width}x${height}`);
+    }
+    if (process.env.HUNAO_FRONTEND_SCREENSHOTS) await page.screenshot({ path: '/tmp/hunao-spectator-draft.png', fullPage: true });
+    guard = 0;
+    while (spectatorGame.phase === 'draft' && guard++ < 100) {
+      const d = spectatorGame.pending; assert.equal(spectatorGame.answer(d.seat, d.id, decide(spectatorGame, d, d.seat)), null);
+    }
+    spectatorGame.drain();
+    const spectatorPick = spectatorGame.snapshot(-1);
+    assert.equal(spectatorPick.phase, 'pick');
+    assert.deepEqual(spectatorPick.pending.optionsBySeat, {});
+    await spectatorFull(spectatorPick);
+    assert.equal(await page.locator('#pickCards, #overlay .pickable').count(), 0);
+    assert.match(await page.locator('#dock').textContent(), /AI 正在暗选出战 · 0\/4/);
+    for (const [width, height] of [[320, 740], [390, 844], [844, 390], [568, 320]]) {
+      await page.setViewportSize({ width, height }); await noOverflow(`观战暗选 ${width}x${height}`, true);
+    }
+    const firstSeat = spectatorGame.pending.seats[0];
+    assert.equal(spectatorGame.answer(firstSeat, spectatorGame.pending.id, decide(spectatorGame, spectatorGame.pending, firstSeat)), null);
+    await spectatorFull(spectatorGame.snapshot(-1));
+    assert.match(await page.locator('#dock').textContent(), /1\/4 已选好/);
+    assert.equal(await page.locator('#players .think.ok').count(), 1);
+    assert.equal(await page.locator('#tokens .token').count(), 0, '暗选不能提前展示出战 AI');
+    if (process.env.HUNAO_FRONTEND_SCREENSHOTS) await page.screenshot({ path: '/tmp/hunao-spectator-pick.png', fullPage: true });
+    for (const seat of spectatorGame.pending.seats.slice(1)) assert.equal(spectatorGame.answer(seat, spectatorGame.pending.id, decide(spectatorGame, spectatorGame.pending, seat)), null);
+    const revealEvents = spectatorGame.drain(), spectatorRace = spectatorGame.snapshot(-1);
+    assert(revealEvents.some(e => e.t === 'reveal'));
+    // 权威快照已经进入 race，画面仍需先等待前一事件，再按 reveal 亮牌。
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await emit({ type: 'game', gameId: spectatorId, mode: 'spectator', you: -1, snap: spectatorRace, full: false, events: [{ t: 'info', text: '准备一起亮牌' }, ...revealEvents], auto: [], speed: 1, deadlineIn: null });
+    assert.equal(await page.locator('#overlay .reveal-grid').count(), 0);
+    await page.locator('#overlay .reveal-grid').waitFor();
+    assert.equal(await page.locator('#overlay .reveal-grid .flip').count(), 4);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await spectatorFull(spectatorRace);
+    for (const kind of ['roll', 'egg', 'twin', 'genius', 'thirdwheel']) {
+      const state = structuredClone(spectatorRace);
+      state.pending = { id: 900, seat: 0, kind, title: 'AI选手1正在决策', options: [] };
+      await spectatorFull(state);
+      assert.equal(await page.locator('#overlay .pickable, #dock [data-v], #trackSvg .cell.pick, #tokens .selectable').count(), 0);
+      assert.equal(await page.locator('#overlay').isVisible(), false);
+      assert.match(await page.locator('#dock').textContent(), /AI选手1/);
+      await page.keyboard.press('Space'); await page.keyboard.press('Enter');
+    }
+    await spectatorFull(spectatorRace);
+    for (const [width, height] of [[320, 740], [390, 844], [844, 390], [568, 320]]) {
+      await page.setViewportSize({ width, height });
+      await page.waitForFunction(() => document.getElementById('board').getBoundingClientRect().width > 180);
+      await noOverflow(`观战赛跑 ${width}x${height}`, true);
+      assert.equal(await page.locator('#spectatorStatus').isVisible(), true);
+      if (process.env.HUNAO_FRONTEND_SCREENSHOTS) await page.screenshot({ path: `/tmp/hunao-spectator-race-${width}.png`, fullPage: true });
+    }
+    // game.mode 独立标识观战也生效；6 AI 与长昵称不能挤爆顶栏。
+    const sixRoom = { ...spectatorRoom, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, pid: `ai${seat}`, name: `很响亮的AI选手名字${seat + 1}`, ai: true, online: true })) };
+    const sixGame = new Game({ players: sixRoom.seats, seed: 99 }); sixGame.start();
+    const modeOnlyRoom = structuredClone(sixRoom); delete modeOnlyRoom.mode;
+    await emit({ type: 'room', room: modeOnlyRoom });
+    await spectatorFull(sixGame.snapshot(-1));
+    assert.equal((await page.evaluate(() => window.__hn())).you, -1);
+    assert.match(await page.locator('#spectatorLabel').textContent(), /6名AI/);
+    assert.equal(await page.locator('#players .prow').count(), 6);
+    for (const [width, height] of [[320, 740], [390, 844], [844, 390], [568, 320]]) {
+      await page.setViewportSize({ width, height }); await noOverflow(`6AI观战 ${width}x${height}`);
+    }
+    await emit({ type: 'room', room: spectatorRoom }); await spectatorFull(spectatorRace);
+    // 房主离场移交后的权限即时生效；非房主不能改倍率。
+    await emit({ type: 'room', room: { ...spectatorRoom, host: 'guest' } });
+    assert.equal(await page.locator('#speedBtn').isDisabled(), true);
+    const speedsBefore = await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'speed').length);
+    await page.evaluate(() => document.querySelector('#speedBtn').click());
+    assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'speed').length), speedsBefore);
+    await emit({ type: 'room', room: spectatorRoom });
+    await page.locator('#speedBtn').click();
+    assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'speed').length), speedsBefore + 1);
+
+    assert.equal(await playerActionCount(), actionsBeforeWatch, '观战前后 act/auto/emote 数量不增加');
+    // 同身份断线、页面刷新都从 -1 快照恢复，而非占用 AI 的席位。
+    await page.evaluate(() => window.__fakeSocket.close());
+    assert.equal(await page.locator('#watchBtn').isDisabled(), true);
+    assert.match(await page.locator('#dock').textContent(), /观战连接已断开/);
+    await page.waitForFunction(() => window.__fakeSocket.readyState === 1);
+    await emit({ type: 'hello', token: 'a'.repeat(32), id: 'p0', name: '本人', room: { code: 'VIEW' } });
+    await emit({ type: 'room', room: spectatorRoom }); await spectatorFull(spectatorRace);
+    assert.equal((await page.evaluate(() => window.__hn())).you, -1);
+    await page.reload({ waitUntil: 'load' });
+    assert.equal(await page.locator('#watchBtn').isDisabled(), true);
+    assert.equal(await page.locator('#watchCount .on').getAttribute('data-v'), '4');
+    await emit({ type: 'hello', token: 'a'.repeat(32), id: 'p0', name: '本人', room: { code: 'VIEW' } });
+    await emit({ type: 'room', room: spectatorRoom }); await spectatorFull(spectatorRace);
+    await page.evaluate(() => { Sound.yourTurn = () => window.__spectatorTurnPing(); });
+    assert.equal(await page.locator('#pickCards').count(), 0);
+    assert.equal(await page.locator('#spectatorStatus').isVisible(), true);
+    // 把真实引擎四场流程逐批送入 fakeWS，所有 AI 决策、技能与结算走原动画链。
+    let resultsSeen = 0;
+    guard = 0;
+    while (spectatorGame.pending && guard++ < 1200) {
+      const d = spectatorGame.pending, seat = d.simul ? d.seats.find(s => d.answers[s] === undefined) : d.seat;
+      assert.equal(spectatorGame.answer(seat, d.id, decide(spectatorGame, d, seat)), null);
+      const events = spectatorGame.drain(); resultsSeen += events.filter(e => e.t === 'raceEnd').length;
+      await emit({ type: 'game', gameId: spectatorId, mode: 'spectator', you: -1, snap: spectatorGame.snapshot(-1), full: false, events, auto: [], speed: 4, deadlineIn: null });
+      await page.waitForFunction(() => !window.__hn().playing && !window.__hn().queue);
+    }
+    assert.equal(spectatorGame.phase, 'over'); assert.equal(resultsSeen, 4);
+    // 最终动画 await 尚未收尾时移交房主：仅同步权限，不重建领奖台或重播庆祝。
+    await emit({ type: 'room', room: { ...spectatorRoom, host: 'guest' } });
+    await spectatorFull(spectatorRace);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.evaluate(() => { window.__oldFanfare = Sound.fanfare; window.__finalFanfares = 0; Sound.fanfare = () => { window.__finalFanfares++; }; });
+    const finalState = spectatorGame.snapshot(-1);
+    await emit({ type: 'game', gameId: spectatorId, mode: 'spectator', you: -1, snap: finalState, full: false, events: [{ t: 'gameOver', scores: finalState.players.map(p => ({ seat: p.seat, score: p.score })), champions: finalState.champions }], auto: [], speed: 1, deadlineIn: null });
+    assert.equal((await page.evaluate(() => window.__hn())).playing, true);
+    assert.match(await page.locator('#finalReplayControl').textContent(), /等房主/);
+    await page.evaluate(() => { window.__finalPodium = document.querySelector('#overlay .podium'); });
+    await emit({ type: 'room', room: { ...spectatorRoom, status: 'over' } });
+    assert.equal(await page.locator('#again').textContent(), '再看一局');
+    assert.equal(await page.evaluate(() => window.__finalPodium === document.querySelector('#overlay .podium')), true, '权限变化不能重建庆祝浮层');
+    await page.waitForFunction(() => !window.__hn().playing && !window.__hn().queue);
+    assert.equal(await page.locator('#dock [data-x="again"]').textContent(), '再看一局');
+    assert.equal(await page.evaluate(() => window.__finalFanfares), 1, '房主移交不能重播庆祝音效');
+    await page.evaluate(() => { Sound.fanfare = window.__oldFanfare; });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(turnPings, 0, '观众不能收到个人回合音效');
+    assert.equal(await page.locator('#again').textContent(), '再看一局');
+    assert.equal(await page.locator('#dock [data-x="again"]').textContent(), '再看一局');
+    assert.equal(await page.locator('#players .prow').count(), 4);
+    assert.equal(await page.locator('#myTeam').textContent(), '');
+    for (const [width, height] of [[320, 740], [390, 844], [844, 390], [568, 320]]) {
+      await page.setViewportSize({ width, height }); await noOverflow(`观战结算 ${width}x${height}`);
+      assert(await page.locator('#again').isVisible());
+    }
+    await emit({ type: 'room', room: { ...spectatorRoom, status: 'over', host: 'guest' } });
+    assert.equal(await page.locator('#again, #dock [data-x="again"]').count(), 0);
+    assert.match(await page.locator('#dock').textContent(), /等房主/);
+    await emit({ type: 'room', room: { ...spectatorRoom, status: 'over' } });
+    await page.locator('#again').click();
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'replay').at(-1)), { type: 'replay' });
+    assert.equal(await page.locator('#again').isDisabled(), true);
+    await emit({ type: 'error', gameId: spectatorId, for: 'replay', msg: '最终动画还没结束，请稍后再试', retryIn: 500 });
+    assert.equal(await page.locator('#again').isDisabled(), false);
+    assert.equal(await page.locator('#dock [data-x="again"]').isDisabled(), false);
+    await page.locator('#ovClose').click();
+    await page.locator('#overlay').waitFor({ state: 'hidden' });
+    await page.locator('#dock [data-x="again"]').click();
+    assert.equal((await page.evaluate(() => window.__hn())).navigationPending, 'replay');
+    const replayGame = new Game({ players: spectatorRoom.seats, seed: 120 }); replayGame.start();
+    const replayId = 'spectator-replay-game';
+    await emit({ type: 'room', room: spectatorRoom });
+    await spectatorFull(replayGame.snapshot(-1), { gameId: replayId });
+    assert.equal((await page.evaluate(() => window.__hn())).navigationPending, null);
+    assert.equal((await page.evaluate(() => window.__hn())).gameId, replayId);
+    assert.equal(await page.locator('#again').count(), 0);
+    assert.equal(await page.locator('#players .prow').count(), 4);
+    assert.match(await page.locator('#spectatorCode').textContent(), /VIEW/);
+    // 重播之后，旧 gameId 的 full 不能把界面拉回旧局结算。
+    await spectatorFull(spectatorGame.snapshot(-1));
+    assert.equal((await page.evaluate(() => window.__hn())).gameId, replayId);
+    assert.equal((await page.evaluate(() => window.__hn())).phase, 'draft');
+    assert.equal(await playerActionCount(), 0, '刷新后观众未发送任何玩家动作');
+    await emit({ type: 'left' });
+    assert.equal(await page.locator('#spectatorStatus').isVisible(), false);
+    assert.equal(await page.locator('#home').isVisible(), true);
+    // 朋友通过既有 join 入口加入观战；身份过期会清理观战状态。
+    await page.locator('#codeInput').fill('VIEW'); await page.locator('#joinBtn').click();
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').at(-1)), { type: 'join', code: 'VIEW' });
+    await emit({ type: 'room', room: { ...spectatorRoom, host: 'guest' } });
+    await spectatorFull(spectatorPick, { gameId: 'spectator-join-game' });
+    assert.equal(await page.locator('#pickCards').count(), 0);
+    await emit({ type: 'error', for: 'join', msg: '房间不存在' });
+    assert.equal(await page.locator('#spectatorStatus').isVisible(), false);
+    assert.equal(await page.locator('#overlay').isVisible(), false);
+    assert.equal((await page.evaluate(() => window.__hn())).mode, null);
+    // 重新加入普通房间，个人操作、托管、选卡都仍然保留。
+    await emit({ type: 'room', room }); await full(pick, { gameId: 'ordinary-after-spectator' });
+    assert.equal(await page.locator('#spectatorStatus').isVisible(), false);
+    assert.equal(await page.locator('#autoBtn').isVisible(), true);
+    assert(await page.locator('#pickCards .pickable').count() > 0);
+    assert.equal((await page.evaluate(() => window.__hn())).you, 0);
+    await emit({ type: 'left' });
+    assert(actionsBeforeWatch > 0);
+
+    // 独立真实 WS 上下文：别人的建房/改名/加入/观战/离线，通过目录推送直接抵达首页。
+    const liveContexts = [];
+    try {
+      // 不同角色独立存储 hn_me；同源多标签共享凭证仅用于刻意的同身份测试。
+      for (let role = 0; role < 3; role++) liveContexts.push(await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' }));
+      const [ownerPage, directoryPage, watchOwnerPage] = await Promise.all(liveContexts.map(context => context.newPage()));
+      for (const p of [ownerPage, directoryPage, watchOwnerPage]) p.on('pageerror', error => errors.push(error.message));
+      const liveUrl = `http://127.0.0.1:${server.address().port}/`;
+      await Promise.all([ownerPage.goto(liveUrl), directoryPage.goto(liveUrl), watchOwnerPage.goto(liveUrl)]);
+      await Promise.all([ownerPage, directoryPage, watchOwnerPage].map(p => p.waitForFunction(() => document.body.dataset.connection === 'ready')));
+      await directoryPage.locator('#roomListStatus').filter({ hasText: '暂无在线房间' }).waitFor();
+      await ownerPage.locator('#nameInput').fill('公开大厅房主');
+      await ownerPage.locator('#createBtn').click();
+      await ownerPage.locator('#lobby').waitFor({ state: 'visible' });
+      const publicCode = (await ownerPage.locator('#roomCode').textContent()).trim();
+      const publicButton = directoryPage.locator(`#roomList button[data-room-code="${publicCode}"]`);
+      await publicButton.waitFor();
+      assert.equal(await publicButton.textContent(), '加入');
+      assert.equal(await directoryPage.locator('#home').isVisible(), true);
+      const publicRow = publicButton.locator('xpath=ancestor::li');
+      assert.match(await publicRow.textContent(), /公开大厅房主/);
+      // 同昵称输入保持首页，收到 setName 的 hello 也只能刷新目录。
+      await directoryPage.locator('#nameInput').fill('目录来客'); await directoryPage.locator('#nameInput').blur();
+      await publicButton.click();
+      await directoryPage.locator('#lobby').waitFor({ state: 'visible' });
+      assert.equal((await directoryPage.locator('#roomCode').textContent()).trim(), publicCode);
+      assert.equal(await ownerPage.locator('#seats .seat:not(.empty)').count(), 2);
+      await directoryPage.locator('#leaveLobby').click();
+      await directoryPage.locator('#home').waitFor({ state: 'visible' });
+      await publicButton.waitFor();
+      // 无人在线的暂停房间不再展示，首页无需手动刷新。
+      await ownerPage.close();
+      await publicButton.waitFor({ state: 'detached' });
+      await directoryPage.locator('#roomListStatus').filter({ hasText: '暂无在线房间' }).waitFor();
+      await watchOwnerPage.locator('#watchBtn').click();
+      await watchOwnerPage.locator('#game').waitFor({ state: 'visible' });
+      const watchCode = (await watchOwnerPage.locator('#spectatorCode').textContent()).match(/[A-Z0-9]{4}/)[0];
+      const watchDirectoryButton = directoryPage.locator(`#roomList button[data-room-code="${watchCode}"]`);
+      await watchDirectoryButton.waitFor();
+      assert.equal(await watchDirectoryButton.textContent(), '观看');
+      const watchingBeforeList = await watchOwnerPage.evaluate(() => window.__hn());
+      await directoryPage.locator('#refreshRooms').click();
+      await directoryPage.locator('#roomList[aria-busy="false"]').waitFor();
+      const watchingAfterList = await watchOwnerPage.evaluate(() => window.__hn());
+      assert.equal(watchingAfterList.gameId, watchingBeforeList.gameId);
+      assert.equal(watchingAfterList.mode, 'spectator');
+      assert.equal(await watchOwnerPage.locator('#game').isVisible(), true);
+      await watchDirectoryButton.click();
+      await directoryPage.locator('#spectatorStatus').waitFor({ state: 'visible' });
+      assert.equal((await directoryPage.evaluate(() => window.__hn())).you, -1);
+      assert.equal((await directoryPage.evaluate(() => window.__hn())).mode, 'spectator');
+      assert.match(await directoryPage.locator('#spectatorCode').textContent(), new RegExp(watchCode));
+      assert.equal(await directoryPage.locator('#pickCards, #overlay .pickable, #draftCards .pickable').count(), 0);
+    } finally { await Promise.all(liveContexts.map(context => context.close())); }
+
     // 损坏的本地凭证可自愈，不能无限拿同一非法 token 重连。
     await emit({ type: 'error', for: 'hello', msg: '身份凭证无效' });
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('hn_me')).token), undefined);
     assert.equal(errors.length, 0, errors.join('\n'));
-    console.log('前端回归通过：握手/断线提交/同时选择确认/减少动态计时/倍率/旋转选点/full-lobby-left动画取消');
+    console.log('前端回归通过：公开房间首次订阅/手动刷新/空与多房间/合法code/XSS字面显示/加入与观看与返回/满席与进行中禁用/失败刷新/断线旧列表禁用与重连刷新/隐藏无轮询/活动game隔离/真实WS建房加入离线推送与AI观战 + 普通模式原回归 + 观战3–6AI/独立人数/选秀暗选无个人操作/按序亮牌/真实四场技能与结算/房主移交/replay与retry/旧gameId隔离/断线刷新恢复/320、390、844x390、568x320无溢出');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

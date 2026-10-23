@@ -26,6 +26,7 @@ function createHub(options = {}) {
   const players = new Map(); // token -> { id, token, name, sockets:Set, room, touched }
   const byId = new Map();
   const rooms = new Map();
+  const listSubscribers = new Set(); // 仅请求列表的本标签订阅，不扩散到同身份的其他标签。
   let disposed = false;
 
   function send(ws, msg) {
@@ -33,11 +34,17 @@ function createHub(options = {}) {
     try { ws.send(JSON.stringify(msg)); } catch { /* 关闭中的连接由 close/心跳清理，不能中断其他席广播 */ }
   }
   function openSockets(p) { return [...p.sockets].filter((ws) => ws.readyState === 1 && ws.player === p); }
-  function viewers(room) { return [...room.clients].filter((ws) => ws.readyState === 1 && ws.room === room.code && ws.player?.room === room.code && ws.player.sockets.has(ws) && seatOf(room, ws.player.id) >= 0); }
   function seatOf(room, pid) { return room.seats.findIndex((s) => !s.ai && s.pid === pid); }
+  // 成员资格与比赛席位分离：观众有身份和房间绑定，但永远没有参赛 seat。
+  function hasMember(room, pid) { return room.mode === 'spectator' ? room.spectators.has(pid) : seatOf(room, pid) >= 0; }
+  function memberIds(room) {
+    const ids = room.mode === 'spectator' ? [...room.spectators] : room.seats.filter((s) => !s.ai).map((s) => s.pid);
+    return ids.filter((id) => byId.get(id)?.room === room.code);
+  }
+  function viewers(room) { return [...room.clients].filter((ws) => ws.readyState === 1 && ws.room === room.code && ws.player?.room === room.code && ws.player.sockets.has(ws) && hasMember(room, ws.player.id)); }
   function isOnline(pid, room) {
     const p = byId.get(pid);
-    return !!p && p.room === room.code && openSockets(p).some((ws) => ws.room === room.code && room.clients.has(ws));
+    return !!p && hasMember(room, pid) && p.room === room.code && openSockets(p).some((ws) => ws.room === room.code && room.clients.has(ws));
   }
   // 离线是连接状态，不再覆盖手动托管/超时托管。重连不偷偷取消手动选择。
   function isAuto(room, s) { return !s.ai && (!!s.autoMode || !isOnline(s.pid, room)); }
@@ -47,11 +54,72 @@ function createHub(options = {}) {
     return {
       code: room.code, host: room.host, status: room.status,
       seats: room.seats.map((s, seat) => ({ seat, name: s.name, ai: s.ai, pid: s.pid || null, online: s.ai || isOnline(s.pid, room) })),
+      ...(room.mode === 'spectator' ? { mode: room.mode, spectators: memberIds(room).map((id) => ({ id, name: byId.get(id).name, online: isOnline(id, room) })) } : {}),
     };
+  }
+  // 公开目录与房内快照分开：只保留安全摘要，不能泄漏身份、手牌或游戏状态。
+  function snapshotDirectory() {
+    const directorySnapshot = [];
+    for (const room of rooms.values()) {
+      const members = memberIds(room);
+      const online = members.filter((id) => isOnline(id, room)).length;
+      // 暂停房间仍可凭原邀请码/身份返回，但无人在线时不放进公开大厅。
+      if (!online) continue;
+      const spectator = room.mode === 'spectator';
+      const aiCount = room.seats.filter((s) => s.ai).length;
+      const humanCount = room.seats.length - aiCount;
+      const host = members.includes(room.host) ? byId.get(room.host) : byId.get(members[0]);
+      directorySnapshot.push({
+        summary: {
+          code: room.code, mode: spectator ? 'spectator' : 'play', status: room.status,
+          hostName: host?.name || room.seats.find((s) => !s.ai)?.name || '公开房间',
+          playerCount: room.seats.length, aiCount, humanCount,
+          onlineCount: online, maxPlayers: 6,
+          spectatorCount: spectator ? members.length : 0,
+          onlineSpectatorCount: spectator ? online : 0,
+        },
+        // 与 joinRoom 的成员返回规则一致，已经离席但保留的比赛席位也可返回。
+        members: new Set(spectator ? room.spectators : room.seats.filter((s) => !s.ai).map((s) => s.pid)),
+      });
+    }
+    return directorySnapshot;
+  }
+  function directoryRank(room) {
+    if (room.mode === 'play' && room.status === 'lobby' && room.canJoin) return 0;
+    if (room.mode === 'spectator') return 1;
+    return room.status === 'lobby' ? 2 : room.status === 'playing' ? 3 : 4;
+  }
+  function sendDirectory(ws, snapshot) {
+    if (ws.readyState !== 1 || !ws.player || byId.get(ws.player.id) !== ws.player || !ws.player.sockets.has(ws)) {
+      listSubscribers.delete(ws);
+      return;
+    }
+    const list = snapshot.map(({ summary, members }) => {
+      const isMember = members.has(ws.player.id);
+      const canJoin = isMember || summary.mode === 'spectator' ||
+        (summary.status === 'lobby' && (summary.playerCount < 6 || summary.aiCount > 0));
+      return { ...summary, canJoin, isMember };
+    });
+    list.sort((a, b) => directoryRank(a) - directoryRank(b) || a.code.localeCompare(b.code));
+    send(ws, { type: 'roomList', rooms: list });
+  }
+  function notifyDirectory() {
+    if (disposed || !listSubscribers.size) return;
+    // 一次房间变化只计算一次轻量目录，再按订阅者身份附加加入权限。
+    const snapshot = snapshotDirectory();
+    for (const ws of listSubscribers) sendDirectory(ws, snapshot);
+  }
+  function listRooms(ws, msg) {
+    if (Object.keys(msg).some((key) => key !== 'type')) return '指令参数不正确';
+    listSubscribers.add(ws);
+    // 手动刷新也重新核对 OPEN 状态，不依赖可能尚未到达的 close 事件。
+    sendDirectory(ws, snapshotDirectory());
+    return null;
   }
   function broadcastRoom(room) {
     const msg = { type: 'room', room: roomSummary(room) };
     for (const ws of viewers(room)) send(ws, msg);
+    notifyDirectory();
   }
   function unanswered(d, seat) { return d.simul ? d.seats.includes(seat) && d.answers[seat] === undefined : d.seat === seat; }
   function deadlineIn(room, seat) {
@@ -62,7 +130,7 @@ function createHub(options = {}) {
   }
   function gameMsg(room, p, events = [], full = false) {
     const seat = p ? seatOf(room, p.id) : -1;
-    return { type: 'game', gameId: room.gameId, you: seat, events, snap: room.game.snapshot(seat), full: !!full, auto: autoFlags(room), autoModes: autoModes(room), speed: room.speed, deadlineIn: deadlineIn(room, seat) };
+    return { type: 'game', gameId: room.gameId, you: seat, events, snap: room.game.snapshot(seat), full: !!full, auto: autoFlags(room), autoModes: autoModes(room), speed: room.speed, deadlineIn: deadlineIn(room, seat), ...(room.mode === 'spectator' ? { mode: room.mode } : {}) };
   }
   function broadcastAuto(room) {
     if (!room.game) return;
@@ -75,11 +143,11 @@ function createHub(options = {}) {
     room.deadline = 0;
   }
   function transferHost(room) {
-    const humans = room.seats.filter((s) => !s.ai && byId.get(s.pid)?.room === room.code);
-    const online = humans.filter((s) => isOnline(s.pid, room));
+    const members = memberIds(room);
+    const online = members.filter((id) => isOnline(id, room));
     // 在线成员优先；无人在线时保留已有房主，支持短时断线后恢复。
-    const candidates = online.length ? online : humans;
-    if (!candidates.some((s) => s.pid === room.host)) room.host = candidates[0]?.pid || null;
+    const candidates = online.length ? online : members;
+    if (!candidates.includes(room.host)) room.host = candidates[0] || null;
   }
 
   /* ---------- 身份与连接 ---------- */
@@ -97,7 +165,7 @@ function createHub(options = {}) {
     p.sockets.add(ws);
     ws.player = p;
     let room = p.room && rooms.get(p.room);
-    if (room && seatOf(room, p.id) < 0) room = null;
+    if (room && !hasMember(room, p.id)) room = null;
     if (!room) {
       // 防御陈旧 room 指针；不能保留一个仍能触发广播/暂停恢复的幽灵连接。
       const staleRoom = ws.room && rooms.get(ws.room);
@@ -111,7 +179,8 @@ function createHub(options = {}) {
       room.clients.add(ws);
       ws.room = room.code;
       room.touched = now();
-      if (room.status === 'lobby') room.seats[seatOf(room, p.id)].name = p.name;
+      const seat = seatOf(room, p.id);
+      if (room.status === 'lobby' && seat >= 0) room.seats[seat].name = p.name;
       transferHost(room);
       schedule(room);
       broadcastRoom(room);
@@ -120,6 +189,7 @@ function createHub(options = {}) {
     return null;
   }
   function disconnect(ws) {
+    listSubscribers.delete(ws);
     const p = ws.player;
     const room = ws.room && rooms.get(ws.room);
     if (p) { p.sockets.delete(ws); p.touched = now(); }
@@ -169,6 +239,8 @@ function createHub(options = {}) {
       if (ws.room === room.code) { ws.room = null; send(ws, { type: 'left', reason }); }
     }
     room.clients.clear();
+    room.spectators.clear();
+    notifyDirectory();
   }
   function leaveRoom(ws) {
     const p = ws.player;
@@ -179,12 +251,12 @@ function createHub(options = {}) {
       return null;
     }
     releasePlayer(p, room, 'leave');
+    room.spectators.delete(p.id);
     if (room.status === 'lobby') {
       const seat = seatOf(room, p.id);
       if (seat >= 0) room.seats.splice(seat, 1);
     }
-    const members = room.seats.some((s) => !s.ai && byId.get(s.pid)?.room === room.code);
-    if (!members) { closeRoom(room); return null; }
+    if (!memberIds(room).length) { closeRoom(room); return null; }
     room.touched = now();
     transferHost(room);
     schedule(room);
@@ -195,6 +267,7 @@ function createHub(options = {}) {
   function enter(ws, room) {
     const p = ws.player;
     if (p.room && p.room !== room.code) leaveRoom(ws);
+    if (room.mode === 'spectator') room.spectators.add(p.id);
     p.room = room.code;
     p.touched = room.touched = now();
     for (const s of openSockets(p)) { s.room = room.code; room.clients.add(s); }
@@ -207,13 +280,15 @@ function createHub(options = {}) {
       broadcastAuto(room);
     }
   }
-  function createRoom(ws) {
+  function createRoom(ws, mode = 'play', aiCount = 0) {
     const p = ws.player;
     if (p.room) leaveRoom(ws);
     const room = {
-      code: newCode(), host: p.id, status: 'lobby', seats: [{ pid: p.id, name: p.name, ai: false, autoMode: null }],
+      code: newCode(), host: p.id, status: 'lobby', seats: mode === 'spectator' ? [] : [{ pid: p.id, name: p.name, ai: false, autoMode: null }],
+      ...(mode === 'spectator' ? { mode } : {}), spectators: new Set(),
       clients: new Set(), game: null, gameId: null, timer: null, timing: null, scheduleVersion: 0, busyUntil: 0, touched: now(), speed: 1, deadline: 0,
     };
+    for (let i = 0; i < aiCount; i++) appendAI(room);
     rooms.set(room.code, room);
     enter(ws, room);
     return room;
@@ -223,7 +298,7 @@ function createHub(options = {}) {
     const room = rooms.get(code.trim().toUpperCase());
     if (!room) return '房间不存在';
     const p = ws.player;
-    if (seatOf(room, p.id) >= 0) { enter(ws, room); return null; }
+    if (hasMember(room, p.id) || room.mode === 'spectator') { enter(ws, room); return null; }
     if (room.status !== 'lobby') return '对局已经开始了';
     if (room.seats.length >= 6 && !room.seats.some((s) => s.ai)) return '房间已满（最多 6 人）';
     if (p.room) leaveRoom(ws);
@@ -235,28 +310,33 @@ function createHub(options = {}) {
   function currentRoom(ws) {
     const p = ws.player;
     const room = p && ws.room === p.room && rooms.get(p.room);
-    return room && p.sockets.has(ws) && room.clients.has(ws) && seatOf(room, p.id) >= 0 ? room : null;
+    return room && p.sockets.has(ws) && room.clients.has(ws) && hasMember(room, p.id) ? room : null;
   }
   function hostRoom(ws) {
     const room = currentRoom(ws);
-    if (!room || seatOf(room, ws.player.id) < 0) return '你不在房间里';
+    if (!room) return '你不在房间里';
     if (room.host !== ws.player.id) return '只有房主可以操作';
     return room;
+  }
+  function appendAI(room) {
+    const used = new Set(room.seats.map((s) => s.name));
+    const name = AI_NAMES.find((n) => !used.has(`${n}（AI）`)) || '机器人';
+    room.seats.push({ pid: null, name: `${name}（AI）`, ai: true, autoMode: null });
   }
   function addAI(ws) {
     const room = hostRoom(ws);
     if (typeof room === 'string') return room;
+    if (room.mode === 'spectator') return '观战房间不能修改参赛席位';
     if (room.status !== 'lobby') return '对局已开始';
     if (room.seats.length >= 6) return '最多 6 人';
-    const used = new Set(room.seats.map((s) => s.name));
-    const name = AI_NAMES.find((n) => !used.has(`${n}（AI）`)) || '机器人';
-    room.seats.push({ pid: null, name: `${name}（AI）`, ai: true, autoMode: null });
+    appendAI(room);
     broadcastRoom(room);
     return null;
   }
   function removeAI(ws, seat) {
     const room = hostRoom(ws);
     if (typeof room === 'string') return room;
+    if (room.mode === 'spectator') return '观战房间不能修改参赛席位';
     if (room.status !== 'lobby') return '对局已开始';
     if (!Number.isSafeInteger(seat) || seat < 0 || seat >= room.seats.length) return '席位编号无效';
     if (!room.seats[seat].ai) return '只能移除 AI';
@@ -267,8 +347,13 @@ function createHub(options = {}) {
   function startGame(ws) {
     const room = hostRoom(ws);
     if (typeof room === 'string') return room;
+    if (room.mode === 'spectator') return '观战房间请使用再看一局';
     if (room.status !== 'lobby') return '请先结束结算并返回大厅';
     if (room.seats.length < 3 || room.seats.length > 6) return '需要 3–6 名选手（可以加 AI）';
+    return beginGame(room);
+  }
+  function beginGame(room) {
+    stopTimer(room);
     room.status = 'playing';
     // 决策 ID 只在局内递增；跨房间/重开必须用独立的随机局标识隔离旧标签动作。
     room.gameId = crypto.randomUUID();
@@ -280,9 +365,18 @@ function createHub(options = {}) {
     flush(room, true);
     return null;
   }
+  function replay(ws) {
+    const room = hostRoom(ws);
+    if (typeof room === 'string') return room;
+    if (room.mode !== 'spectator') return '只有观战房间可以再看一局';
+    if (room.status !== 'over' || !room.game || room.game.phase !== 'over') return '对局还没结束';
+    if (now() < room.busyUntil) return '结算动画还没结束，请稍等';
+    return beginGame(room);
+  }
   function backToLobby(ws) {
     const room = hostRoom(ws);
     if (typeof room === 'string') return room;
+    if (room.mode === 'spectator') return '观战房间请使用再看一局';
     if (room.status !== 'over' || !room.game || room.game.phase !== 'over') return '对局还没结束';
     if (now() < room.busyUntil) return '结算动画还没结束，请稍等';
     stopTimer(room);
@@ -319,9 +413,9 @@ function createHub(options = {}) {
   function act(ws, { gameId, id, value }) {
     const room = currentRoom(ws);
     if (!room || !room.game) return '没有进行中的对局';
-    if (typeof gameId !== 'string' || gameId !== room.gameId) return '对局已过期，请重新选择';
     const seat = seatOf(room, ws.player.id);
-    if (seat < 0) return '你是观众';
+    if (seat < 0) return '你是观众，不能操作选手';
+    if (typeof gameId !== 'string' || gameId !== room.gameId) return '对局已过期，请重新选择';
     const d = room.game.pending;
     if (!d || room.status !== 'playing') return '当前没有待决策项';
     // 引擎内部调用不变；不可信网络动作必须同时匹配局标识与局内决策 ID，不兼容省略字段。
@@ -380,6 +474,8 @@ function createHub(options = {}) {
     const version = room.scheduleVersion;
     room.timer = later(() => {
       if (rooms.get(room.code) !== room || room.scheduleVersion !== version || room.game !== g || g.pending !== d) return;
+      // close/心跳清理可能晚于连接失去可写状态；不能靠集合中残留的连接多推进一步。
+      if (!viewers(room).length) { schedule(room); return; }
       for (const seat of who) {
         if (g.pending !== d || !unanswered(d, seat)) continue;
         const st = room.seats[seat];
@@ -396,9 +492,10 @@ function createHub(options = {}) {
   function setAuto(ws, on) {
     if (typeof on !== 'boolean') return '托管状态必须是布尔值';
     const room = currentRoom(ws);
-    if (!room || !room.game || room.status !== 'playing') return '没有进行中的对局';
+    if (!room || !room.game) return '没有进行中的对局';
     const seat = seatOf(room, ws.player.id);
     if (seat < 0) return '你是观众';
+    if (room.status !== 'playing') return '没有进行中的对局';
     room.seats[seat].autoMode = on ? 'manual' : null;
     schedule(room);
     broadcastAuto(room);
@@ -432,11 +529,21 @@ function createHub(options = {}) {
     for (let i = 0; i < count; i++) addAI(ws);
     return startGame(ws);
   }
+  function watch(ws, n) {
+    const count = n === undefined ? 4 : n;
+    // 先校验后离开旧房间；非法参数不能退席或生成一个空观战房间。
+    if (!Number.isSafeInteger(count) || count < 3 || count > 6) return 'AI 数量必须是 3–6 的整数';
+    return beginGame(createRoom(ws, 'spectator', count));
+  }
   function handle(ws, msg) {
     if (disposed) return '服务已关闭';
     if (!msg || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.type !== 'string') return '无效指令';
     if (ws.readyState !== 1) return '连接已关闭';
     if (msg.type !== 'hello' && (!ws.player || !ws.player.sockets.has(ws))) return '请先连接';
+    // 列表查询是纯只读：不 touch、不改成员资格，也不重新调度或 drain 游戏事件。
+    if (msg.type === 'listRooms') return listRooms(ws, msg);
+    // watch 的人数校验先于 touched 更新，非法创建请求没有任何房间/身份副作用。
+    if (msg.type === 'watch') return watch(ws, msg.ai);
     if (ws.player) ws.player.touched = now();
     const room = currentRoom(ws);
     if (room) room.touched = now();
@@ -446,7 +553,11 @@ function createHub(options = {}) {
         if (typeof msg.name !== 'string' || !cleanName(msg.name)) return '请输入有效名字';
         const p = ws.player;
         p.name = cleanName(msg.name);
-        if (room && room.status === 'lobby') { const seat = seatOf(room, p.id); if (seat >= 0) room.seats[seat].name = p.name; broadcastRoom(room); }
+        if (room && (room.status === 'lobby' || room.mode === 'spectator')) {
+          const seat = seatOf(room, p.id);
+          if (seat >= 0 && room.status === 'lobby') room.seats[seat].name = p.name;
+          broadcastRoom(room);
+        } else if (room) notifyDirectory(); // 比赛席位名字冻结，但公开目录房主名随身份改名。
         for (const c of openSockets(p)) send(c, { type: 'hello', token: p.token, id: p.id, name: p.name, room: p.room });
         return null;
       }
@@ -457,6 +568,7 @@ function createHub(options = {}) {
       case 'removeAI': return removeAI(ws, msg.seat);
       case 'start': return startGame(ws);
       case 'quick': return quick(ws, msg.ai);
+      case 'replay': return replay(ws);
       case 'act': return act(ws, msg);
       case 'auto': return setAuto(ws, msg.on);
       case 'emote': return emote(ws, msg.key);
@@ -478,6 +590,7 @@ function createHub(options = {}) {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    listSubscribers.clear();
     cancelEvery(cleanupTimer);
     for (const room of [...rooms.values()]) closeRoom(room);
     for (const p of players.values()) {
@@ -502,7 +615,7 @@ function createHub(options = {}) {
       gameId: room?.game ? room.gameId : null,
       deadlineIn: getDeadlineIn(ws),
       decisionId: room?.game?.pending?.id ?? null,
-      ...(type === 'lobby' && room?.status === 'over' && now() < room.busyUntil ? { retryIn: Math.ceil(room.busyUntil - now()) } : {}),
+      ...((type === 'lobby' || type === 'replay') && room?.status === 'over' && now() < room.busyUntil ? { retryIn: Math.ceil(room.busyUntil - now()) } : {}),
     };
   }
   return { handle, disconnect, rooms, cleanup, dispose, getDeadlineIn, recover, errorContext };

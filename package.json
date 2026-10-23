@@ -9,8 +9,10 @@
     "test:frontend": "node test/frontend.js",
     "test:browser": "node test/browser.js",
     "test:multi": "node test/multi.js",
+    "test:spectator": "node test/spectator.js",
+    "test:directory": "node test/directory.js",
     "test:browser-helper": "node test/browser-helper-test.js",
-    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi"
+    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi && npm run test:spectator && npm run test:directory"
   },
   "engines": {
     "node": ">=20"

@@ -34,6 +34,10 @@
   if (!me || typeof me !== 'object' || Array.isArray(me)) me = {};
   let room = null;
   let gameId = null;
+  let gameMode = null;
+  const retiredGames = new Set();
+  const isSpectator = () => room?.mode === 'spectator' || gameMode === 'spectator';
+  const isParticipant = () => !isSpectator() && you >= 0;
   let inviteRoom = new URLSearchParams(location.search).get('room');
   let snap = null; // 服务端最新权威快照
   let vs = null; // 当前画面状态（随动画推进）
@@ -71,10 +75,15 @@
   let lastFullContext = null;
   let navigationPending = null;
   let navigationTimer = null;
+  let roomRows = [];
+  let roomsLoading = false;
+  let roomsFresh = false;
+  let roomsReceived = false;
 
   /* ================= 连接 ================= */
   function setConnection(state) {
     connection = state;
+    if (state !== 'ready') { roomsFresh = false; roomsLoading = false; }
     document.body.dataset.connection = state;
     const status = $('#connectionStatus');
     if (status) {
@@ -85,6 +94,8 @@
     for (const el of $$('[data-network]')) el.disabled = state !== 'ready';
     for (const el of $$('[data-navigation]')) el.disabled = state !== 'ready' || !!navigationPending;
     renderTopButtons();
+    renderRoomDirectory();
+    syncFinalActions();
     if (room && room.status === 'lobby') renderLobby();
   }
   function connect() {
@@ -127,6 +138,9 @@
     socket.onerror = () => { if (ws === socket) socket.close(); };
   }
   function send(m, quiet = false) {
+    // 观众没有个人席位；即使旧按钮或快捷键仍有引用，也不能提交玩家动作。
+    if (isSpectator() && ['act', 'auto', 'emote'].includes(m.type)) return false;
+    if (isSpectator() && ['speed', 'replay'].includes(m.type) && room?.host !== me.id) return false;
     if (!ws || ws.readyState !== WebSocket.OPEN || (m.type !== 'hello' && (!greeted || connection !== 'ready'))) {
       if (!quiet) toast('尚未连接，请等重连完成后重新操作', true);
       return false;
@@ -191,8 +205,13 @@
         } else if (!msg.room) setConnection('ready');
         break;
       }
+      case 'roomList':
+        roomRows = normalizeRoomRows(msg.rooms);
+        roomsLoading = false; roomsFresh = true; roomsReceived = true;
+        renderRoomDirectory();
+        break;
       case 'room':
-        if (room && room.code !== msg.room.code) resetGameView();
+        if (room && (room.code !== msg.room.code || (room.mode || 'play') !== (msg.room.mode || 'play'))) { resetGameView(); gameId = null; gameMode = null; }
         room = msg.room;
         inviteRoom = null;
         if (room.status === 'lobby') {
@@ -200,23 +219,30 @@
           setConnection('ready'); showScreen('lobby'); renderLobby();
         } else if (!$('#game').hidden) {
           renderPlayers(); renderTopButtons();
-          if (snap?.phase === 'over' && !playing && !queue.length) {
-            renderPrompt();
-            if (overlayKind === 'final' && lastGameOver) showFinalOverlay(lastGameOver);
-          }
+          syncFinalActions();
+          if (isSpectator() && !playing && !queue.length) renderPrompt();
+          if (snap?.phase === 'over' && !playing && !queue.length) renderPrompt();
         }
         setRoomUrl(room.code);
         break;
       case 'game': {
         const resyncing = connection !== 'ready';
         const nextGameId = msg.gameId ?? null;
+        if (nextGameId && retiredGames.has(nextGameId)) break;
         const changedGame = nextGameId !== gameId;
-        if (changedGame) { resetGameView(); gameId = nextGameId; }
-        you = msg.you;
+        if (changedGame) {
+          if (gameId && isSpectator()) {
+            retiredGames.add(gameId);
+            if (retiredGames.size > 32) retiredGames.delete(retiredGames.values().next().value);
+          }
+          resetGameView(); gameId = nextGameId;
+        }
+        gameMode = msg.mode || room?.mode || 'play';
+        you = isSpectator() ? -1 : msg.you;
         autoFlags = msg.auto || [];
         autoModes = msg.autoModes || [];
         if (msg.speed) speed = msg.speed;
-        setDeadline(msg, msg.snap.pending?.id ?? null);
+        setDeadline(isSpectator() ? { ...msg, deadlineIn: null } : msg, msg.snap.pending?.id ?? null);
         reconcileSubmission(msg.snap);
         setConnection('ready');
         showScreen('game');
@@ -241,7 +267,7 @@
       }
       case 'lobby':
         resetGameView();
-        gameId = null;
+        gameId = null; gameMode = null; you = -1;
         setConnection('ready');
         showScreen('lobby');
         renderLobby();
@@ -285,15 +311,73 @@
   /* ================= 屏幕 ================= */
   function returnHome({ keepInvite = false } = {}) {
     resetGameView();
-    room = null; gameId = null; you = -1; autoFlags = []; autoModes = [];
+    room = null; gameId = null; gameMode = null; you = -1; autoFlags = []; autoModes = [];
     if (!keepInvite) { inviteRoom = null; setRoomUrl(null); }
     setConnection('ready');
     showScreen('home');
+    requestRooms();
   }
   function showScreen(id) {
     for (const s of ['home', 'lobby', 'game']) $(`#${s}`).hidden = s !== id;
     document.body.dataset.screen = id;
+    renderSpectatorStatus();
     if (id === 'game') requestAnimationFrame(checkLayout);
+  }
+
+  /* ---------- 首页公开房间（只读订阅，不驱动屏幕或对局） ---------- */
+  const validRoomCode = (code) => typeof code === 'string' && /^[A-Z0-9]{4}$/.test(code);
+  function normalizeRoomRows(rows) {
+    if (!Array.isArray(rows)) return [];
+    const seen = new Set();
+    const count = (n, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(n) && n >= 0 ? Math.min(n, max) : 0;
+    return rows.filter((r) => {
+      if (!r || !validRoomCode(r.code) || !['play', 'spectator'].includes(r.mode) || !['lobby', 'playing', 'over'].includes(r.status) || seen.has(r.code)) return false;
+      seen.add(r.code); return true;
+    }).map((r) => ({
+      code: r.code, mode: r.mode, status: r.status,
+      hostName: typeof r.hostName === 'string' ? r.hostName : '未命名房主',
+      playerCount: count(r.playerCount, 6), aiCount: count(r.aiCount, 6), humanCount: count(r.humanCount, 6),
+      onlineCount: count(r.onlineCount, 6), maxPlayers: 6,
+      spectatorCount: count(r.spectatorCount), onlineSpectatorCount: count(r.onlineSpectatorCount),
+      canJoin: r.canJoin === true, isMember: r.isMember === true,
+    }));
+  }
+  function requestRooms() {
+    if (!send({ type: 'listRooms' }, true)) { renderRoomDirectory(); return false; }
+    roomsLoading = true; roomsFresh = false;
+    renderRoomDirectory();
+    return true;
+  }
+  function renderRoomDirectory() {
+    const list = $('#roomList'), status = $('#roomListStatus');
+    if (!list || !status) return;
+    const online = connection === 'ready' && greeted;
+    const usable = online && roomsFresh;
+    list.setAttribute('aria-busy', String(online && roomsLoading));
+    status.textContent = !online
+      ? (connection === 'offline' ? '已离线' : '正在连接服务器…') + (roomsReceived ? ' · 以下为上次列表，重连后更新' : ' · 连接后显示公开房间')
+      : roomsLoading ? '正在加载公开房间…'
+      : !roomsFresh ? '房间列表尚未更新，请点击刷新'
+      : roomRows.length ? `当前 ${roomRows.length} 个公开房间 · 实时更新` : '暂无在线房间，创建一个邀请大家吧';
+    list.innerHTML = roomRows.map((r) => {
+      const watch = r.mode === 'spectator';
+      const state = r.status === 'lobby' ? '等待开赛' : r.status === 'playing' ? '进行中' : '已结束';
+      const label = r.isMember ? '返回房间' : watch ? '观看' : '加入';
+      const note = !usable ? (online ? '更新后可进入' : '离线，暂不可进入')
+        : !r.canJoin ? (r.status === 'playing' ? '比赛中，暂不可加入' : r.status === 'over' ? '已结束，暂不可加入' : '真人已满，暂不可加入')
+        : r.isMember ? '你已在此房间' : watch ? '随时加入观战' : r.playerCount === 6 && r.aiCount > 0 ? '加入可替换 AI' : '欢迎加入';
+      const people = `选手 ${r.playerCount}/${r.maxPlayers} · 真人 ${r.humanCount} / AI ${r.aiCount}`;
+      const presence = watch ? `观众 ${r.spectatorCount} 人${usable ? ` · ${r.onlineSpectatorCount} 人在线` : ''}` : usable ? `${r.onlineCount} 位真人在线` : '上次房间记录';
+      return `<li class="room-list-item${watch ? ' watch-room' : ''}">
+        <span class="room-list-icon ico" aria-hidden="true">${icon(watch ? 'eye' : 'users')}</span>
+        <div class="room-list-info">
+          <div class="room-list-title"><span class="room-list-host" title="${esc(r.hostName)}">${esc(r.hostName)}</span><span class="room-list-code">${esc(r.code)}</span></div>
+          <p class="room-list-state"><span class="room-state ${esc(r.status)}">${watch ? 'AI 观战 · ' : ''}${esc(state)}</span></p>
+          <p class="room-list-meta">${esc(people)}</p><p class="room-list-meta">${esc(presence)}</p>
+        </div>
+        <div class="room-list-action"><button class="btn small${watch ? '' : ' primary'}" data-room-code="${esc(r.code)}" aria-label="${esc(`${label}：${r.hostName}，房间 ${r.code}`)}"${!usable || !r.canJoin ? ' disabled' : ''}>${esc(label)}</button><span class="room-list-note">${esc(note)}</span></div>
+      </li>`;
+    }).join('');
   }
 
   /* ---------- 首页 ---------- */
@@ -318,6 +402,31 @@
       const name = $('#nameInput').value.trim();
       if (name && name !== me.name) { me.name = name; store.set('hn_me', me); send({ type: 'setName', name }); }
     };
+    let watchN = store.get('hn_watch_ai', 4);
+    if (!Number.isInteger(watchN) || watchN < 3 || watchN > 6) watchN = 4;
+    const watchSeg = $('#watchCount');
+    const syncWatchSeg = () => $$('button', watchSeg).forEach((b) => {
+      const selected = Number(b.dataset.v) === watchN;
+      b.classList.toggle('on', selected);
+      b.setAttribute('aria-checked', String(selected));
+      b.tabIndex = selected ? 0 : -1;
+    });
+    const selectWatch = (b) => {
+      watchN = Number(b.dataset.v); store.set('hn_watch_ai', watchN); syncWatchSeg(); Sound.click();
+    };
+    syncWatchSeg();
+    watchSeg.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-v]'); if (b) selectWatch(b);
+    });
+    watchSeg.addEventListener('keydown', (e) => {
+      const b = e.target.closest('button[data-v]');
+      if (!b || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+      e.preventDefault();
+      const buttons = $$('button', watchSeg), i = buttons.indexOf(b);
+      const next = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (i + (['ArrowRight', 'ArrowDown'].includes(e.key) ? 1 : -1) + buttons.length) % buttons.length;
+      selectWatch(buttons[next]); buttons[next].focus();
+    });
+    $('#watchBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'watch', ai: watchN }); };
     $('#quickBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'quick', ai: aiN }); };
     $('#createBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'create' }); };
     const join = () => {
@@ -327,6 +436,15 @@
     };
     $('#joinBtn').onclick = join;
     $('#codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
+    $('#refreshRooms').onclick = () => { Sound.click(); requestRooms(); };
+    $('#roomList').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-room-code]');
+      if (!b || b.disabled || $('#home').hidden || connection !== 'ready' || !roomsFresh) return;
+      const code = b.dataset.roomCode;
+      if (!validRoomCode(code) || !roomRows.some(r => r.code === code && r.canJoin)) return;
+      Sound.click(); ensureName(); send({ type: 'join', code });
+    });
+    renderRoomDirectory();
   }
 
   /* ---------- 房间 ---------- */
@@ -657,6 +775,8 @@
   /* ================= 渲染 ================= */
   function renderAll() {
     if (!vs) return;
+    renderSpectatorStatus();
+    if (!isParticipant()) $('#myTeam').innerHTML = '';
     renderPills();
     renderTitle();
     renderPlayers();
@@ -687,8 +807,8 @@
   function renderTitle() {
     let t = '';
     if (!vs) return;
-    if (vs.phase === 'draft') t = '选秀：组建你的 4 人队伍';
-    else if (vs.phase === 'pick') t = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name} · 派谁上场？`;
+    if (vs.phase === 'draft') t = isParticipant() ? '选秀：组建你的 4 人队伍' : 'AI 选秀：自动组建队伍';
+    else if (vs.phase === 'pick') t = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name} · ${isParticipant() ? '派谁上场？' : 'AI 正在暗选出战'}`;
     else if (vs.phase === 'race') {
       const p = vs.curSeat != null ? vs.players[vs.curSeat] : null;
       t = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}${p ? ` · 轮到 ${p.name}` : ''}`;
@@ -696,7 +816,20 @@
     else if (vs.phase === 'over') t = '比赛结束';
     $('#topTitle').textContent = t;
   }
+  function renderSpectatorStatus() {
+    const show = isSpectator() && !$('#game').hidden;
+    $('#game').dataset.mode = isSpectator() ? 'spectator' : 'play';
+    $('#spectatorStatus').hidden = !show;
+    if (!show) return;
+    const count = room?.seats?.length || vs?.players?.length || 0;
+    $('#spectatorLabel').textContent = `正在观战 · ${count}名AI`;
+    const viewers = (room?.spectators || []).filter((p) => p.online).length;
+    $('#spectatorViewers').textContent = `${viewers}人观看`;
+    $('#spectatorCode').textContent = room?.code ? `房间 ${room.code}` : '';
+    $('#spectatorCode').hidden = !room?.code;
+  }
   function renderTopButtons() {
+    renderSpectatorStatus();
     $('#speedLabel').textContent = `${speed}x`;
     const host = room && room.host === me.id;
     $('#speedBtn').disabled = !host || connection !== 'ready';
@@ -706,7 +839,8 @@
     $('#autoBtn').disabled = connection !== 'ready';
     $('#autoBtn').setAttribute('aria-pressed', String(!!autoFlags[you]));
     $('#autoBtn').title = autoFlags[you] ? '点击关闭托管并接管' : '点击开启托管';
-    $('#autoBtn').hidden = you < 0;
+    $('#autoBtn').hidden = !isParticipant();
+    $('#emotes').hidden = !isParticipant();
     $('#soundBtn').innerHTML = `<span class="ico">${icon(Sound.muted ? 'mute' : 'sound')}</span>`;
   }
 
@@ -753,15 +887,17 @@
   function renderDraft(deal) {
     const d = snap && snap.pending;
     $('#draftCards').innerHTML = (vs.faceUp || []).map((id, k) => rcard(id, { cls: deal ? 'deal' : '', k })).join('');
+    if (!isParticipant()) for (const el of $$('#draftCards .rcard')) el.dataset.tip = el.dataset.id;
+    $('#draftTitle').textContent = isParticipant() ? (vs.draft ? `${vs.draft.round === 0 ? '第一' : '第二'}轮选秀` : '组建你的队伍') : `AI 自动选秀${vs.draft ? ` · 第 ${vs.draft.round + 1}/2 轮` : ''}`;
     const total = vs.players.length * 4;
     const picked = vs.players.reduce((s, p) => s + p.hand.length, 0);
-    $('#draftSub').textContent = `已选 ${picked}/${total} · 每人 4 名，四场各派一名 · 技能写在卡上，轮到你时点击选人`;
+    $('#draftSub').textContent = `已选 ${picked}/${total} · 每人 4 名，四场各派一名 · ${isParticipant() ? '技能写在卡上，轮到你时点击选人' : 'AI 自己选人，点卡牌可查看技能'}`;
     renderDraftOrder();
     renderMyTeam();
     if (d && d.kind === 'draft') bindDraftPick(d);
   }
   function bindDraftPick(d) {
-    const mine = d.seat === you && !playing && !queue.length && !submitted && connection === 'ready';
+    const mine = isParticipant() && d.seat === you && !playing && !queue.length && !submitted && connection === 'ready';
     for (const el of $$('#draftCards .rcard')) {
       el.classList.toggle('pickable', mine);
       el.onclick = mine ? () => {
@@ -907,7 +1043,7 @@
   }
   function renderMyTeam() {
     const box = $('#myTeam');
-    const p = vs && you >= 0 ? vs.players[you] : null;
+    const p = vs && isParticipant() ? vs.players[you] : null;
     if (!p) { box.innerHTML = ''; return; }
     const slots = p.hand.map((id) => `<div class="mt-slot filled" data-tip="${id}" style="--rc:${rcol(id)}">${art(id)}<span>${esc(R[id].name)}</span></div>`);
     for (let i = p.hand.length; i < 4; i++) slots.push('<div class="mt-slot"><span>待选</span></div>');
@@ -1010,7 +1146,7 @@
       // 旧 pump 的 finally 也不能解锁新一局、重建旧提示。
       if (epoch === animationEpoch) {
         fast = false; playing = false;
-        renderPlayers(); renderPrompt();
+        renderPlayers(); renderPrompt(); syncFinalActions();
       }
     }
   }
@@ -1397,20 +1533,39 @@
       <div class="ov-actions"><button class="btn" id="ovClose">看看赛道</button></div></div>`, 'results');
     $('#ovClose').onclick = () => { Sound.click(); hideOverlay(); };
   }
+  function syncFinalActions() {
+    if (overlayKind !== 'final') return;
+    const control = $('#finalReplayControl');
+    if (!control) return;
+    const host = room?.host === me.id;
+    const spectator = isSpectator();
+    const type = spectator ? 'replay' : 'lobby';
+    if (host) {
+      let again = $('#again', control);
+      if (!again) {
+        control.innerHTML = `<button class="btn primary big" id="again" data-navigation="${type}">${spectator ? '再看一局' : '再来一局'}</button>`;
+        again = $('#again', control);
+        again.onclick = () => { Sound.click(); navigate(type, again); };
+      }
+      again.disabled = connection !== 'ready' || !!navigationPending;
+    } else if ($('#again', control) || !control.firstChild) {
+      control.innerHTML = `<span class="sub">${spectator ? '等房主开启下一场 AI 对局…' : '等房主开下一局…'}</span>`;
+    }
+  }
   function showFinalOverlay(e) {
     lastGameOver = e;
     const rows = e.scores.slice().sort((a, b) => b.score - a.score);
     const champs = e.champions.map((s) => vs.players[s].name).join('、');
     const list = rows.map((x, k) => `<div class="st-row ${e.champions.includes(x.seat) ? 'top' : ''}" data-seat="${x.seat}" style="animation-delay:${k * 80}ms"><span class="rk">${k + 1}</span><span class="st-name">${esc(vs.players[x.seat].name)}${x.seat === you ? '（你）' : ''}</span><span class="gain"></span><span class="tot">${x.score}</span></div>`).join('');
-    const host = room && room.host === me.id;
+    const spectator = isSpectator();
     const champ = e.champions[0];
     const cp = vs.players[champ];
     const lastRid = cp && cp.hand[cp.hand.length - 1];
-    showOverlay(`<div class="ov-box card"><h2>总冠军：${esc(champs)}</h2><p class="sub">${e.champions.includes(you) ? '你赢了！胡闹之王！' : '四场胡闹落幕，下次再战！'}</p>
+    showOverlay(`<div class="ov-box card"><h2>总冠军：${esc(champs)}</h2><p class="sub">${e.champions.includes(you) ? '你赢了！胡闹之王！' : spectator ? '四场 AI 对局已落幕，冠军诞生！' : '四场胡闹落幕，下次再战！'}</p>
       <div class="podium"><div class="pod p1" style="--c:${PCOL[champ % 6]}"><div class="who">${lastRid ? art(lastRid) : ''}</div><div class="nm">${esc(cp.name)}</div><div class="blk">1<small>${rows[0].score} 分</small></div></div></div>
       <div class="standings">${list}</div>
-      <div class="ov-actions">${host ? '<button class="btn primary big" id="again">再来一局</button>' : '<span class="sub">等房主开下一局…</span>'}<button class="btn" id="toHome">回到首页</button><button class="btn ghost" id="ovClose">看看赛道</button></div></div>`, 'final');
-    const again = $('#again'); if (again) again.onclick = () => { Sound.click(); navigate('lobby', again); };
+      <div class="ov-actions"><span id="finalReplayControl"></span><button class="btn" id="toHome">回到首页</button><button class="btn ghost" id="ovClose">看看赛道</button></div></div>`, 'final');
+    syncFinalActions();
     $('#toHome').onclick = () => { Sound.click(); navigate('leave', $('#toHome')); };
     $('#ovClose').onclick = () => { Sound.click(); hideOverlay(); };
   }
@@ -1467,7 +1622,7 @@
   function unlockPrompt() { locked = !!submitted; if (!playing && !queue.length) renderPrompt(); }
   function answer(d, v) {
     const current = snap && snap.pending;
-    if (locked || playing || queue.length || !current || current.id !== d.id ||
+    if (!isParticipant() || locked || playing || queue.length || !current || current.id !== d.id ||
         (current.simul ? !current.seats.includes(you) || current.done.includes(you) : current.seat !== you)) return false;
     // 旧后端没有 gameId 字段；新后端始终下发并严格校验，升级前仍可继续现有对局。
     if (!send({ type: 'act', ...(gameId ? { gameId } : {}), id: d.id, value: v })) return false;
@@ -1498,6 +1653,28 @@
     renderPlayers();
     const dock = $('#dock');
     const d = snap.pending;
+    if (!isParticipant() && (snap.phase !== 'over' || connection !== 'ready')) {
+      if (['pick', 'choose', 'mini', 'reveal'].includes(overlayKind)) hideOverlay(true);
+      if (vs.phase === 'draft') bindDraftPick(d || {});
+      let title = 'AI 对局正在进行', sub = '选秀、出战、掷骰与技能均由 AI 自动完成';
+      let seat = -1;
+      if (connection !== 'ready') { title = '观战连接已断开，正在重新同步'; sub = '重连后继续观看，不会要求你选卡或接管 AI'; }
+      else if (d?.simul) {
+        const done = (d.done || []).length, total = (d.seats || vs.players).length;
+        title = `AI 正在暗选出战 · ${done}/${total} 已选好`;
+        sub = `第 ${vs.raceNo} 场 · 全部选好后同时亮牌`;
+      } else if (d) {
+        seat = d.seat;
+        const p = vs.players[seat];
+        title = `${p?.name || 'AI'} ${WAIT_TEXT[d.kind] || '正在思考'}`;
+        sub = d.kind === 'draft' ? 'AI 自动组建队伍 · 可以查看卡牌技能，无需操作' : 'AI 自动行动 · 骰子、技能和移动按顺序播放';
+      } else if (vs.phase === 'between') { title = `第 ${vs.raceNo} 场已结束`; sub = '正在结算，随后自动进入下一场'; }
+      if (connection === 'ready' && room?.spectators?.length && !room.spectators.some((p) => p.online)) {
+        title = '暂无在线观众，AI 对局等待中'; sub = '观众重新连接后会自动继续';
+      }
+      dock.innerHTML = promptHtml({ seat, mine: false, title, sub });
+      return;
+    }
     if (vs.phase === 'draft') bindDraftPick(d || {});
     if (connection !== 'ready' || submitted) {
       if (d && d.simul) showPickOverlay(d);
@@ -1508,13 +1685,15 @@
     }
     if (snap.phase === 'over') {
       const host = room && room.host === me.id;
-      dock.innerHTML = promptHtml({ seat: you, mine: false, title: '比赛结束', sub: '四场胡闹已落幕', opts: `<button class="btn" data-x="show">查看成绩</button>${host ? '<button class="btn primary" data-x="again">再来一局</button>' : ''}<button class="btn" data-x="home">回到首页</button>` });
+      const spectator = isSpectator();
+      const againType = spectator ? 'replay' : 'lobby';
+      dock.innerHTML = promptHtml({ seat: you, mine: false, title: '比赛结束', sub: spectator && !host ? '等房主开启下一场 AI 对局…' : '四场胡闹已落幕', opts: `<button class="btn" data-x="show">查看成绩</button>${host ? `<button class="btn primary" data-x="again" data-navigation="${againType}" ${navigationPending ? 'disabled' : ''}>${spectator ? '再看一局' : '再来一局'}</button>` : ''}<button class="btn" data-x="home">回到首页</button>` });
       $('.prompt', dock).classList.remove('wait');
       for (const b of $$('#dock [data-x]')) {
         b.onclick = () => {
           Sound.click();
           if (b.dataset.x === 'show' && lastGameOver) showFinalOverlay(lastGameOver);
-          if (b.dataset.x === 'again') navigate('lobby', b);
+          if (b.dataset.x === 'again') navigate(againType, b);
           if (b.dataset.x === 'home') navigate('leave', b);
         };
       }
@@ -1773,7 +1952,7 @@
     });
   }
 
-  window.__hn = () => ({ pending: snap && snap.pending, phase: vs && vs.phase, playing, queue: queue.length, overlayKind, you, locked });
+  window.__hn = () => ({ pending: snap && snap.pending, phase: vs && vs.phase, playing, queue: queue.length, overlayKind, you, locked, mode: gameMode, gameId, navigationPending });
 
   /* ================= 启动 ================= */
   function init() {

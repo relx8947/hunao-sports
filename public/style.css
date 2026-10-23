@@ -137,6 +137,12 @@ input { font: inherit; color: inherit; }
 .field input:focus, .code-join input:focus { background: #fff; box-shadow: 0 0 0 4px rgba(255, 197, 61, .5); }
 .quick-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
 .quick-row .btn.big { flex: 1 1 240px; }
+.watch-entry { padding-top: 14px; border-top: 2px dashed var(--line); }
+.watch-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
+.watch-row .watch-btn { flex: 1 1 240px; background: var(--bg2); }
+.watch-row .watch-btn:hover { background: var(--paper); }
+.watch-entry p { margin: 10px 0 0; font-size: 12px; font-weight: 700; color: var(--ink2); line-height: 1.5; }
+#watchCount button { min-height: 44px; }
 .seg { display: inline-flex; align-items: center; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--bg); overflow: hidden; box-shadow: var(--shadow-sm); }
 .seg-label { padding: 0 10px; font-size: 13px; font-weight: 800; color: var(--ink2); }
 .seg button { border: 0; border-left: 2px solid var(--ink); background: transparent; width: 42px; height: 100%; min-height: 46px; font-weight: 900; font-size: 16px; transition: background .15s; }
@@ -148,6 +154,44 @@ input { font: inherit; color: inherit; }
 .code-join { flex: 1 1 220px; min-width: 0; display: flex; gap: 8px; }
 .code-join input { flex: 1; width: 0; min-width: 0; text-transform: uppercase; letter-spacing: .3em; text-align: center; font-weight: 900; }
 .home-foot { display: flex; gap: 10px; }
+
+/* 首页公开大厅：人数是房间概要，不展示任何对局私有信息。 */
+.room-directory { width: 100%; min-width: 0; padding: 20px; }
+.room-directory-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.room-directory-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px; font-weight: 900; }
+.room-directory-head h2 .ico { width: 24px; height: 24px; }
+.room-directory-head .btn { min-height: 44px; flex: none; }
+.room-directory-hint { margin: 10px 0 0; color: var(--ink2); font-size: 12px; font-weight: 600; line-height: 1.6; }
+.room-list-status { margin: 12px 0 0; font-size: 13px; color: var(--ink2); font-weight: 800; line-height: 1.6; }
+.room-list { display: grid; gap: 12px; padding: 0; margin: 14px 0 0; list-style: none; }
+.room-list:empty { margin-top: 0; }
+.room-list-item { display: grid; grid-template-columns: 38px minmax(0, 1fr) 116px; align-items: center; gap: 12px; min-width: 0; padding: 14px; border: 2px solid var(--ink); border-radius: 16px; background: var(--bg); box-shadow: var(--shadow-sm); }
+.room-list-item.watch-room { background: var(--bg2); }
+.room-list-icon { align-self: start; width: 38px; height: 38px; padding: 7px; background: var(--yellow); border: 2px solid var(--ink); border-radius: 12px; }
+.watch-room .room-list-icon { background: var(--paper); }
+.room-list-info { min-width: 0; }
+.room-list-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 15px; font-weight: 900; }
+.room-list-host { min-width: 0; font-size: 15px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-list-code { flex: none; padding: 2px 5px; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 6px; font-size: 12px; font-weight: 900; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.room-list-state, .room-list-meta { margin: 6px 0 0; font-size: 12px; font-weight: 700; color: var(--ink2); line-height: 1.5; overflow-wrap: anywhere; }
+.room-state { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; background: var(--paper); color: var(--ink); }
+.room-state.lobby { border-color: var(--ink); background: var(--yellow); border-bottom: 2px solid var(--green); }
+.room-state.playing { border-bottom: 2px solid var(--blue); }
+.room-state.over { color: var(--ink2); }
+.room-list-action { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; max-width: 124px; }
+.room-list-action .btn { min-width: 78px; min-height: 44px; padding: 8px 12px; }
+.room-list-action .btn:disabled { opacity: .6; background: var(--bg2); cursor: not-allowed; }
+.room-list-note { color: var(--ink2); font-size: 11px; font-weight: 700; line-height: 1.5; text-align: center; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .room-directory { padding: 18px 16px; }
+  .room-directory-head h2 { font-size: 18px; }
+  .room-list-item { grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 12px; }
+  .room-list-icon { width: 34px; height: 34px; padding: 6px; }
+  .room-list-host { font-size: 14px; }
+  .room-list-action { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; max-width: none; padding-top: 8px; border-top: 1px dashed var(--line); }
+  .room-list-action .btn { flex: none; min-width: 92px; }
+  .room-list-note { text-align: left; }
+}
 
 /* ---------- 房间 ---------- */
 #lobby { display: flex; justify-content: center; padding: 28px 16px 40px; }
@@ -195,6 +239,35 @@ input { font: inherit; color: inherit; }
 .race-pill .pts { color: var(--ink2); font-weight: 700; }
 .top-title { flex: 1; min-width: 0; font-weight: 900; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 .top-actions { display: flex; gap: 6px; flex: none; }
+.spectator-status { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; font-size: 12px; font-weight: 800; color: var(--ink2); }
+.spectator-status > .ico { color: var(--ink); flex: none; }
+#spectatorLabel { white-space: nowrap; color: var(--ink); }
+.spectator-viewers { white-space: nowrap; }
+.spectator-code { margin-left: auto; white-space: nowrap; padding: 3px 8px; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 8px; font-variant-numeric: tabular-nums; }
+#game[data-mode="spectator"] .top-title { display: none; }
+#game[data-mode="spectator"] .rcard:not(.pickable) { cursor: help; }
+#game[data-mode="spectator"] .dock .timer { display: none; }
+@media (max-width: 1200px) {
+  #game[data-mode="spectator"] .topbar { flex-wrap: wrap; }
+  #game[data-mode="spectator"] .top-actions { margin-left: auto; }
+  .spectator-status { order: 3; flex-basis: 100%; }
+}
+@media (max-width: 1000px) and (orientation: landscape) and (max-height: 550px) {
+  #game[data-mode="spectator"] .topbar { flex-wrap: wrap; }
+  .spectator-status { gap: 6px; font-size: 11px; }
+  #game[data-mode="spectator"] .dock .prompt { flex-wrap: wrap; }
+  #game[data-mode="spectator"] .dock .p-opts { flex: 0 1 auto; }
+}
+@media (max-width: 360px) {
+  #game[data-mode="spectator"] .topbar { gap: 6px; }
+  #game[data-mode="spectator"] .top-actions { gap: 4px; }
+  #game[data-mode="spectator"] .races { width: 100%; }
+  #game[data-mode="spectator"] .top-actions { margin-left: 0; }
+  .spectator-status { gap: 5px; }
+  .spectator-viewers { display: none; }
+  .home-card { padding: 18px; }
+  #aiCount, #watchCount { max-width: 100%; }
+}
 
 .stage { grid-area: stage; position: relative; min-height: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 10px; }
 .board-wrap { width: 100%; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; container-type: size; }
