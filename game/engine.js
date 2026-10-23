@@ -91,6 +91,8 @@ class Game {
   drain() { const e = this.events; this.events = []; return e; }
 
   emit(ev) {
+    // 事件可能包含 results/champions 等内部数组，消费者不得反向改写对局。
+    ev = structuredClone(ev);
     ev.seq = ++this.evSeq;
     this.events.push(ev);
     if (ev.text) {
@@ -136,16 +138,43 @@ class Game {
     return on.filter((r) => r.pos === m);
   }
 
-  // 运动员当前生效的技能（模仿猫动态取领跑者技能）
+  copyCandidates(r) {
+    return this.leaders().filter((x) => x !== r && x.power !== 'copycat' && !BEFORE_RACE.has(x.power));
+  }
+  copyKey(candidates) { return candidates.map((r) => `${r.rid}:${r.power}`).sort().join('|'); }
+
+  // 查询不修改状态，也不替玩家选择；新并列局面在生成器边界处理。
   power(r) {
     if (!this.active(r)) return null;
     if (r.power !== 'copycat') return r.power;
-    const lead = this.leaders().filter((x) => x !== r && x.power !== 'copycat' && !BEFORE_RACE.has(x.power));
-    if (!lead.length) return null;
-    const pick = lead.includes(r.copyPick) ? r.copyPick
-      : lead.slice().sort((a, b) => (BY_ID[b.power]?.tier || 0) - (BY_ID[a.power]?.tier || 0))[0];
-    r.copyPick = pick;
-    return pick.power;
+    const candidates = this.copyCandidates(r);
+    if (candidates.length === 1) return candidates[0].power;
+    const picked = r.copyChoices?.[this.copyKey(candidates)];
+    return candidates.find((x) => x.rid === picked)?.power || null;
+  }
+
+  *refreshCopies() {
+    for (const r of this.sortByTurn(this.onTrack().filter((o) => o.power === 'copycat'))) {
+      const candidates = this.copyCandidates(r);
+      const key = this.copyKey(candidates);
+      let picked = candidates.length === 1 ? candidates[0].rid : r.copyChoices?.[key];
+      if (candidates.length > 1 && !candidates.some((o) => o.rid === picked)) {
+        picked = yield this.ask(r.seat, 'copycat', '模仿猫：并列领跑，复制谁的技能？', candidates.map((o) => ({
+          v: o.rid, label: `${this.nm(o)} · ${BY_ID[o.power].skill}`,
+        })));
+        // 当前回合连锁中，同一批领跑者再次出现时沿用选择；下回合可重选。
+        r.copyChoices ||= Object.create(null);
+        r.copyChoices[key] = picked;
+      }
+      const eff = candidates.find((o) => o.rid === picked)?.power || null;
+      if (r.copyEff !== eff) {
+        r.copyEff = eff;
+        this.emit({ t: 'copy', rid: r.rid, target: picked || null, power: eff,
+          text: eff ? `${this.nm(r)} 复制了「${BY_ID[eff].skill}」` : `${this.nm(r)} 当前没有可复制的领跑技能` });
+        // 先保存选择和有效技能，再处理同格排斥；嵌套刷新不会重复询问同一局面。
+        if (eff === 'hugebaby') yield* this.shoveByBaby(r);
+      }
+    }
   }
   has(r, key) { return this.power(r) === key; }
   holders(key) { return this.sortByTurn(this.onTrack().filter((r) => this.power(r) === key)); }
@@ -227,6 +256,7 @@ class Game {
     this.finishCount = 0;
     this.outOrder = [];
     this.turns = 0;
+    this.raceEndReason = 'finished';
     for (const s of seats) {
       const rid = picks[s];
       this.players[s].used.push(rid);
@@ -253,9 +283,15 @@ class Game {
           this.extraTurn = false;
         }
         this.checkEnd();
-        if (this.turns >= MAX_TURNS) throw new RaceEnd();
+        if (this.turns >= MAX_TURNS) {
+          this.raceEndReason = 'turn-limit';
+          this.emit({ t: 'info', text: '本场达到回合上限，保留已获得分数并进入结算' });
+          throw new RaceEnd();
+        }
         if (this.skipperNext != null) { seat = this.skipperNext; this.skipperNext = null; } else seat = (seat + 1) % this.n;
       }
+      this.raceEndReason = 'loop-limit';
+      this.emit({ t: 'info', text: '本场达到循环保护上限，保留已获得分数并进入结算' });
       throw new RaceEnd();
     } catch (e) {
       if (!(e instanceof RaceEnd)) throw e;
@@ -270,6 +306,7 @@ class Game {
   *beforeRace() {
     this.curSeat = this.firstSeat;
     for (const r of this.sortByTurn(this.racers)) yield* this.applyBeforeRace(r, r.power, 0);
+    yield* this.refreshCopies();
   }
 
   // Egg / Twin 拿到的技能若也是「赛前」技能，同样生效
@@ -322,7 +359,7 @@ class Game {
     }
     if (next) this.firstSeat = next.seat;
     const res = {
-      race: this.raceNo, track: this.trackKey,
+      race: this.raceNo, track: this.trackKey, turns: this.turns, reason: this.raceEndReason,
       standings: this.racers.map((r) => ({ seat: r.seat, rid: r.rid, pos: r.pos, finished: r.finished, out: r.out, bonus: r.bonusSecond || false })),
       scores: this.players.map((p) => this.score(p.seat)),
     };
@@ -333,6 +370,7 @@ class Game {
 
   /* ================= 技能生效 & 蹭蹭狗 ================= */
   *pw(r, key, times = 1) {
+    yield* this.refreshCopies();
     for (let i = 0; i < times; i++) {
       const k = `${r.rid}:${key}`;
       const c = (this.pwCount.get(k) || 0) + 1;
@@ -414,10 +452,32 @@ class Game {
     return pos;
   }
 
+  // 普通巨婴停格和模仿猫切换技能共用；挤人不算移动，但校正后必须结算停格。
+  *shoveByBaby(r) {
+    if (!this.active(r) || !this.has(r, 'hugebaby') || r.pos <= 0 || r.pos >= FINISH) return;
+    const from = r.pos;
+    const shoved = [];
+    for (const o of this.sortByTurn(this.at(from, r))) {
+      this.babyPushed = null;
+      const to = this.babyAdjust(o, from - 1);
+      const baby = this.babyPushed;
+      o.pos = to;
+      this.emit({ t: 'warp', rid: o.rid, from, to, text: `${this.nm(o)} 被${this.nm(r)}挤到后面` });
+      shoved.push({ racer: o, to, baby });
+    }
+    if (!shoved.length) return;
+    yield* this.pw(r, 'hugebaby');
+    for (const { racer: o, to, baby } of shoved) {
+      if (baby) yield* this.pw(baby, 'hugebaby');
+      if (this.active(o) && o.pos === to) yield* this.afterStop(o, from, to, { passed: [], moved: false, sharedBefore: [] });
+    }
+  }
+
   /* ================= 移动 ================= */
   // kind: main | power | arrow
   *move(r, amount, kind = 'power') {
     if (!this.active(r) || !amount) return;
+    yield* this.refreshCopies();
     if (++this.depth > 60) { this.depth--; return; }
     try {
       const from = r.pos;
@@ -480,6 +540,7 @@ class Game {
 
   // 冲线也算一次移动：同格的吸盘鱼可以跟着冲线
   *afterFinishMove(r, from, sharedBefore) {
+    yield* this.refreshCopies();
     for (const sf of this.holders('suckerfish')) {
       if (sf === r || !sharedBefore.includes(sf) || sf.pos !== from) continue;
       const ok = yield this.ask(sf.seat, 'suckerfish', `吸盘鱼：跟着 ${this.nm(r)} 一起冲线？`, [{ v: 'yes', label: '黏上去！' }, { v: 'no', label: '算了' }]);
@@ -503,20 +564,11 @@ class Game {
 
   // 停在某格之后的连锁：赛道格 → 当前玩家 → 其他玩家（顺时针）
   *afterStop(r, from, final, { passed, moved, sharedBefore }) {
+    if (!this.active(r)) return;
+    yield* this.refreshCopies();
+    // 前置连锁可能改变落点；只跳过位置相关触发，原移动的超车/同格历史仍须结算。
     // 巨婴落到有人的格子：把他们挤到身后一格（不算移动，视为停在那里）
-    if (final > 0 && final < FINISH && this.has(r, 'hugebaby')) {
-      const shoved = this.at(final, r);
-      if (shoved.length) {
-        for (const o of shoved) {
-          o.pos = final - 1;
-          this.emit({ t: 'warp', rid: o.rid, from: final, to: final - 1, text: `${this.nm(o)} 被${this.nm(r)}挤到后面一格` });
-        }
-        yield* this.pw(r, 'hugebaby');
-        for (const o of this.sortByTurn(shoved)) {
-          if (this.active(o) && o.pos === final - 1) yield* this.afterStop(o, final, final - 1, { passed: [], moved: false, sharedBefore: [] });
-        }
-      }
-    }
+    if (r.pos === final) yield* this.shoveByBaby(r);
     const trig = [];
     const add = (order, fn) => trig.push({ order, fn });
     const sp = this.track.spaces[final];
@@ -558,7 +610,7 @@ class Game {
       });
     }
 
-    const here = this.at(final, r);
+    const here = r.pos === final ? this.at(final, r) : [];
     // 芭芭雅嘎
     if (this.power(r) === 'babayaga' && here.length) {
       add(this.seatOrder(r.seat), function* () {
@@ -647,12 +699,15 @@ class Game {
     this.pwTotal = 0;
     this.depth = 0;
     this.loopNoted = false;
+    // 缓存仅覆盖本回合技能连锁；清空后 power() 在新选择完成前返回 null。
+    for (const r of this.racers) delete r.copyChoices;
   }
 
   *takeTurn(r) {
     this.curSeat = r.seat;
     this.turns++;
     this.resetTurnCounters();
+    yield* this.refreshCopies();
     this.emit({ t: 'turn', seat: r.seat, rid: r.rid });
     const startPos = r.pos;
     let skipMain = false;
@@ -680,10 +735,10 @@ class Game {
     }
     if (!skipMain && this.active(r)) yield* this.mainMove(r, startPos);
 
-    // 起哄怪
-    if (this.active(r) && Math.abs(r.pos - startPos) <= 1) {
+    // 起哄怪按回合实际位移触发：第一名技能失效不抹去本回合的移动事实。
+    if (!r.out && this.finishCount < 2 && Math.abs(r.pos - startPos) <= 1) {
       for (const h of this.holders('heckler')) {
-        if (h === r || !this.active(h)) continue;
+        if (!this.active(h)) continue;
         this.emit({ t: 'info', rid: h.rid, text: `${this.nm(h)}：哈哈哈，原地踏步！前进 2 格` });
         yield* this.move(h, 2, 'power');
         yield* this.pw(h, 'heckler');
@@ -693,6 +748,7 @@ class Game {
   }
 
   *mainMove(r, startPos) {
+    yield* this.refreshCopies();
     const yn = (yes, no) => [{ v: 'yes', label: yes }, { v: 'no', label: no }];
     // ---- 主移动前 ----
     if (this.has(r, 'cheerleader')) {
@@ -739,7 +795,7 @@ class Game {
     if (this.active(r) && this.has(r, 'thirdwheel')) {
       const counts = {};
       for (const o of this.onTrack()) counts[o.pos] = (counts[o.pos] || 0) + 1;
-      const spaces = Object.keys(counts).map(Number).filter((p) => counts[p] === 2 && p !== r.pos && p > 0);
+      const spaces = Object.keys(counts).map(Number).filter((p) => counts[p] === 2 && p !== r.pos);
       if (spaces.length) {
         const opts = spaces.sort((a, b) => b - a).map((p) => ({ v: `s${p}`, label: `第 ${p} 格` })).concat([{ v: '_no', label: '不挤了' }]);
         const v = yield this.ask(r.seat, 'thirdwheel', '电灯泡：挤进哪个两人格？', opts);
@@ -792,8 +848,8 @@ class Game {
       for (let g = 0; g < 4; g++) {
         const opts = [{ v: 'keep', label: `就用 ${roll}` }];
         if (magic > 0) opts.push({ v: 'magic', label: `魔术重掷（还剩 ${magic} 次）` });
-        const dm = !diceUsed && this.holders('dicemonger').length ? this.holders('dicemonger')[0] : null;
-        if (dm) opts.push({ v: 'dice', label: '骰子交易：重掷一次' });
+        const dealers = !diceUsed ? this.holders('dicemonger') : [];
+        if (dealers.length) opts.push({ v: 'dice', label: '骰子交易：重掷一次' });
         if (opts.length === 1) break;
         const v = yield this.ask(r.seat, 'reroll', `掷出了 ${roll}，要重掷吗？`, opts, { roll });
         if (v === 'keep' || !this.active(r)) break;
@@ -801,9 +857,13 @@ class Game {
         this.emit({ t: 'roll', rid: r.rid, seat: r.seat, value: roll, reroll: true, text: `${this.nm(r)} 重掷出 ${roll}` });
         if (v === 'magic') { magic--; yield* this.pw(r, 'magician'); } else {
           diceUsed = true;
-          if (dm !== r && this.active(dm)) {
-            this.emit({ t: 'info', rid: dm.rid, text: `${this.nm(dm)} 做成一笔骰子生意，前进 1 格` });
-            yield* this.move(dm, 1, 'power');
+          // 机会共享一次；本次交易触发的所有有效贩子依回合顺序结算奖励。
+          for (const dm of dealers) {
+            if (!this.active(dm)) continue;
+            if (dm !== r) {
+              this.emit({ t: 'info', rid: dm.rid, text: `${this.nm(dm)} 做成一笔骰子生意，前进 1 格` });
+              yield* this.move(dm, 1, 'power');
+            }
             yield* this.pw(dm, 'dicemonger');
           }
         }
@@ -835,13 +895,14 @@ class Game {
         if (this.has(r, 'sisyphus')) {
           skip = true;
           const chips = this.players[r.seat].chips;
-          const i = chips.findIndex((c) => c.kind === 'bronze');
-          const j = i >= 0 ? i : chips.reduce((best, c, k) => (best < 0 || c.v < chips[best].v ? k : best), -1);
+          const i = chips.findIndex((c) => c.kind === 'bronze' && c.v > 0);
+          const j = i >= 0 ? i : chips.reduce((best, c, k) => c.v > 0 && (best < 0 || c.v < chips[best].v) ? k : best, -1);
           if (j >= 0) {
             const [lost] = chips.splice(j, 1);
             if (lost.v > 1) chips.push({ ...lost, v: lost.v - 1 });
           }
-          this.emit({ t: 'chip', seat: r.seat, kind: 'lose', v: -1, text: `${this.nm(r)} 掷出 6，石头滚回起点，失去 1 分` });
+          if (j >= 0) this.emit({ t: 'chip', seat: r.seat, kind: 'lose', v: -1, text: `${this.nm(r)} 掷出 6，石头滚回起点，失去 1 分` });
+          else this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 掷出 6，石头滚回起点；当前没有分数可失去` });
           yield* this.warp(r, 0);
           yield* this.pw(r, 'sisyphus');
         }
@@ -883,15 +944,23 @@ class Game {
   }
 
   /* ================= 对外快照 ================= */
-  snapshot() {
+  snapshot(viewerSeat) {
     const d = this.pending;
+    const internal = viewerSeat === undefined;
     let pending = null;
     if (d) {
-      pending = d.simul
-        ? { id: d.id, kind: d.kind, title: d.title, simul: true, seats: d.seats, done: Object.keys(d.answers).map(Number), optionsBySeat: d.optionsBySeat }
-        : { id: d.id, kind: d.kind, title: d.title, seat: d.seat, options: d.options, roll: d.roll, target: d.target };
+      if (d.simul) {
+        const optionsBySeat = internal ? d.optionsBySeat :
+          (d.seats.includes(viewerSeat) ? { [viewerSeat]: d.optionsBySeat[viewerSeat] } : {});
+        pending = { id: d.id, kind: d.kind, title: d.title, simul: true, seats: d.seats,
+          done: Object.keys(d.answers).map(Number), optionsBySeat };
+      } else {
+        pending = { id: d.id, kind: d.kind, title: d.title, seat: d.seat,
+          options: internal || viewerSeat === d.seat ? d.options : [], roll: d.roll, target: d.target };
+      }
     }
-    return {
+    // 包括 chips、results、pending options、计分常量都必须与引擎脱离引用。
+    return structuredClone({
       phase: this.phase,
       raceNo: this.raceNo,
       track: this.trackKey,
@@ -909,7 +978,7 @@ class Game {
       champions: this.champions || null,
       pending,
       seq: this.evSeq,
-    };
+    });
   }
 }
 

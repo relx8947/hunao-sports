@@ -3,9 +3,11 @@
   let ctx = null;
   let master = null;
   let muted = false;
+  const sources = new Set();
   try { muted = localStorage.getItem('hn_mute') === '1'; } catch (e) { /* ignore */ }
 
   function ensure() {
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return null;
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
@@ -14,8 +16,17 @@
       master.gain.value = 0.55;
       master.connect(ctx.destination);
     }
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     return ctx;
+  }
+
+  function track(source, nodes) {
+    sources.add(source);
+    source.onended = () => { sources.delete(source); for (const node of nodes) node.disconnect(); };
+  }
+  function stop() {
+    for (const source of sources) { try { source.stop(); } catch (e) { /* already ended */ } }
+    sources.clear();
   }
 
   function tone(freq, dur, { type = 'sine', vol = 0.3, at = 0, slide = 0, attack = 0.005 } = {}) {
@@ -30,6 +41,7 @@
     g.gain.exponentialRampToValueAtTime(vol, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(master);
+    track(o, [o, g]);
     o.start(t); o.stop(t + dur + 0.02);
   }
 
@@ -47,14 +59,17 @@
     const g = ctx.createGain();
     g.gain.value = vol;
     src.connect(f); f.connect(g); g.connect(master);
+    track(src, [src, f, g]);
     src.start(t);
   }
 
   const S = {
     unlock() { ensure(); },
+    stop,
     get muted() { return muted; },
     setMuted(m) {
       muted = !!m;
+      if (muted) stop();
       try { localStorage.setItem('hn_mute', muted ? '1' : '0'); } catch (e) { /* ignore */ }
     },
     click() { tone(660, 0.06, { type: 'triangle', vol: 0.15 }); },

@@ -4,7 +4,8 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const CANCELLED = new Error('动画已取消');
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
@@ -30,7 +31,10 @@
   /* ================= 状态 ================= */
   let ws = null;
   let me = store.get('hn_me', {});
+  if (!me || typeof me !== 'object' || Array.isArray(me)) me = {};
   let room = null;
+  let gameId = null;
+  let inviteRoom = new URLSearchParams(location.search).get('room');
   let snap = null; // 服务端最新权威快照
   let vs = null; // 当前画面状态（随动画推进）
   let you = -1;
@@ -48,89 +52,225 @@
   let podium = { 1: [153, 171], 2: [114, 189] };
   let lastGameOver = null;
   let reconnectDelay = 800;
+  let connection = 'connecting';
+  let greeted = false;
+  let reconnectTimer = null;
+  let handshakeTimer = null;
+  let animationEpoch = 0;
+  const animationTimers = new Set();
+  const animationIntervals = new Set();
+  const pendingWaits = new Set();
+  let submitted = null;
+  let submitTimer = null;
+  let autoModes = [];
+  let timerTicker = null;
+  let timerEnds = 0;
+  let timerDuration = 0;
+  let deadlineId = null;
+  let overlayHideTimer = null;
+  let lastFullContext = null;
+  let navigationPending = null;
+  let navigationTimer = null;
 
   /* ================= 连接 ================= */
+  function setConnection(state) {
+    connection = state;
+    document.body.dataset.connection = state;
+    const status = $('#connectionStatus');
+    if (status) {
+      status.hidden = state === 'ready';
+      status.textContent = state === 'syncing' ? '正在同步房间，请稍候…' : state === 'connecting' ? '正在连接服务器…' : '连接断开，正在重连；未确认操作将核对最新局面';
+    }
+    if (state === 'ready') clearTimeout(handshakeTimer);
+    for (const el of $$('[data-network]')) el.disabled = state !== 'ready';
+    for (const el of $$('[data-navigation]')) el.disabled = state !== 'ready' || !!navigationPending;
+    renderTopButtons();
+    if (room && room.status === 'lobby') renderLobby();
+  }
   function connect() {
+    clearTimeout(reconnectTimer);
+    setConnection('connecting');
+    greeted = false;
     // 相对当前页面路径连接，挂在任意子路径（如 /hunao/）下都能用
     const u = new URL('ws', location.href);
     u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     u.search = '';
-    ws = new WebSocket(u.toString());
-    ws.onopen = () => {
-      reconnectDelay = 800;
-      send({ type: 'hello', token: me.token, name: me.name || $('#nameInput').value.trim() });
+    const socket = new WebSocket(u.toString());
+    ws = socket;
+    clearTimeout(handshakeTimer);
+    handshakeTimer = setTimeout(() => { if (ws === socket && connection !== 'ready') socket.close(); }, 10000);
+    socket.onopen = () => {
+      if (ws !== socket) return;
+      setConnection('syncing');
+      send({ type: 'hello', token: me.token, name: me.name || $('#nameInput').value.trim() }, true);
     };
-    ws.onmessage = (ev) => {
+    socket.onmessage = (ev) => {
+      if (ws !== socket) return;
       let msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
-      handle(msg);
+      if (msg && typeof msg === 'object') handle(msg);
     };
-    ws.onclose = () => {
-      setTimeout(connect, reconnectDelay);
+    socket.onclose = () => {
+      if (ws !== socket) return;
+      clearTimeout(handshakeTimer);
+      greeted = false;
+      // 关闭时不知道 act 是否被服务端处理；重连快照决定，不自动重发。
+      clearTimeout(submitTimer); submitTimer = null;
+      clearNavigation();
+      deadlineAt = 0;
+      setConnection('offline');
+      clearPromptLive();
+      if (!playing) renderPrompt();
+      reconnectTimer = setTimeout(connect, reconnectDelay);
       reconnectDelay = Math.min(reconnectDelay * 1.6, 8000);
-      if (room) toast('连接断开，正在重连…', true);
     };
+    socket.onerror = () => { if (ws === socket) socket.close(); };
   }
-  function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+  function send(m, quiet = false) {
+    if (!ws || ws.readyState !== WebSocket.OPEN || (m.type !== 'hello' && (!greeted || connection !== 'ready'))) {
+      if (!quiet) toast('尚未连接，请等重连完成后重新操作', true);
+      return false;
+    }
+    try { ws.send(JSON.stringify(m)); return true; } catch (e) {
+      if (!quiet) toast('发送失败，请重连后重试', true);
+      ws.close();
+      return false;
+    }
+  }
+  function clearSubmission() {
+    clearTimeout(submitTimer); submitTimer = null;
+    submitted = null;
+    locked = false;
+  }
+  function reconcileSubmission(next) {
+    if (!submitted) return;
+    const d = next.pending;
+    // 同 id 的完整快照也不是确认；同时暗选只认本席 done。
+    if (!d || d.id !== submitted.id || (d.simul && (d.done || []).includes(you))) clearSubmission();
+  }
+  function setDeadline(msg, id = deadlineId) {
+    if (id !== deadlineId) { deadlineAt = 0; timerEnds = 0; timerDuration = 0; deadlineId = id; }
+    if (Object.prototype.hasOwnProperty.call(msg, 'deadlineIn')) {
+      deadlineAt = Number.isFinite(msg.deadlineIn) && msg.deadlineIn > 0 ? Date.now() + msg.deadlineIn : 0;
+    }
+  }
+  function clearNavigation() {
+    clearTimeout(navigationTimer); navigationTimer = null;
+    navigationPending = null;
+    for (const el of $$('[data-navigation]')) el.disabled = connection !== 'ready';
+  }
+  function navigate(type, button) {
+    if (navigationPending || !send({ type })) return false;
+    navigationPending = type;
+    if (button) { button.dataset.navigation = type; button.disabled = true; }
+    for (const el of $$('[data-navigation]')) el.disabled = true;
+    const epoch = animationEpoch;
+    navigationTimer = setTimeout(() => {
+      if (epoch !== animationEpoch || !navigationPending) return;
+      toast('房间操作尚未确认，正在重新同步', true);
+      if (ws) ws.close();
+    }, 8000);
+    return true;
+  }
 
   function handle(msg) {
+    if (!greeted && msg.type !== 'hello' && msg.type !== 'error') return;
     switch (msg.type) {
       case 'hello': {
+        const firstHello = !greeted;
+        greeted = true;
+        clearTimeout(handshakeTimer);
+        reconnectDelay = 800;
         me = { token: msg.token, id: msg.id, name: msg.name };
         store.set('hn_me', me);
         if (!$('#nameInput').value) $('#nameInput').value = me.name;
-        const want = new URLSearchParams(location.search).get('room');
-        if (!msg.room && want) send({ type: 'join', code: want });
-        if (!msg.room && !want) showScreen('home');
+        if (firstHello && !msg.room) {
+          const want = inviteRoom || new URLSearchParams(location.search).get('room');
+          returnHome({ keepInvite: !!want });
+          if (want) { inviteRoom = want; send({ type: 'join', code: want }); }
+        } else if (!msg.room) setConnection('ready');
         break;
       }
       case 'room':
+        if (room && room.code !== msg.room.code) resetGameView();
         room = msg.room;
-        if (room.status === 'lobby') { showScreen('lobby'); renderLobby(); } else if (!$('#game').hidden) renderPlayers();
+        inviteRoom = null;
+        if (room.status === 'lobby') {
+          if (vs) resetGameView();
+          setConnection('ready'); showScreen('lobby'); renderLobby();
+        } else if (!$('#game').hidden) {
+          renderPlayers(); renderTopButtons();
+          if (snap?.phase === 'over' && !playing && !queue.length) {
+            renderPrompt();
+            if (overlayKind === 'final' && lastGameOver) showFinalOverlay(lastGameOver);
+          }
+        }
         setRoomUrl(room.code);
         break;
-      case 'game':
+      case 'game': {
+        const resyncing = connection !== 'ready';
+        const nextGameId = msg.gameId ?? null;
+        const changedGame = nextGameId !== gameId;
+        if (changedGame) { resetGameView(); gameId = nextGameId; }
         you = msg.you;
         autoFlags = msg.auto || [];
+        autoModes = msg.autoModes || [];
         if (msg.speed) speed = msg.speed;
-        deadlineAt = msg.deadlineIn != null ? Date.now() + msg.deadlineIn : 0;
+        setDeadline(msg, msg.snap.pending?.id ?? null);
+        reconcileSubmission(msg.snap);
+        setConnection('ready');
         showScreen('game');
         renderTopButtons();
+        const events = msg.events || [];
         if (msg.full || !vs) {
-          queue.length = 0;
+          const sameGame = !changedGame && lastFullContext && lastFullContext.gameId === gameId && msg.snap.seq >= lastFullContext.seq;
+          resetGameView({ preserveSubmission: !!sameGame && !resyncing, preserveDeadline: true });
+          lastFullContext = { gameId, seq: msg.snap.seq };
           snap = msg.snap;
           vs = clone(snap);
-          hideOverlay(true);
-          $('#feed').innerHTML = '';
           for (const l of snap.log || []) addFeed(l.text);
           if (snap.phase === 'over' && snap.champions) lastGameOver = { scores: snap.players.map((p) => ({ seat: p.seat, score: p.score })), champions: snap.champions };
           renderAll();
           renderPrompt();
+          if (snap.phase === 'over' && lastGameOver) showFinalOverlay(lastGameOver);
         } else {
-          queue.push({ events: msg.events, snap: msg.snap });
-          if (!msg.events.length) { if (!playing && queue.length === 1) { queue.shift(); snap = msg.snap; syncMeta(); renderPrompt(); } } else pump();
+          queue.push({ events, snap: msg.snap });
+          pump();
         }
         break;
+      }
       case 'lobby':
-        vs = null; snap = null; queue.length = 0; builtTrack = null;
-        hideOverlay(true);
+        resetGameView();
+        gameId = null;
+        setConnection('ready');
         showScreen('lobby');
         renderLobby();
         break;
       case 'left':
-        room = null; vs = null; snap = null; queue.length = 0; builtTrack = null;
-        hideOverlay(true);
-        setRoomUrl(null);
-        showScreen('home');
+        returnHome();
         break;
       case 'error':
+        if (msg.for === 'act' && msg.gameId != null && msg.gameId !== gameId) break;
+        setDeadline(msg);
         toast(msg.msg, true);
-        if (msg.for === 'join') { setRoomUrl(null); showScreen('home'); }
-        unlockPrompt();
+        if (msg.for === 'hello') {
+          me = { name: typeof me.name === 'string' ? me.name : '' };
+          store.set('hn_me', me);
+          if (ws) ws.close();
+          break;
+        }
+        if (msg.for === 'join') returnHome();
+        if (!msg.for || msg.for === 'act') { clearSubmission(); hideOverlay(true); unlockPrompt(); }
+        if (!msg.for || msg.for === navigationPending) { clearNavigation(); renderPrompt(); }
+        if (msg.retryIn > 0 && msg.for === 'lobby') toast('最终动画还没结束，请稍后再试');
         break;
       case 'emote': showEmote(msg.seat, msg.key); break;
-      case 'auto': autoFlags = msg.auto; renderPlayers(); renderTopButtons(); break;
-      case 'speed': speed = msg.speed; renderTopButtons(); break;
+      case 'auto':
+        if (msg.gameId != null && msg.gameId !== gameId) break;
+        autoFlags = msg.auto; autoModes = msg.autoModes || [];
+        if (msg.decisionId == null || msg.decisionId === deadlineId) setDeadline(msg);
+        renderPlayers(); renderTopButtons(); addTimer(); break;
+      case 'speed': speed = msg.speed; setDeadline(msg); renderTopButtons(); addTimer(); break;
       default: break;
     }
   }
@@ -143,6 +283,13 @@
   }
 
   /* ================= 屏幕 ================= */
+  function returnHome({ keepInvite = false } = {}) {
+    resetGameView();
+    room = null; gameId = null; you = -1; autoFlags = []; autoModes = [];
+    if (!keepInvite) { inviteRoom = null; setRoomUrl(null); }
+    setConnection('ready');
+    showScreen('home');
+  }
   function showScreen(id) {
     for (const s of ['home', 'lobby', 'game']) $(`#${s}`).hidden = s !== id;
     document.body.dataset.screen = id;
@@ -199,9 +346,9 @@
     $('#seats').innerHTML = cards.join('');
     fillIcons($('#seats'));
     $('#addAI').hidden = !host;
-    $('#addAI').disabled = room.seats.length >= 6;
+    $('#addAI').disabled = room.seats.length >= 6 || connection !== 'ready';
     $('#startBtn').hidden = !host;
-    $('#startBtn').disabled = room.seats.length < 3;
+    $('#startBtn').disabled = room.seats.length < 3 || connection !== 'ready';
     $('#lobbyTip').textContent = host
       ? (room.seats.length < 3 ? '把房间码发给朋友，人不够可以加 AI。3-6 人开赛。' : '人齐了就开始吧！')
       : '等待房主开始比赛…';
@@ -213,7 +360,7 @@
     });
     $('#addAI').onclick = () => { Sound.click(); send({ type: 'addAI' }); };
     $('#startBtn').onclick = () => { Sound.click(); send({ type: 'start' }); };
-    $('#leaveLobby').onclick = () => { Sound.click(); send({ type: 'leave' }); };
+    $('#leaveLobby').onclick = () => { Sound.click(); navigate('leave', $('#leaveLobby')); };
     $('#copyLink').onclick = async () => {
       const link = `${location.origin}${location.pathname}?room=${room.code}`;
       try {
@@ -274,7 +421,10 @@
     if (want !== layout) {
       layout = want;
       builtTrack = null;
-      if (vs && vs.phase !== 'draft') { buildBoard(vs.track); layoutTokens(true); renderTurnCard(); }
+      if (vs && vs.phase !== 'draft') {
+        buildBoard(vs.track); layoutTokens(true); renderTurnCard();
+        if (!playing && !queue.length) renderPrompt();
+      }
     }
   }
 
@@ -383,7 +533,9 @@
       el.dataset.rid = r.rid;
       el.dataset.tip = r.rid;
       el.style.setProperty('--c', PCOL[r.seat % 6]);
-      const nm = vs.players[r.seat] ? vs.players[r.seat].name : '';
+      // 棋盘上地方小，AI 名字省掉「（AI）」后缀，侧栏里另有 AI 标记
+      const p = vs.players[r.seat];
+      const nm = p ? (p.ai ? p.name.replace(/（AI）$/, '') : p.name) : '';
       el.innerHTML = `<div class="hop"><div class="body">${art(r.rid)}</div></div><div class="seat-dot">${esc(nm)}</div>`;
       el.addEventListener('click', () => onTokenClick(r.rid));
       $('#tokens').appendChild(el);
@@ -395,7 +547,7 @@
     const [W, H] = VB();
     const live = new Set(vs.racers.map((r) => r.rid));
     for (const el of $$('#tokens .token')) if (!live.has(el.dataset.rid)) el.remove();
-    const groups = {};
+    const groups = {}, placed = [];
     for (const r of vs.racers) {
       const p = r.finished ? FIN : r.pos;
       (groups[p] = groups[p] || []).push(r);
@@ -405,17 +557,21 @@
       if (p === FIN) {
         // 冲线的运动员站上领奖台
         list.forEach((r, k) => {
-          const [x, y] = podium[r.finished] || podium[2];
+          const [px, y] = podium[r.finished] || podium[2];
+          const x = px + (r.finished > 2 ? k * 10 : 0);
           const el = tokenEl(r);
           if (instant) el.style.transition = 'none';
-          el.style.left = `${(x + (r.finished > 2 ? k * 10 : 0)) / W * 100}%`;
+          el.style.left = `${x / W * 100}%`;
           el.style.top = `${y / H * 100}%`;
           el.classList.remove('tripped', 'cur');
           el.classList.add('done');
           let pl = $('.place', el);
           if (!pl) { pl = document.createElement('div'); el.appendChild(pl); }
           pl.className = `place p${r.finished}`; pl.textContent = r.finished;
-          el.style.zIndex = 4;
+          // 冠军站在亚军前面，名字不被挡
+          const z = r.finished === 1 ? 5 : 4;
+          el.style.zIndex = z;
+          placed.push({ el, x, y, z });
           if (instant) { void el.offsetWidth; el.style.transition = ''; }
         });
         continue;
@@ -426,12 +582,12 @@
       const n = list.length;
       list.forEach((r, k) => {
         let dx, dy;
-        const long = rc.w > rc.h ? 'x' : 'y';
         if (p === 0 && layout === 'wide') {
-          const span = p === 0 ? Math.min(26, 130 / Math.max(1, n - 1)) : Math.min(24, 60 / Math.max(1, n - 1));
-          const a = (k - (n - 1) / 2) * span;
-          const b = (k % 2 ? 7 : -7) * (n > 1 ? 1 : 0);
-          [dx, dy] = long === 'x' ? [a, b] : [b, a];
+          // 起点格够宽：3 人以内排成一行，名字全露出来；人多就分前后两排
+          const rows = n > 3 ? 2 : 1, per = Math.ceil(n / rows);
+          const row = Math.floor(k / per), cnt = row ? n - per : per;
+          dx = (k % per - (cnt - 1) / 2) * 57;
+          dy = rows > 1 ? (row ? 15 : -15) : 0;
         } else {
           const sl = (SLOTS[Math.min(n, 6)] || SLOTS[6])[k % 6];
           [dx, dy] = layout === 'wide' ? sl : [sl[1], sl[0]];
@@ -447,11 +603,37 @@
         let pl = $('.place', el);
         if (r.finished && !pl) { pl = document.createElement('div'); el.appendChild(pl); }
         if (pl) { if (r.finished) { pl.className = `place p${r.finished}`; pl.textContent = r.finished; } else pl.remove(); }
-        el.style.zIndex = el.classList.contains('cur') ? 6 : 2 + k;
+        const z = el.classList.contains('cur') ? 6 : 2 + k;
+        el.style.zIndex = z;
+        if (!r.out) placed.push({ el, x: cx + dx, y: cy + dy, z });
         if (instant) { void el.offsetWidth; el.style.transition = ''; }
       });
     }
+    fitTags(placed);
     renderStandings();
+  }
+  // 名字签防重叠：从最上层的棋子往下排，名字签会压到更上层的棋子或已显示的名字签就先收起（悬停棋子仍能看是谁）
+  function fitTags(placed) {
+    const s = layout === 'tall' ? 50 : 58;
+    const shown = [], bodies = [];
+    placed.sort((a, b) => b.z - a.z || (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? 1 : -1));
+    const measured = placed.map((t) => {
+      const tag = $('.seat-dot', t.el), u = t.el.offsetWidth / s;
+      return { ...t, hw: tag && u ? tag.offsetWidth / u / 2 : null };
+    });
+    const changes = [];
+    for (const t of measured) {
+      if (t.hw == null) continue;
+      // 名字签贴在棋子底下：bottom -16%、高 16
+      const bottom = t.y + s * 0.66;
+      const box = { l: t.x - t.hw, r: t.x + t.hw, t: bottom - 16, b: bottom };
+      const hit = shown.some((o) => o.l < box.r && box.l < o.r && o.t < box.b && box.t < o.b)
+        || bodies.some((c) => Math.hypot(c.x - Math.max(box.l, Math.min(c.x, box.r)), c.y - Math.max(box.t, Math.min(c.y, box.b))) < c.r);
+      changes.push({ el: t.el, hit });
+      if (!hit) shown.push(box);
+      bodies.push({ x: t.x, y: t.y, r: s / 2 });
+    }
+    for (const { el, hit } of changes) el.classList.toggle('notag', hit);
   }
   const vr = (rid) => vs && vs.racers.find((r) => r.rid === rid);
   const rname = (rid) => { const r = vr(rid); return r ? `${vs.players[r.seat].name}的${R[rid].name}` : R[rid] ? R[rid].name : rid; };
@@ -517,9 +699,13 @@
   function renderTopButtons() {
     $('#speedLabel').textContent = `${speed}x`;
     const host = room && room.host === me.id;
-    $('#speedBtn').disabled = !host;
+    $('#speedBtn').disabled = !host || connection !== 'ready';
+    $('#speedBtn').setAttribute('aria-label', `动画速度 ${speed} 倍${host ? '，点击切换' : '，由房主设置'}`);
     $('#speedBtn').title = host ? '动画速度（房主设置）' : '动画速度由房主设置';
     $('#autoBtn').classList.toggle('on', !!autoFlags[you]);
+    $('#autoBtn').disabled = connection !== 'ready';
+    $('#autoBtn').setAttribute('aria-pressed', String(!!autoFlags[you]));
+    $('#autoBtn').title = autoFlags[you] ? '点击关闭托管并接管' : '点击开启托管';
     $('#autoBtn').hidden = you < 0;
     $('#soundBtn').innerHTML = `<span class="ico">${icon(Sound.muted ? 'mute' : 'sound')}</span>`;
   }
@@ -533,8 +719,10 @@
       const cur = vs.racers.find((r) => r.seat === p.seat);
       const ava = cur && racing ? art(cur.rid) : `<span class="init">${esc(p.name.slice(0, 1))}</span>`;
       const hand = p.hand.map((id) => `<i class="${p.used.includes(id) && !(cur && cur.rid === id && racing) ? 'used' : ''} ${cur && cur.rid === id && racing ? 'now' : ''}" style="--rc:${rcol(id)}" data-tip="${id}">${art(id)}</i>`).join('');
+      const effective = cur && (Object.prototype.hasOwnProperty.call(cur, 'eff') ? cur.eff : cur.power);
+      const skill = effective && R[effective] ? R[effective].skill : cur?.power === 'copycat' ? '暂无可复制技能' : R[cur?.rid]?.skill;
       const line = cur && racing
-        ? `<div class="pline" data-tip="${cur.rid}">${esc(R[cur.rid].name)} · <span>${esc(R[cur.power || cur.rid].skill)}</span>${cur.finished ? ` · 第 ${cur.finished} 名` : cur.out ? ' · 出局' : cur.tripped ? ' · 摔倒' : ` · ${cur.pos} 格`}</div>`
+        ? `<div class="pline" data-tip="${cur.rid}">${esc(R[cur.rid].name)} · <span>${esc(skill)}</span>${cur.finished ? ` · 第 ${cur.finished} 名` : cur.out ? ' · 出局' : cur.tripped ? ' · 摔倒' : ` · ${cur.pos} 格`}</div>`
         : '';
       const kinds = { gold: 0, silver: 0, bronze: 0 };
       for (const c of p.chips || []) if (kinds[c.kind] != null) kinds[c.kind] += c.v;
@@ -544,7 +732,9 @@
         if (d.simul && d.seats.includes(p.seat)) think = d.done.includes(p.seat) ? '<span class="think ok">已出牌</span>' : '<span class="think">思考中</span>';
         else if (!d.simul && d.seat === p.seat) think = '<span class="think">行动中</span>';
       }
-      const tags = `${p.seat === you ? '<span class="you">你</span>' : ''}${autoFlags[p.seat] && !p.ai ? '<span class="auto">托管</span>' : ''}${p.ai ? '<span class="auto">AI</span>' : ''}`;
+      const offline = !p.ai && room && room.seats[p.seat] && room.seats[p.seat].online === false;
+      const modeLabel = offline ? '离线' : autoModes[p.seat] === 'timeout' ? '超时托管' : '托管';
+      const tags = `${p.seat === you ? '<span class="you">你</span>' : ''}${(autoFlags[p.seat] || offline) && !p.ai ? `<span class="auto">${modeLabel}</span>` : ''}${p.ai ? '<span class="auto">AI</span>' : ''}`;
       return `<div class="prow ${vs.curSeat === p.seat && vs.phase === 'race' ? 'cur' : ''} ${p.seat === you ? 'me' : ''}" data-seat="${p.seat}" style="--c:${c}">
         <div class="pav" ${cur && racing ? `data-tip="${cur.rid}"` : ''}>${ava}</div>
         <div class="pn"><b>${esc(p.name)}${tags}</b>${line}<div class="hand">${hand}</div></div>
@@ -565,16 +755,21 @@
     $('#draftCards').innerHTML = (vs.faceUp || []).map((id, k) => rcard(id, { cls: deal ? 'deal' : '', k })).join('');
     const total = vs.players.length * 4;
     const picked = vs.players.reduce((s, p) => s + p.hand.length, 0);
-    $('#draftSub').textContent = `已选 ${picked}/${total} · 每人 4 名，四场比赛各派一名上场 · 悬停/点按卡牌看完整技能`;
+    $('#draftSub').textContent = `已选 ${picked}/${total} · 每人 4 名，四场各派一名 · 技能写在卡上，轮到你时点击选人`;
     renderDraftOrder();
     renderMyTeam();
     if (d && d.kind === 'draft') bindDraftPick(d);
   }
   function bindDraftPick(d) {
-    const mine = d.seat === you && !playing && !queue.length;
+    const mine = d.seat === you && !playing && !queue.length && !submitted && connection === 'ready';
     for (const el of $$('#draftCards .rcard')) {
       el.classList.toggle('pickable', mine);
-      el.onclick = mine ? () => { Sound.card(); lockPrompt(); send({ type: 'act', id: d.id, value: el.dataset.id }); $$('#draftCards .rcard').forEach((c) => c.classList.remove('pickable')); } : null;
+      el.onclick = mine ? () => {
+        if (answer(d, el.dataset.id)) {
+          Sound.card();
+          $$('#draftCards .rcard').forEach((c) => { c.classList.remove('pickable'); c.onclick = null; });
+        }
+      } : null;
     }
   }
 
@@ -629,7 +824,8 @@
     const r = vs && vs.phase === 'race' && vs.curSeat != null ? vs.racers.find((x) => x.seat === vs.curSeat) : null;
     if (!r || r.finished || r.out) { tc.hidden = true; tcRid = null; return; }
     const base = R[r.rid];
-    const pw = r.power && r.power !== r.rid && R[r.power] ? R[r.power] : null;
+    const effective = Object.prototype.hasOwnProperty.call(r, 'eff') ? r.eff : r.power;
+    const pw = effective && effective !== r.rid && R[effective] ? R[effective] : null;
     const p = vs.players[r.seat];
     const status = r.tripped
       ? '<div class="tc-st bad">摔倒中 · 本回合不掷骰</div>'
@@ -648,7 +844,8 @@
     const racing = vs && (vs.phase === 'race' || vs.phase === 'between');
     const r = racing ? vs.racers.find((x) => x.rid === id) : null;
     const owner = r ? vs.players[r.seat] : vs && vs.players.find((p) => p.hand.includes(id));
-    const pw = r && r.power && r.power !== id && R[r.power] ? R[r.power] : null;
+    const effective = r && (Object.prototype.hasOwnProperty.call(r, 'eff') ? r.eff : r.power);
+    const pw = effective && effective !== id && R[effective] ? R[effective] : null;
     let st = '';
     if (r) st = r.finished ? `第 ${r.finished} 名冲线` : r.out ? '已被淘汰' : `在第 ${r.pos} 格 · 离终点 ${FIN - r.pos} 格${r.tripped ? ' · 摔倒中' : ''}`;
     else if (owner && owner.used.includes(id)) st = '已经上过场';
@@ -706,7 +903,7 @@
     const chips = d.order.map((seat, k) => `<span class="do ${k < d.idx ? 'past' : ''} ${k === d.idx ? 'now' : ''}" style="--c:${PCOL[seat % 6]}">${esc(vs.players[seat].name)}${seat === you ? '（你）' : ''}</span>`);
     box.innerHTML = `<span class="do-label">第 ${d.round + 1}/2 轮</span>${chips.join('<span class="do-arrow">›</span>')}`;
     const now = $('.do.now', box);
-    if (now) now.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+    if (now) now.scrollIntoView({ block: 'nearest', inline: 'center', behavior: reducedMotion.matches ? 'instant' : 'smooth' });
   }
   function renderMyTeam() {
     const box = $('#myTeam');
@@ -742,34 +939,92 @@
   }
 
   /* ================= 事件播放 ================= */
-  const wait = (ms) => (fast ? Promise.resolve() : sleep(ms / speed));
+  function animationLater(fn, ms) {
+    const epoch = animationEpoch;
+    const timer = setTimeout(() => { animationTimers.delete(timer); if (epoch === animationEpoch) fn(); }, ms);
+    animationTimers.add(timer);
+    return timer;
+  }
+  function resetGameView({ preserveSubmission = false, preserveDeadline = false } = {}) {
+    animationEpoch++;
+    for (const w of pendingWaits) { clearTimeout(w.timer); w.reject(CANCELLED); }
+    pendingWaits.clear();
+    for (const t of animationTimers) clearTimeout(t);
+    animationTimers.clear();
+    for (const t of animationIntervals) clearInterval(t);
+    animationIntervals.clear();
+    clearTimeout(overlayHideTimer);
+    clearInterval(timerTicker); timerTicker = null; timerEnds = 0;
+    clearTimeout(comTimer);
+    clearNavigation();
+    if (!preserveSubmission) clearSubmission();
+    if (!preserveDeadline) { deadlineAt = 0; deadlineId = null; timerDuration = 0; }
+    lastFullContext = null;
+    queue.length = 0; playing = false; fast = false;
+    clearPromptLive(); hideTip(); hideOverlay(true);
+    vs = null; snap = null; builtTrack = null; tcRid = null;
+    lastYourTurnId = null; lastGameOver = null;
+    for (const id of ['tokens', 'floaters', 'feed', 'dock', 'commentary']) $(`#${id}`).innerHTML = '';
+    setDice('');
+    for (const el of $$('.banner, .coin, .bubble')) el.remove();
+    cancelAnimationFrame(confettiState.raf); confettiState.raf = 0; confettiState.parts = [];
+    const cv = $('#confetti'), ctx = cv.getContext('2d');
+    if (ctx) ctx.clearRect(0, 0, cv.width, cv.height);
+    if (Sound.stop) Sound.stop();
+  }
+  function wait(ms, epoch) {
+    if (epoch !== animationEpoch) return Promise.reject(CANCELLED);
+    if (fast || reducedMotion.matches) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const w = { reject, timer: null };
+      w.timer = setTimeout(() => { pendingWaits.delete(w); epoch === animationEpoch ? resolve() : reject(CANCELLED); }, ms / speed);
+      pendingWaits.add(w);
+    });
+  }
   async function pump() {
     if (playing) return;
+    const epoch = animationEpoch;
     playing = true;
     clearPromptLive();
-    while (queue.length) {
-      const b = queue.shift();
-      fast = document.hidden || queue.length > 3;
-      for (const e of b.events) {
-        try { await playEvent(e); } catch (err) { console.error('播放事件出错', e, err); }
+    try {
+      while (queue.length && epoch === animationEpoch) {
+        const b = queue.shift();
+        fast = document.hidden || queue.length > 3;
+        for (const e of b.events) {
+          if (epoch !== animationEpoch) return;
+          try { await playEvent(e, epoch); } catch (err) {
+            if (err === CANCELLED || epoch !== animationEpoch) return;
+            console.error('播放事件出错', e, err);
+          }
+        }
+        if (epoch !== animationEpoch) return;
+        snap = b.snap;
+        if (queue.length === 0) {
+          const keepOverlay = overlayKind;
+          vs = clone(snap);
+          renderAll();
+          if (keepOverlay && !overlayKeep()) hideOverlay();
+        }
       }
-      snap = b.snap;
-      if (queue.length === 0) {
-        const keepOverlay = overlayKind;
-        vs = clone(snap);
-        renderAll();
-        if (keepOverlay && !overlayKeep()) hideOverlay();
+    } finally {
+      // 旧 pump 的 finally 也不能解锁新一局、重建旧提示。
+      if (epoch === animationEpoch) {
+        fast = false; playing = false;
+        renderPlayers(); renderPrompt();
       }
     }
-    fast = false;
-    playing = false;
-    renderPlayers();
-    renderPrompt();
   }
-  function overlayKeep() { return overlayKind === 'results' || overlayKind === 'final' || overlayKind === 'pick' || overlayKind === 'choose'; }
+  function overlayKeep() {
+    if (overlayKind === 'results' || overlayKind === 'final') return true;
+    const d = snap && snap.pending;
+    if (overlayKind === 'pick') return !!(d && d.simul && d.seats.includes(you));
+    return overlayKind === 'choose' && !!(d && !d.simul && d.seat === you && d.id === overlayDecision && ['egg', 'twin'].includes(d.kind));
+  }
 
   const FEED_CLS = { finish: 'good', extraTurn: 'good', out: 'bad', trip: 'bad', blocked: 'bad', chip: 'gold', transform: 'hi', predict: 'hi', duel: 'hi', reveal: 'hi' };
-  async function playEvent(e) {
+  async function playEvent(e, epoch) {
+    const pause = async (ms) => { await wait(ms, epoch); if (epoch !== animationEpoch) throw CANCELLED; };
+    if (epoch !== animationEpoch) throw CANCELLED;
     if (e.text && e.t !== 'raceIntro') {
       const r0 = vr(e.rid) || vr(e.a);
       addFeed(e.text, FEED_CLS[e.t] || '', e.seat != null ? e.seat : r0 ? r0.seat : undefined);
@@ -778,7 +1033,7 @@
       case 'rollOff': {
         const who = e.reason === 'draft' ? '选秀顺序' : '第一场先手';
         const html = `<div class="roll-off">${e.rolls.map((r) => `<div class="ro"><div class="die land">${die(r.v)}</div><span style="color:${PCOL[r.seat % 6]}">${esc(vs.players[r.seat].name)}</span></div>`).join('')}</div>`;
-        if (vs.phase === 'draft' || vs.phase === 'pick') { showMiniOverlay(`<h2>掷骰决定${who}</h2>${html}`); Sound.dice(); await wait(1200); } else { setDice(html); Sound.dice(); await wait(1200); }
+        if (vs.phase === 'draft' || vs.phase === 'pick') { showMiniOverlay(`<h2>掷骰决定${who}</h2>${html}`); Sound.dice(); await pause(1200); } else { setDice(html); Sound.dice(); await pause(1200); }
         break;
       }
       case 'draftStart':
@@ -786,15 +1041,15 @@
         hideOverlay();
         renderAll();
         commentary(e.text);
-        await wait(700);
+        await pause(700);
         break;
       case 'faceUp':
         vs.faceUp = e.cards.slice();
         if (e.order) vs.draft = { order: e.order, idx: 0, round: e.round };
         $('#draftTitle').textContent = e.round === 0 ? '第一轮选秀' : '第二轮选秀';
         renderDraft(true);
-        for (let i = 0; i < Math.min(6, e.cards.length); i++) setTimeout(() => Sound.card(), i * 70);
-        await wait(1000);
+        for (let i = 0; i < Math.min(6, e.cards.length); i++) animationLater(() => Sound.card(), i * 70);
+        await pause(1000);
         break;
       case 'drafted': {
         const el = $(`#draftCards .rcard[data-id="${e.rid}"]`);
@@ -810,14 +1065,14 @@
         }
         Sound.card();
         renderPlayers();
-        await wait(480);
+        await pause(480);
         vs.faceUp = vs.faceUp.filter((id) => id !== e.rid);
         if (el) el.remove();
         break;
       }
       case 'firstPlayer':
         commentary(e.text);
-        await wait(700);
+        await pause(700);
         break;
       case 'raceIntro': {
         hideOverlay();
@@ -832,7 +1087,7 @@
         addFeed(`第 ${e.race} 场 · ${TRACKS[e.track].name}（金 ${e.gold} / 银 ${e.silver}）`, 'race');
         banner(`第 ${e.race} 场 · ${TRACKS[e.track].name}`, `冠军 ${e.gold} 分 · 亚军 ${e.silver} 分`, e.track === 'wild');
         Sound.reveal();
-        await wait(1500);
+        await pause(1500);
         break;
       }
       case 'picked': {
@@ -850,7 +1105,7 @@
         showRevealOverlay(e.picks);
         Sound.reveal();
         renderPlayers();
-        await wait(2300);
+        await pause(2300);
         hideOverlay();
         layoutTokens(true);
         renderTitle();
@@ -865,14 +1120,14 @@
         renderTurnCard();
         { const r = vr(e.rid); if (r) addFeed(`${vs.players[e.seat].name} · ${R[r.rid].name} 的回合`, 'turn', e.seat); }
         Sound.turn();
-        await wait(330);
+        await pause(330);
         break;
       }
       case 'recover': {
         const r = vr(e.rid); if (r) r.tripped = false;
         layoutTokens();
         floater(e.rid, '爬起来了', '');
-        await wait(420);
+        await pause(420);
         break;
       }
       case 'roll': {
@@ -880,18 +1135,19 @@
         const cap = `${r ? esc(vs.players[r.seat].name) : ''}${e.reroll ? ' 重掷' : ''}`;
         setDice(`<div class="die rolling">${die(1 + Math.floor(Math.random() * 6))}</div>`);
         Sound.dice();
-        const spin = setInterval(() => { const d = $('#diceZone .die.rolling'); if (d) d.innerHTML = die(1 + Math.floor(Math.random() * 6)); }, 90);
-        await wait(560);
-        clearInterval(spin);
+        const spin = setInterval(() => { if (epoch !== animationEpoch) return; const d = $('#diceZone .die.rolling'); if (d) d.innerHTML = die(1 + Math.floor(Math.random() * 6)); }, 90);
+        animationIntervals.add(spin);
+        await pause(560);
+        clearInterval(spin); animationIntervals.delete(spin);
         setDice(`<div class="die land">${die(e.value)}<div class="die-cap">${cap}</div></div>`);
         Sound.diceLand(e.value);
-        await wait(420);
+        await pause(420);
         break;
       }
       case 'calc': {
         const mods = e.mods.map((m) => `<span class="m ${m.v < 0 ? 'neg' : 'pos'}">${esc(m.label)} ${m.v > 0 ? '+' : ''}${m.v}</span>`).join('');
         setDice(`<div class="calc"><div class="die" style="width:calc(56*var(--u));height:calc(56*var(--u))">${e.base <= 6 ? die(e.base) : ''}</div>${e.base > 6 ? `<b>${e.base}</b>` : ''}${mods}<span>=</span><span class="eq">${e.total}</span></div>`);
-        await wait(850);
+        await pause(850);
         break;
       }
       case 'move': {
@@ -907,12 +1163,12 @@
           hop.classList.remove('go'); void hop.offsetWidth; hop.classList.add('go');
           if (back) Sound.back(); else Sound.hop(i);
           i++;
-          await wait(Timing.STEP);
+          await pause(Timing.STEP);
         }
         r.pos = e.to;
         if (e.kind === 'arrow') pulseCell(e.to);
         layoutTokens();
-        await wait(140);
+        await pause(140);
         break;
       }
       case 'warp': {
@@ -920,12 +1176,12 @@
         const el = tokenEl(r);
         el.classList.add('warp-out');
         Sound.warp();
-        await wait(250);
+        await pause(250);
         r.pos = e.to;
         layoutTokens(true);
         el.classList.remove('warp-out');
         pulseCell(e.to);
-        await wait(300);
+        await pause(300);
         break;
       }
       case 'swap': {
@@ -934,11 +1190,11 @@
         ea.classList.add('warp-out'); eb.classList.add('warp-out');
         Sound.warp();
         commentary(e.text);
-        await wait(300);
+        await pause(300);
         a.pos = e.pa; b.pos = e.pb;
         layoutTokens(true);
         ea.classList.remove('warp-out'); eb.classList.remove('warp-out');
-        await wait(450);
+        await pause(450);
         break;
       }
       case 'power': {
@@ -946,7 +1202,7 @@
         const key = e.key;
         floater(e.rid, `${R[key] ? R[key].skill : key}！`, '', r ? '#FFF3C4' : undefined);
         Sound.power();
-        await wait(260);
+        await pause(260);
         break;
       }
       case 'trip': {
@@ -955,7 +1211,7 @@
         renderTurnCard();
         floater(e.rid, '摔倒！', 'bad');
         Sound.trip();
-        await wait(500);
+        await pause(500);
         break;
       }
       case 'finish': {
@@ -967,7 +1223,7 @@
         commentary(e.text);
         const el = r && tokenEl(r);
         if (el) { const b = el.getBoundingClientRect(); confetti(e.place === 1 ? 90 : 50, b.left + b.width / 2, b.top + b.height / 2); }
-        await wait(1250);
+        await pause(1250);
         break;
       }
       case 'out': {
@@ -975,9 +1231,9 @@
         Sound.chomp();
         floater(e.rid, '被吃掉了！', 'bad');
         commentary(e.text);
-        await wait(300);
+        await pause(300);
         layoutTokens();
-        await wait(650);
+        await pause(650);
         break;
       }
       case 'chip': {
@@ -993,7 +1249,7 @@
           flyCoin(r && r.rid, e.seat, e.kind, e.v);
           Sound.chip();
         }
-        await wait(360);
+        await pause(360);
         const sc = $(`[data-score="${e.seat}"]`);
         if (sc) { sc.textContent = p.score; sc.classList.remove('bump'); void sc.offsetWidth; sc.classList.add('bump'); }
         break;
@@ -1004,51 +1260,57 @@
         floater(e.rid, '走不了！', 'bad');
         Sound.blocked();
         commentary(e.text);
-        await wait(650);
+        await pause(650);
         break;
       }
       case 'space':
         pulseCell(e.pos);
-        await wait(300);
+        await pause(300);
         break;
       case 'predict': {
         const txt = e.target ? `预言：${R[vr(e.target)?.rid || e.target]?.name || ''} 夺冠` : `预言掷出 ${e.value}`;
         floater(e.rid, txt, 'good');
         commentary(e.text);
-        await wait(850);
+        await pause(850);
+        break;
+      }
+      case 'copy': {
+        const r = vr(e.rid); if (r) r.eff = e.power;
+        renderTurnCard(); renderPlayers(); commentary(e.text);
+        await pause(400);
         break;
       }
       case 'transform': {
-        const r = vr(e.rid); if (r) r.power = e.power;
+        const r = vr(e.rid); if (r) { r.power = e.power; r.eff = e.power; }
         renderTurnCard();
         renderPlayers();
         floater(e.rid, `获得「${R[e.power].skill}」`, 'good');
         commentary(e.text);
         Sound.warp();
-        await wait(1200);
+        await pause(1200);
         break;
       }
       case 'duel': {
         setDice(`<div class="duel-dice"><div class="die land">${die(e.ra)}<div class="die-cap">${esc(rname(e.a))}</div></div><b class="vs">VS</b><div class="die land">${die(e.rb)}<div class="die-cap">${esc(rname(e.b))}</div></div></div>`);
         Sound.duel();
         commentary(e.text);
-        await wait(1400);
+        await pause(1400);
         break;
       }
       case 'extraTurn':
         floater(e.rid, '再来一回合！', 'good');
-        await wait(650);
+        await pause(650);
         break;
       case 'info':
         if (e.text) commentary(e.text);
-        await wait(e.rid ? 380 : 500);
+        await pause(e.rid ? 380 : 500);
         break;
       case 'raceEnd': {
         vs.phase = 'between';
-        await wait(500);
+        await pause(500);
         showResultsOverlay(e);
         Sound.fanfare();
-        await wait(3000);
+        await pause(3000);
         break;
       }
       case 'gameOver':
@@ -1056,7 +1318,7 @@
         showFinalOverlay(e);
         Sound.fanfare();
         confetti(260);
-        await wait(1500);
+        await pause(1500);
         break;
       default: break;
     }
@@ -1067,13 +1329,14 @@
     b.className = `banner ${wild ? 'wild' : ''}`;
     b.innerHTML = `<div><b>${esc(title)}</b><span>${esc(sub)}</span></div>`;
     document.body.appendChild(b);
-    setTimeout(() => b.remove(), 1700 / Math.min(speed, 1.5));
+    animationLater(() => b.remove(), 1700 / Math.min(speed, 1.5));
   }
 
   function flyCoin(rid, seat, kind, v) {
     const from = (rid && $(`#tokens .token[data-rid="${rid}"]`)) || $('#center');
     const to = $(`[data-score="${seat}"]`);
-    if (!from || !to || fast) return;
+    if (!from || !to || fast || reducedMotion.matches) return;
+    const epoch = animationEpoch;
     const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
     const c = document.createElement('div');
     c.className = 'coin';
@@ -1083,6 +1346,7 @@
     c.style.top = `${a.top + a.height / 2 - 13}px`;
     document.body.appendChild(c);
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (epoch !== animationEpoch) return;
       c.style.left = `${b.left + b.width / 2 - 13}px`;
       c.style.top = `${b.top + b.height / 2 - 13}px`;
       c.style.transform = 'scale(.6) rotate(360deg)';
@@ -1093,6 +1357,7 @@
   /* ================= 浮层 ================= */
   function showOverlay(html, kind) {
     const ov = $('#overlay');
+    clearTimeout(overlayHideTimer);
     ov.hidden = false;
     ov.classList.remove('out');
     ov.innerHTML = html;
@@ -1107,7 +1372,8 @@
     if (ov.hidden) return;
     if (instant) { ov.hidden = true; ov.innerHTML = ''; return; }
     ov.classList.add('out');
-    setTimeout(() => { if (ov.classList.contains('out')) { ov.hidden = true; ov.innerHTML = ''; ov.classList.remove('out'); } }, 280);
+    clearTimeout(overlayHideTimer);
+    overlayHideTimer = setTimeout(() => { if (ov.classList.contains('out')) { ov.hidden = true; ov.innerHTML = ''; ov.classList.remove('out'); } }, 280);
   }
   function showMiniOverlay(inner) {
     showOverlay(`<div class="ov-box card mini-ov">${inner}</div>`, 'mini');
@@ -1135,7 +1401,7 @@
     lastGameOver = e;
     const rows = e.scores.slice().sort((a, b) => b.score - a.score);
     const champs = e.champions.map((s) => vs.players[s].name).join('、');
-    const list = rows.map((x, k) => `<div class="st-row ${e.champions.includes(x.seat) ? 'top' : ''}" style="animation-delay:${k * 80}ms"><span class="rk">${k + 1}</span><span>${esc(vs.players[x.seat].name)}${x.seat === you ? '（你）' : ''}</span><span class="gain"></span><span class="tot">${x.score}</span></div>`).join('');
+    const list = rows.map((x, k) => `<div class="st-row ${e.champions.includes(x.seat) ? 'top' : ''}" data-seat="${x.seat}" style="animation-delay:${k * 80}ms"><span class="rk">${k + 1}</span><span class="st-name">${esc(vs.players[x.seat].name)}${x.seat === you ? '（你）' : ''}</span><span class="gain"></span><span class="tot">${x.score}</span></div>`).join('');
     const host = room && room.host === me.id;
     const champ = e.champions[0];
     const cp = vs.players[champ];
@@ -1144,30 +1410,28 @@
       <div class="podium"><div class="pod p1" style="--c:${PCOL[champ % 6]}"><div class="who">${lastRid ? art(lastRid) : ''}</div><div class="nm">${esc(cp.name)}</div><div class="blk">1<small>${rows[0].score} 分</small></div></div></div>
       <div class="standings">${list}</div>
       <div class="ov-actions">${host ? '<button class="btn primary big" id="again">再来一局</button>' : '<span class="sub">等房主开下一局…</span>'}<button class="btn" id="toHome">回到首页</button><button class="btn ghost" id="ovClose">看看赛道</button></div></div>`, 'final');
-    const again = $('#again'); if (again) again.onclick = () => { Sound.click(); send({ type: 'lobby' }); };
-    $('#toHome').onclick = () => { Sound.click(); send({ type: 'leave' }); };
+    const again = $('#again'); if (again) again.onclick = () => { Sound.click(); navigate('lobby', again); };
+    $('#toHome').onclick = () => { Sound.click(); navigate('leave', $('#toHome')); };
     $('#ovClose').onclick = () => { Sound.click(); hideOverlay(); };
   }
 
   function showPickOverlay(d) {
     const mineOpts = d.optionsBySeat[you];
     const answered = d.done.includes(you);
-    if (overlayKind === 'pick' && overlayDecision === d.id) { updatePickStatus(d); return; }
+    const sending = !!(submitted && submitted.id === d.id);
+    const key = `${d.id}:${answered}:${sending}:${connection}`;
+    if (overlayKind === 'pick' && overlayDecision === key) { updatePickStatus(d); return; }
     const idx = vs.raceNo - 1;
     const hint = idx < 3 ? '后面的比赛分更高，王牌可以留到后面' : '最后一场，全力以赴！';
-    const cards = mineOpts && !answered ? mineOpts.map((o, k) => rcard(o.v, { cls: 'pickable deal', k })).join('') : '';
+    const canPick = mineOpts && !answered && !sending && connection === 'ready';
+    const cards = mineOpts && !answered ? mineOpts.map((o, k) => rcard(o.v, { cls: canPick ? 'pickable deal' : 'dim', k })).join('') : '';
     showOverlay(`<div class="ov-box card"><h2>第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}</h2>
-      <p class="sub">冠军 ${GOLD[idx]} 分 · 亚军 ${SILVER[idx]} 分 · ${mineOpts && !answered ? `派谁上场？${hint}` : '等待其他人出牌…'}</p>
+      <p class="sub">冠军 ${GOLD[idx]} 分 · 亚军 ${SILVER[idx]} 分 · ${sending ? '正在提交，等待服务器确认…' : connection !== 'ready' ? '断线中，重连同步后可重新选择' : canPick ? `派谁上场？${hint}` : answered ? '你的出牌已确认，等待其他人…' : '等待其他人出牌…'}</p>
       <div class="ov-cards" id="pickCards">${cards}</div><div class="pick-status" id="pickStatus"></div></div>`, 'pick');
-    overlayDecision = d.id;
+    overlayDecision = key;
     updatePickStatus(d);
     for (const el of $$('#pickCards .rcard')) {
-      el.onclick = () => {
-        Sound.card();
-        send({ type: 'act', id: d.id, value: el.dataset.id });
-        for (const c of $$('#pickCards .rcard')) { c.classList.remove('pickable'); c.onclick = null; if (c !== el) c.classList.add('dim'); }
-        $('.sub', $('#overlay')).textContent = `你派出了 ${R[el.dataset.id].name}，等待其他人出牌…`;
-      };
+      el.onclick = canPick ? () => { if (answer(d, el.dataset.id)) Sound.card(); } : null;
     }
   }
   function updatePickStatus(d) {
@@ -1183,12 +1447,13 @@
     showOverlay(`<div class="ov-box card"><h2>${esc(title)}</h2><p class="sub">${esc(sub)}</p><div class="ov-cards">${cards}</div><div class="ov-actions">${extra}</div></div>`, 'choose');
     overlayDecision = d.id;
     for (const el of $$('#overlay .rcard, #overlay [data-v]')) {
-      el.onclick = () => { Sound.card(); answer(d, el.dataset.id || el.dataset.v); hideOverlay(); };
+      el.onclick = () => { if (answer(d, el.dataset.id || el.dataset.v)) { Sound.card(); hideOverlay(); } };
     }
   }
 
   /* ================= 决策面板 ================= */
   function clearPromptLive() {
+    $('#board').classList.remove('picking-cell');
     for (const el of $$('#tokens .token.selectable')) el.classList.remove('selectable');
     for (const el of $$('#trackSvg .cell.pick')) { el.classList.remove('pick'); el.onclick = null; }
     tokenPick = null;
@@ -1199,12 +1464,24 @@
   }
   let locked = false;
   function lockPrompt() { locked = true; $$('#dock button').forEach((b) => { b.disabled = true; }); }
-  function unlockPrompt() { locked = false; if (!playing && !queue.length) renderPrompt(); }
+  function unlockPrompt() { locked = !!submitted; if (!playing && !queue.length) renderPrompt(); }
   function answer(d, v) {
-    if (locked) return;
+    const current = snap && snap.pending;
+    if (locked || playing || queue.length || !current || current.id !== d.id ||
+        (current.simul ? !current.seats.includes(you) || current.done.includes(you) : current.seat !== you)) return false;
+    // 旧后端没有 gameId 字段；新后端始终下发并严格校验，升级前仍可继续现有对局。
+    if (!send({ type: 'act', ...(gameId ? { gameId } : {}), id: d.id, value: v })) return false;
+    submitted = { gameId, id: d.id, value: v };
     lockPrompt();
     clearPromptLive();
-    send({ type: 'act', id: d.id, value: v });
+    // 没有独立 ack 的协议下，长时间不确认就重新握手拿权威快照，绝不重播旧 act。
+    submitTimer = setTimeout(() => {
+      if (!submitted || submitted.id !== d.id || submitted.gameId !== gameId) return;
+      toast('操作尚未确认，正在重新同步；不会重复提交', true);
+      if (ws) ws.close();
+    }, 8000);
+    renderPrompt();
+    return true;
   }
 
   const WAIT_TEXT = {
@@ -1216,12 +1493,19 @@
 
   function renderPrompt() {
     if (playing || queue.length || !snap || !vs) return;
-    locked = false;
+    locked = !!submitted;
     clearPromptLive();
     renderPlayers();
     const dock = $('#dock');
     const d = snap.pending;
     if (vs.phase === 'draft') bindDraftPick(d || {});
+    if (connection !== 'ready' || submitted) {
+      if (d && d.simul) showPickOverlay(d);
+      else if (overlayKind === 'choose' || overlayKind === 'pick') hideOverlay(true);
+      dock.innerHTML = promptHtml({ seat: you, mine: false, title: submitted ? '正在提交，等待服务器确认' : '连接已断开，正在重新同步', sub: submitted ? '确认前不会重复提交；其他选手的更新不会误判为成功' : '重连完成后按最新局面重新操作，未发送的动作不会自动补发' });
+      addTimer();
+      return;
+    }
     if (snap.phase === 'over') {
       const host = room && room.host === me.id;
       dock.innerHTML = promptHtml({ seat: you, mine: false, title: '比赛结束', sub: '四场胡闹已落幕', opts: `<button class="btn" data-x="show">查看成绩</button>${host ? '<button class="btn primary" data-x="again">再来一局</button>' : ''}<button class="btn" data-x="home">回到首页</button>` });
@@ -1230,21 +1514,21 @@
         b.onclick = () => {
           Sound.click();
           if (b.dataset.x === 'show' && lastGameOver) showFinalOverlay(lastGameOver);
-          if (b.dataset.x === 'again') send({ type: 'lobby' });
-          if (b.dataset.x === 'home') send({ type: 'leave' });
+          if (b.dataset.x === 'again') navigate('lobby', b);
+          if (b.dataset.x === 'home') navigate('leave', b);
         };
       }
       return;
     }
     if (!d) { dock.innerHTML = ''; return; }
     if (d.simul) {
-      if (overlayKind !== 'results' || true) showPickOverlay(d);
+      showPickOverlay(d);
       const mine = d.seats.includes(you) && !d.done.includes(you);
       dock.innerHTML = promptHtml({ seat: you, mine, title: mine ? '选择本场出战的运动员' : '等待所有人出牌', sub: mine ? '在上方卡牌中点选' : '所有人选好后同时亮牌' });
-      if (mine) yourTurnPing(d.id);
+      if (mine) { yourTurnPing(d.id); addTimer(); }
       return;
     }
-    if (overlayKind === 'pick' || overlayKind === 'mini' || overlayKind === 'reveal') hideOverlay();
+    if (overlayKind === 'pick' || overlayKind === 'mini' || overlayKind === 'reveal' || (overlayKind === 'choose' && !overlayKeep())) hideOverlay();
     const p = vs.players[d.seat];
     const mine = d.seat === you;
     if (!mine) {
@@ -1303,6 +1587,7 @@
         break;
       }
       case 'thirdwheel': {
+        $('#board').classList.add('picking-cell');
         opts = d.options.map((o) => `<button class="btn ${o.v === '_no' ? '' : 'small'}" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
         for (const o of d.options) {
           if (!o.v.startsWith('s')) continue;
@@ -1327,23 +1612,36 @@
     return `<div class="prompt ${mine ? 'mine' : 'wait'}" style="--c:${c}">${ava ? `<div class="p-ava">${ava}</div>` : ''}<div class="p-txt"><b>${esc(title)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>${opts ? `<div class="p-opts">${opts}</div>` : ''}<div class="timer" hidden></div></div>`;
   }
   function addTimer() {
+    clearInterval(timerTicker); timerTicker = null;
     const t = $('#dock .timer');
-    if (!t || !deadlineAt) return;
+    if (!t) return;
     const remain = deadlineAt - Date.now();
-    if (remain <= 0 || remain > 90000) return;
-    t.hidden = false;
-    t.style.width = '100%';
-    t.style.transform = 'scaleX(1)';
+    if (!deadlineAt || remain <= 0 || remain > 120000) { t.hidden = true; timerEnds = 0; return; }
+    if (!timerDuration) timerDuration = remain;
+    const duration = timerDuration;
+    timerEnds = deadlineAt;
+    t.style.transform = 'none';
     t.style.transition = 'none';
-    void t.offsetWidth;
-    t.style.transition = `transform ${remain}ms linear`;
-    t.style.transform = 'scaleX(0)';
+    t.dataset.duration = String(duration);
+    t.hidden = false;
+    t.setAttribute('role', 'progressbar');
+    t.setAttribute('aria-label', '本次决策剩余时间');
+    t.setAttribute('aria-valuemin', '0'); t.setAttribute('aria-valuemax', String(Math.ceil(duration / 1000)));
+    const tick = () => {
+      if (!t.isConnected || timerEnds !== deadlineAt) { clearInterval(timerTicker); timerTicker = null; return; }
+      const ms = Math.max(0, deadlineAt - Date.now());
+      t.style.width = `${Math.min(100, ms / duration * 100)}%`;
+      t.setAttribute('aria-valuenow', String(Math.ceil(ms / 1000)));
+      t.setAttribute('aria-valuetext', `剩余 ${Math.ceil(ms / 1000)} 秒`);
+      if (!ms) { clearInterval(timerTicker); timerTicker = null; }
+    };
+    tick(); timerTicker = setInterval(tick, 100);
   }
   function yourTurnPing(id) {
     if (lastYourTurnId === id) return;
     lastYourTurnId = id;
     Sound.yourTurn();
-    if (navigator.vibrate) try { navigator.vibrate(30); } catch (e) { /* ignore */ }
+    if (navigator.vibrate && navigator.userActivation?.hasBeenActive) try { navigator.vibrate(30); } catch (e) { /* ignore */ }
   }
 
   /* ================= 表情 ================= */
@@ -1425,7 +1723,7 @@
   }
   const confettiState = { parts: [], raf: 0 };
   function confetti(n = 150, x, y) {
-    if (fast) return;
+    if (fast || reducedMotion.matches) return;
     const cv = $('#confetti');
     const dpr = window.devicePixelRatio || 1;
     cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
@@ -1461,14 +1759,15 @@
     $('#autoBtn').onclick = () => { Sound.click(); send({ type: 'auto', on: !autoFlags[you] }); };
     $('#soundBtn').onclick = () => { Sound.setMuted(!Sound.muted); renderTopButtons(); Sound.click(); };
     $('#leaveGame').onclick = () => {
-      if ($('#leaveGame').dataset.armed) { send({ type: 'leave' }); return; }
+      if ($('#leaveGame').dataset.armed) { navigate('leave', $('#leaveGame')); return; }
       $('#leaveGame').dataset.armed = '1';
       toast('再点一次离开对局');
       setTimeout(() => { delete $('#leaveGame').dataset.armed; }, 2500);
     };
     document.addEventListener('keydown', (e) => {
       if (e.code !== 'Space' && e.key !== 'Enter') return;
-      if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (!$('#modal').hidden || !$('#overlay').hidden || e.repeat || e.isComposing) return;
+      if (document.activeElement?.matches('input, textarea, button, select, a, [contenteditable="true"]')) return;
       const b = $('#dock .roll-btn');
       if (b && !b.disabled) { e.preventDefault(); b.click(); }
     });

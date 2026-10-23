@@ -5,9 +5,21 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/rules.js && node test/sim.js 1000"
+    "test": "node test/rules.js && node test/sim.js 1000 && node test/hub.js && node test/server.js",
+    "test:frontend": "node test/frontend.js",
+    "test:browser": "node test/browser.js",
+    "test:multi": "node test/multi.js",
+    "test:browser-helper": "node test/browser-helper-test.js",
+    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi"
   },
-  "engines": { "node": ">=20" },
-  "dependencies": { "ws": "^8.18.0" },
-  "license": "MIT"
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
 }

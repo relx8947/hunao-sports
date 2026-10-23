@@ -23,6 +23,7 @@
       case 'space': return 380;
       case 'predict': return 900;
       case 'transform': return 1300;
+      case 'copy': return 420;
       case 'info': return 420;
       case 'turn': return 380;
       case 'extraTurn': return 700;

@@ -35,6 +35,49 @@ test('规则书示例：浪漫鳄走 5 格超过蹭蹭狗和香蕉', () => {
   assert.strictEqual(R(g, 'scoocher').pos, 4);
   assert.strictEqual(R(g, 'banana').pos, 3);
 });
+test('巨婴触发连锁改变落点后，原移动超过香蕉仍须结算且不重复爱情', () => {
+  const g = setup([['romantic', 0], ['banana', 3], ['scoocher', 4], ['hugebaby', 6]]);
+  run(g, g.move(R(g, 'romantic'), 6, 'main'));
+  assert.strictEqual(R(g, 'romantic').pos, 7);
+  assert.strictEqual(R(g, 'romantic').tripped, true);
+  assert.strictEqual(R(g, 'scoocher').pos, 5);
+  assert.strictEqual(R(g, 'banana').pos, 3);
+  assert.strictEqual(R(g, 'hugebaby').pos, 6);
+  const events = g.drain();
+  assert.deepStrictEqual(events.filter(e => e.t === 'move' && e.rid === 'romantic').map(e => [e.from, e.to]), [[0, 5], [5, 7]]);
+  assert.strictEqual(events.filter(e => e.t === 'power' && e.key === 'romantic').length, 1);
+  assert.strictEqual(events.filter(e => e.t === 'power' && e.key === 'banana').length, 1);
+  const movedAgain = events.findIndex(e => e.t === 'move' && e.rid === 'romantic' && e.to === 7);
+  const bananaTrip = events.findIndex(e => e.t === 'trip' && e.rid === 'romantic' && /香蕉/.test(e.text));
+  assert(bananaTrip > movedAgain, '原移动的超车应在前置连锁结束后继续结算');
+});
+test('连锁改变落点后，原先同格的吸盘鱼仍能跟到实际新位置', () => {
+  const g = setup([['romantic', 0], ['banana', 3], ['scoocher', 4], ['hugebaby', 6], ['suckerfish', 0]]);
+  const targets = [];
+  run(g, g.move(R(g, 'romantic'), 6, 'main'), { suckerfish: d => {
+    targets.push(d.target);
+    return targets.length === 1 ? 'yes' : 'no';
+  }});
+  assert.deepStrictEqual(targets, [7, 9]); // 第一次跟随又触发爱情；拒绝第二次，避免继续连锁。
+  assert.strictEqual(R(g, 'suckerfish').pos, 7);
+  assert.strictEqual(R(g, 'suckerfish').tripped, true);
+  assert.strictEqual(R(g, 'romantic').pos, 9);
+  assert.strictEqual(R(g, 'romantic').tripped, true);
+});
+test('原落点失效时跳过巨婴挤人、赛道格与同格技能，仍结算超车', () => {
+  const g = setup([['hugebaby', 9], ['banana', 3], ['legs', 7], ['romantic', 0]], 'wild');
+  const baby = R(g, 'hugebaby');
+  // 原移动为 0 → 7，前置连锁已把巨婴移到 9；只剩历史超车需要结算。
+  run(g, g.afterStop(baby, 0, 7, { passed: [R(g, 'banana')], moved: true, sharedBefore: [] }));
+  assert.strictEqual(baby.pos, 9);
+  assert.strictEqual(baby.tripped, true);
+  assert.strictEqual(R(g, 'legs').pos, 7);
+  assert.strictEqual(R(g, 'romantic').pos, 0);
+  assert.strictEqual(g.score(0), 0);
+  const events = g.drain();
+  assert(!events.some(e => e.t === 'warp' || e.t === 'space'));
+  assert.deepStrictEqual(events.filter(e => e.t === 'power').map(e => e.key), ['banana']);
+});
 test('半人马超车后蹄踢：被超者后退 2，最多到起点', () => {
   const g = setup([['centaur', 0], ['legs', 1], ['hare', 4]]);
   run(g, g.move(R(g, 'centaur'), 6, 'main'));
@@ -144,6 +187,272 @@ test('整局流程：3 人 AI 能跑完 4 场', () => {
   }
   assert.strictEqual(g.phase, 'over');
   assert.strictEqual(g.results.length, 4);
+});
+
+test('模仿猫同回合并列领跑由玩家选，连锁中同组再现不重复询问', () => {
+  const g = setup([['copycat', 0], ['legs', 10], ['hare', 10]]);
+  const cat = R(g, 'copycat');
+  assert.strictEqual(g.power(cat), null);
+  const gen = g.refreshCopies();
+  const question = gen.next();
+  assert.strictEqual(question.value.kind, 'copycat');
+  assert.deepStrictEqual(question.value.options.map(o => o.v).sort(), ['hare', 'legs']);
+  assert.strictEqual(g.power(cat), null);
+  assert.strictEqual(gen.next('hare').done, true);
+  assert.strictEqual(g.power(cat), 'hare');
+  assert.strictEqual(g.refreshCopies().next().done, true);
+  R(g, 'legs').pos = 11;
+  run(g, g.refreshCopies());
+  assert.strictEqual(g.power(cat), 'legs');
+  R(g, 'hare').pos = 11;
+  assert.strictEqual(g.refreshCopies().next().done, true);
+  assert.strictEqual(g.power(cat), 'hare');
+  cat.pos = 12;
+  run(g, g.refreshCopies());
+  assert.strictEqual(g.power(cat), null);
+  cat.pos = 0;
+  assert.strictEqual(g.refreshCopies().next().done, true);
+  assert.strictEqual(g.power(cat), 'hare');
+  assert.strictEqual(g.drain().filter(e => e.t === 'copy' && e.power === 'hare').length, 3);
+});
+test('模仿猫跨回合同组领跑可重选，清缓存与待决策时不泄漏旧技能', () => {
+  const g = setup([['copycat', 0], ['legs', 10], ['hare', 10]]);
+  const cat = R(g, 'copycat');
+  run(g, g.refreshCopies(), { copycat: 'hare' });
+  assert.strictEqual(g.power(cat), 'hare');
+  g.drain();
+  g.resetTurnCounters();
+  assert.strictEqual(g.power(cat), null);
+  assert.strictEqual(g.has(cat, 'hare'), false);
+  assert.deepStrictEqual(g.holders('hare').map(r => r.rid), ['hare']);
+  assert.strictEqual(g.snapshot().racers.find(r => r.rid === 'copycat').eff, null);
+  assert.strictEqual(g.drain().length, 0, '技能查询和快照不应自行选择或产生事件');
+  const gen = g.refreshCopies();
+  const question = gen.next();
+  assert.strictEqual(question.done, false);
+  assert.strictEqual(question.value.kind, 'copycat');
+  assert.strictEqual(g.power(cat), null);
+  assert.strictEqual(gen.next('legs').done, true);
+  assert.strictEqual(g.power(cat), 'legs');
+  assert.strictEqual(g.refreshCopies().next().done, true);
+  assert.strictEqual(g.drain().filter(e => e.t === 'copy' && e.power === 'legs').length, 1);
+});
+test('真实回合开始会清除模仿猫上一回合选择，并先停在新的复制决策', () => {
+  const g = setup([['copycat', 0], ['legs', 10], ['hare', 10]]);
+  const cat = R(g, 'copycat');
+  run(g, g.refreshCopies(), { copycat: 'hare' });
+  const gen = g.takeTurn(cat);
+  const question = gen.next();
+  assert.strictEqual(g.turns, 1);
+  assert.strictEqual(question.value.kind, 'copycat');
+  assert.strictEqual(g.power(cat), null);
+  const next = gen.next('legs');
+  assert.strictEqual(next.value.kind, 'mode');
+  assert(next.value.options.some(o => o.v === 'legs'));
+  assert.strictEqual(g.power(cat), 'legs');
+});
+test('模仿猫排除赛前技能与已出局领跑者', () => {
+  const g = setup([['copycat', 0], ['egg', 10], ['legs', 9]]);
+  assert.strictEqual(g.power(R(g, 'copycat')), null);
+  R(g, 'egg').out = true;
+  assert.strictEqual(g.power(R(g, 'copycat')), 'legs');
+});
+test('snapshot 深拷贝，不共享手牌、筹码、决策和赛道分值', () => {
+  const g = new Game({ players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], seed: 9 });
+  g.start();
+  const first = g.snapshot();
+  first.faceUp.length = 0;
+  first.pending.options.length = 0;
+  first.players[0].chips.push({ kind: 'bronze', v: 999 });
+  first.gold[0] = 999;
+  const second = g.snapshot();
+  assert(second.faceUp.length > 0 && second.pending.options.length > 0);
+  assert.strictEqual(second.players[0].score, 0);
+  assert.strictEqual(second.gold[0], 3);
+});
+test('按席快照仅暴露本人选择，暗选答案在亮牌前不外泄', () => {
+  const { decide } = require('../game/ai');
+  const g = new Game({ players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], seed: 9 });
+  g.start();
+  while (g.phase === 'draft') {
+    const d = g.pending;
+    g.answer(d.seat, d.id, decide(g, d, d.seat));
+  }
+  const d = g.pending;
+  assert.deepStrictEqual(Object.keys(g.snapshot(0).pending.optionsBySeat), ['0']);
+  assert.deepStrictEqual(g.snapshot(-1).pending.optionsBySeat, {});
+  assert.strictEqual(g.answer(0, d.id, d.optionsBySeat[0][0].v), null);
+  assert.deepStrictEqual(g.snapshot(1).pending.done, [0]);
+  assert.strictEqual(g.snapshot(1).pending.answers, undefined);
+  assert.strictEqual(g.snapshot(1).racers.length, 0);
+  assert.strictEqual(g.answer(0, d.id, d.optionsBySeat[0][1].v), '你已经选好了');
+});
+test('事件冻结原始内容，不随调用者后续修改', () => {
+  const g = setup([['legs', 0], ['hare', 0]]);
+  const event = { t: 'test', nested: { values: [1] } };
+  g.emit(event);
+  event.nested.values[0] = 999;
+  assert.strictEqual(g.drain()[0].nested.values[0], 1);
+});
+test('电灯泡选择两人起点格后确实瞬移到 0，且主移动尚未开始', () => {
+  const g = setup([['thirdwheel', 5], ['legs', 0], ['hare', 0]]);
+  const tw = R(g, 'thirdwheel');
+  const gen = g.mainMove(tw, 5);
+  const question = gen.next();
+  assert.strictEqual(question.value.kind, 'thirdwheel');
+  assert(question.value.options.some(o => o.v === 's0'));
+  const next = gen.next('s0');
+  assert.strictEqual(next.done, false);
+  assert.strictEqual(next.value.kind, 'roll');
+  assert.strictEqual(tw.pos, 0);
+  const events = g.drain();
+  assert.deepStrictEqual(events.filter(e => e.t === 'warp' && e.rid === 'thirdwheel').map(e => [e.from, e.to]), [[5, 0]]);
+  assert(events.some(e => e.t === 'power' && e.key === 'thirdwheel'));
+  assert(!events.some(e => e.t === 'roll' || e.t === 'move'), '停在掷骰决策时尚未进行主移动');
+});
+test('西西弗斯零分回起点不生成虚假的扣分事件', () => {
+  const g = setup([['sisyphus', 5], ['legs', 10], ['hare', 2]]);
+  g.d6 = () => 6;
+  run(g, g.mainMove(R(g, 'sisyphus'), 5));
+  assert.strictEqual(R(g, 'sisyphus').pos, 0);
+  assert.strictEqual(g.score(0), 0);
+  assert(!g.drain().some(e => e.t === 'chip' && e.kind === 'lose'));
+});
+test('西西弗斯扣分恰好1分并保留剩余奖牌值', () => {
+  const g = setup([['sisyphus', 5], ['legs', 10], ['hare', 2]]);
+  g.players[0].chips = [{ kind: 'gold', v: 3, race: 1 }];
+  g.d6 = () => 6;
+  run(g, g.mainMove(R(g, 'sisyphus'), 5));
+  assert.strictEqual(g.score(0), 2);
+  assert.strictEqual(g.drain().filter(e => e.kind === 'lose').length, 1);
+});
+
+test('冲线后刷新模仿猫，原吸盘鱼拒绝后猫仍可跟随成为第二名', () => {
+  const g = setup([['legs', 28], ['copycat', 28], ['suckerfish', 28], ['hare', 28]]);
+  // 本体鱼的回合中让大长腿移动，按回合顺序先询问本体鱼，再询问猫。
+  g.curSeat = 2;
+  const copies = [], follows = [];
+  run(g, g.move(R(g, 'legs'), 2, 'power'), {
+    copycat: d => {
+      copies.push(d.options.map(o => o.v).sort());
+      assert(copies.length <= 2, '新领跑局面只应询问一次');
+      return copies.length === 1 ? 'legs' : 'suckerfish';
+    },
+    suckerfish: d => {
+      follows.push(d.seat);
+      return d.seat === 2 ? 'no' : 'yes';
+    },
+  });
+  assert.strictEqual(R(g, 'copycat').finished, 2);
+  assert.strictEqual(R(g, 'legs').finished, 1);
+  assert.strictEqual(R(g, 'suckerfish').finished, 0);
+  assert.deepStrictEqual(copies, [['hare', 'legs', 'suckerfish'], ['hare', 'suckerfish']]);
+  assert.deepStrictEqual(follows, [2, 1]);
+});
+test('骰子贩子自己重掷，复制贩子的猫也获得一格奖励且机会仍共享', () => {
+  const g = setup([['dicemonger', 10], ['copycat', 5], ['legs', 0]]);
+  let rolls = 0, offers = 0;
+  g.d6 = () => { rolls++; return 2; };
+  run(g, g.mainMove(R(g, 'dicemonger'), 10), { reroll: () => { offers++; return 'dice'; } });
+  assert.strictEqual(R(g, 'copycat').pos, 6);
+  assert.strictEqual(R(g, 'dicemonger').pos, 12, '掷骰者不获得自己的交易奖励');
+  assert.strictEqual(offers, 1, '多个有效贩子不能增加重掷次数');
+  assert.strictEqual(rolls, 2);
+  assert.deepStrictEqual(g.drain().filter(e => e.t === 'power' && e.key === 'dicemonger').map(e => e.rid), ['dicemonger', 'copycat']);
+});
+test('第三人重掷时所有有效骰子贩子均按回合顺序奖励一格', () => {
+  const g = setup([['dicemonger', 10], ['copycat', 5], ['legs', 0]]);
+  g.curSeat = 2;
+  let offers = 0;
+  g.d6 = () => 2;
+  run(g, g.mainMove(R(g, 'legs'), 0), { mode: 'roll', reroll: () => { offers++; return 'dice'; } });
+  assert.strictEqual(R(g, 'copycat').pos, 6);
+  assert.strictEqual(R(g, 'dicemonger').pos, 11);
+  assert.strictEqual(R(g, 'legs').pos, 2);
+  assert.strictEqual(offers, 1);
+  assert.deepStrictEqual(g.drain().filter(e => e.t === 'move').map(e => [e.rid, e.from, e.to]), [
+    ['dicemonger', 10, 11], ['copycat', 5, 6], ['legs', 0, 2],
+  ]);
+});
+test('巨婴挤人落点仍受另一巨婴约束，不能停在猫的格子或误触星星', () => {
+  for (const track of ['mild', 'wild']) {
+    const g = setup([['hugebaby', 0], ['copycat', 14], ['legs', 15], ['hare', 1]], track);
+    let copies = 0;
+    run(g, g.move(R(g, 'hugebaby'), 15, 'main'), { copycat: () => {
+      copies++;
+      assert.strictEqual(copies, 1);
+      return 'hugebaby';
+    }});
+    assert.strictEqual(R(g, 'legs').pos, 13);
+    assert.strictEqual(R(g, 'hugebaby').pos, 15);
+    assert.strictEqual(R(g, 'copycat').pos, 14);
+    assert.strictEqual(g.power(R(g, 'copycat')), 'hugebaby');
+    assert.strictEqual(g.score(2), 0, '校正后的落点不是第 14 格星星');
+    const events = g.drain();
+    assert.deepStrictEqual(events.filter(e => e.t === 'warp').map(e => [e.rid, e.from, e.to]), [['legs', 15, 13]]);
+    assert(!events.some(e => e.t === 'space' && e.rid === 'legs'));
+    assert.strictEqual(g.refreshCopies().next().done, true, '校正后不重复询问同一组领跑者');
+  }
+});
+test('模仿猫切成巨婴时排斥已有同格对手，并执行实际落点的停格连锁', () => {
+  for (const track of ['mild', 'wild']) {
+    const g = setup([['copycat', 5], ['hare', 5], ['legs', 15], ['hugebaby', 10]], track);
+    const cat = R(g, 'copycat');
+    run(g, g.refreshCopies());
+    assert.strictEqual(g.power(cat), 'legs');
+    let copies = 0;
+    run(g, g.move(R(g, 'hugebaby'), 5, 'main'), { copycat: () => {
+      copies++;
+      assert.strictEqual(copies, 1, '停格连锁不应无限重问复制选择');
+      return 'hugebaby';
+    }});
+    assert.strictEqual(R(g, 'hare').pos, track === 'wild' ? 6 : 4);
+    assert.strictEqual(cat.pos, 5);
+    assert.strictEqual(g.power(cat), 'hugebaby');
+    const events = g.drain();
+    assert.deepStrictEqual(events.filter(e => e.t === 'warp' && e.rid === 'hare').map(e => [e.rid, e.from, e.to]), [['hare', 5, 4]]);
+    assert.deepStrictEqual(events.filter(e => e.t === 'move' && e.rid === 'hare').map(e => [e.from, e.to]), track === 'wild' ? [[4, 6]] : []);
+    assert.strictEqual(g.refreshCopies().next().done, true);
+    const positions = g.racers.map(r => r.pos);
+    for (let i = 0; i < 3; i++) {
+      assert.strictEqual(g.power(cat), 'hugebaby');
+      g.holders('hugebaby');
+      g.snapshot();
+    }
+    assert.deepStrictEqual(g.racers.map(r => r.pos), positions);
+    assert.strictEqual(g.drain().length, 0, 'power、holders 与快照必须保持纯查询');
+  }
+});
+test('真实回合移动一格夺冠后仍触发起哄怪，但淘汰或比赛终止不触发', () => {
+  const g = setup([['legs', 29], ['heckler', 10], ['hare', 0]]);
+  g.d6 = () => 1;
+  run(g, g.takeTurn(R(g, 'legs')), { mode: 'roll' });
+  assert.strictEqual(R(g, 'heckler').pos, 12);
+  assert.strictEqual(R(g, 'legs').finished, 1);
+  const events = g.drain();
+  assert(events.some(e => e.t === 'turnEnd' && e.seat === 0));
+  assert.strictEqual(events.filter(e => e.t === 'power' && e.key === 'heckler').length, 1);
+
+  const movedTwo = setup([['legs', 28], ['heckler', 10], ['hare', 0]]);
+  movedTwo.d6 = () => 2;
+  run(movedTwo, movedTwo.takeTurn(R(movedTwo, 'legs')), { mode: 'roll' });
+  assert.strictEqual(R(movedTwo, 'legs').finished, 1);
+  assert.strictEqual(R(movedTwo, 'heckler').pos, 10);
+
+  const ended = setup([['legs', 29], ['heckler', 10], ['mastermind', 0]]);
+  R(ended, 'mastermind').mmPredict = 'legs';
+  ended.d6 = () => 1;
+  run(ended, ended.takeTurn(R(ended, 'legs')), { mode: 'roll' });
+  assert.strictEqual(ended.finishCount, 2);
+  assert.strictEqual(R(ended, 'heckler').pos, 10);
+  assert(!ended.drain().some(e => e.t === 'turnEnd' || (e.t === 'power' && e.key === 'heckler')));
+
+  const out = setup([['legs', 0], ['heckler', 10], ['mouth', 1]]);
+  // 固定主移动阶段发生淘汰，单独覆盖回合末排除淘汰者的条件。
+  out.mainMove = function* (r) { yield* this.eliminate(r, R(out, 'mouth')); };
+  run(out, out.takeTurn(R(out, 'legs')));
+  assert.strictEqual(R(out, 'legs').out, true);
+  assert.strictEqual(R(out, 'heckler').pos, 10);
 });
 
 let fail = 0;

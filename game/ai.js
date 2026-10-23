@@ -20,6 +20,8 @@ function decide(game, d, seat) {
     }
     case 'twin':
       return vals.filter((v) => v !== '_skip').sort((a, b) => tier(b) - tier(a))[0] || '_skip';
+    case 'copycat':
+      return vals.slice().sort((a, b) => tier(game.byRid(b)?.power) - tier(game.byRid(a)?.power))[0];
     case 'pickRacer': {
       // 后面的比赛分更高：先派弱的，强的留到后面
       const sorted = vals.slice().sort((a, b) => tier(a) - tier(b));

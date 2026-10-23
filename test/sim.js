@@ -4,7 +4,7 @@ const { Game, FINISH } = require('../game/engine');
 const { decide } = require('../game/ai');
 
 const N = Number(process.argv[2]) || 2000;
-let races = 0, turns = 0, decisions = 0, capped = 0;
+let races = 0, turns = 0, decisions = 0, capped = 0, cappedRaces = 0;
 const kinds = {};
 const powerSeen = {};
 const t0 = Date.now();
@@ -43,8 +43,10 @@ for (let i = 0; i < N; i++) {
       const fin = r.standings.filter((s) => s.finished);
       if (fin.length > 2) throw new Error('完赛人数 >2');
     }
-    turns += g.turns;
-    if (g.turns >= 240) capped++;
+    turns += g.results.reduce((sum, r) => sum + r.turns, 0);
+    const limited = g.results.filter(r => r.reason === 'turn-limit' || r.reason === 'loop-limit').length;
+    cappedRaces += limited;
+    if (limited) capped++;
   } catch (e) {
     console.error(`对局 #${i} (n=${n}, seed=${seed}) 失败:`, e.stack);
     console.error('最近日志:', g.log.slice(-15).map((l) => l.text).join('\n  '));
@@ -52,7 +54,7 @@ for (let i = 0; i < N; i++) {
   }
 }
 console.log(`完成 ${N} 局 / ${races} 场比赛，用时 ${Date.now() - t0}ms`);
-console.log(`平均决策 ${(decisions / N).toFixed(1)} 次/局，触顶回合上限 ${capped} 局`);
+console.log(`平均决策 ${(decisions / N).toFixed(1)} 次/局，保护上限 ${capped} 局 / ${cappedRaces} 场；平均回合 ${(turns / races).toFixed(1)} 次/场`);
 console.log('决策类型:', kinds);
 const missing = require('../game/racers').RACER_IDS.filter((id) => !powerSeen[id] && !['copycat'].includes(id));
 console.log('从未生效的技能:', missing.length ? missing : '无');

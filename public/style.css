@@ -228,8 +228,9 @@ input { font: inherit; color: inherit; }
 @keyframes comIn { from { opacity: 0; transform: translateY(8px) scale(.9); } }
 
 /* 骰子 */
-.die { width: calc(84 * var(--u)); height: calc(84 * var(--u)); position: relative; filter: drop-shadow(calc(3 * var(--u)) calc(4 * var(--u)) 0 rgba(35, 31, 51, .9)); }
-.die svg { width: 100%; height: 100%; }
+/* 投影只给骰面：挂在 .die 上会连下方的名字一起投出重影 */
+.die { width: calc(84 * var(--u)); height: calc(84 * var(--u)); position: relative; }
+.die svg { width: 100%; height: 100%; filter: drop-shadow(calc(3 * var(--u)) calc(4 * var(--u)) 0 rgba(35, 31, 51, .9)); }
 .die.rolling { animation: dieRoll .5s linear infinite; }
 .die.land { animation: dieLand .45s var(--ease); }
 @keyframes dieRoll { 0% { transform: rotate(0) translateY(0); } 25% { transform: rotate(90deg) translateY(-12%); } 50% { transform: rotate(180deg) translateY(0); } 75% { transform: rotate(270deg) translateY(-8%); } 100% { transform: rotate(360deg); } }
@@ -262,7 +263,9 @@ input { font: inherit; color: inherit; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .token.cur .body { box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 0 0 calc(7 * var(--u)) rgba(255, 197, 61, .85), calc(2 * var(--u)) calc(3 * var(--u)) 0 calc(6 * var(--u)) var(--ink); }
 .token.cur { z-index: 5; }
-.token .seat-dot { position: absolute; left: 50%; bottom: -16%; transform: translateX(-50%); padding: 0 calc(6 * var(--u)); height: calc(16 * var(--u)); line-height: calc(13 * var(--u)); border-radius: 99px; background: var(--c); border: calc(2 * var(--u)) solid var(--ink); color: #fff; font-size: calc(10 * var(--u)); font-weight: 900; white-space: nowrap; max-width: 180%; overflow: hidden; text-overflow: ellipsis; }
+.token .seat-dot { position: absolute; left: 50%; bottom: -16%; transform: translateX(-50%); padding: 0 calc(6 * var(--u)); height: calc(16 * var(--u)); line-height: calc(13 * var(--u)); border-radius: 99px; background: var(--c); border: calc(2 * var(--u)) solid var(--ink); color: #fff; font-size: calc(10 * var(--u)); font-weight: 900; white-space: nowrap; max-width: calc(56 * var(--u)); overflow: hidden; text-overflow: ellipsis; transition: opacity .15s; }
+/* 名字签不超过一格宽，压到别人时由 fitTags 收起 */
+.token.notag .seat-dot { opacity: 0; }
 .token.out { opacity: 0; transform: scale(.2) rotate(200deg); }
 .token.done { opacity: .95; }
 .token .place { position: absolute; right: -12%; top: -12%; width: 46%; height: 46%; border-radius: 50%; border: 2px solid var(--ink); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: calc(15 * var(--u)); background: var(--gold); color: #fff; animation: pop .4s var(--ease); }
@@ -385,7 +388,7 @@ input { font: inherit; color: inherit; }
 .timer { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--red); transform-origin: left; }
 .roll-btn { font-size: 18px; padding: 14px 28px; background: var(--yellow); animation: breathe 1.6s ease-in-out infinite; }
 .roll-btn .ico { width: 26px; height: 26px; }
-@keyframes breathe { 50% { transform: translate(-1px, -2px) scale(1.04); box-shadow: 3px 4px 0 var(--ink); } }
+@keyframes breathe { 50% { box-shadow: 3px 4px 0 var(--ink), 0 0 0 4px rgba(255, 197, 61, .4); } }
 .num-opts { display: flex; gap: 6px; }
 .num-opts .btn { width: 46px; padding: 8px 0; font-size: 18px; }
 
@@ -469,7 +472,7 @@ input { font: inherit; color: inherit; }
 @media (max-width: 1100px) {
   #game { grid-template-columns: minmax(0, 1fr) 250px; }
 }
-@media (max-width: 820px) {
+@media (max-width: 1000px) {
   #game {
     grid-template-columns: 100%;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -600,7 +603,7 @@ input { font: inherit; color: inherit; }
 .feed .ln.hi { color: var(--ink); font-weight: 800; background: var(--bg); }
 
 /* ---------- 选秀补充 ---------- */
-.draft-order { display: flex; align-items: center; gap: 6px; max-width: 100%; overflow-x: auto; padding: 4px 6px 8px; scrollbar-width: none; }
+.draft-order { flex: none; display: flex; align-items: center; gap: 6px; max-width: 100%; overflow-x: auto; padding: 4px 6px 8px; scrollbar-width: none; }
 .draft-order::-webkit-scrollbar { display: none; }
 .do-label { flex: none; font-size: 12px; font-weight: 900; color: var(--ink2); margin-right: 4px; }
 .do { flex: none; padding: 3px 10px; border-radius: 99px; border: 2px solid var(--c); background: var(--paper); font-size: 12.5px; font-weight: 800; color: var(--ink2); transition: all .3s var(--ease); }
@@ -639,7 +642,7 @@ input { font: inherit; color: inherit; }
 @keyframes mineGlow { 50% { box-shadow: 4px 4px 0 var(--ink), 0 0 0 5px rgba(255, 197, 61, .55); } }
 .token { cursor: help; }
 .token.selectable { cursor: pointer; }
-@media (max-width: 820px) {
+@media (max-width: 1000px) {
   .rankbar { display: none; }
   .draft { gap: 10px; padding: 6px 2px 0; }
   .draft-head p { font-size: 12px; }
@@ -651,3 +654,70 @@ input { font: inherit; color: inherit; }
 }
 
 .board.tall .token { width: calc(50 * var(--u)); height: calc(50 * var(--u)); margin: calc(-25 * var(--u)) 0 0 calc(-25 * var(--u)); }
+
+/* 安全区保护所有入口；短横屏优先保留赛道和操作区。 */
+#home, #lobby {
+  padding: calc(28px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+}
+#game {
+  padding: calc(10px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+}
+.overlay, .modal {
+  padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+}
+.connection-status {
+  position: fixed; z-index: 110; left: calc(12px + env(safe-area-inset-left)); right: calc(12px + env(safe-area-inset-right)); top: calc(12px + env(safe-area-inset-top));
+  margin: 0 auto; width: fit-content; max-width: calc(100% - 24px); padding: 10px 14px; background: var(--paper); border: 2px solid var(--ink); border-radius: 12px; box-shadow: var(--shadow-sm); font-weight: 800; font-size: 13px; pointer-events: none;
+}
+.timer { transition: none !important; transform: none !important; }
+.board.picking-cell .token { pointer-events: none; }
+.toasts { top: calc(14px + env(safe-area-inset-top)); max-width: calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px); }
+@media (max-width: 1000px) {
+  #game { padding: calc(8px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left)); }
+  .icon-btn { height: 44px; min-width: 44px; justify-content: center; }
+  #speedLabel { display: inline; }
+  .btn, .link { min-height: 44px; }
+  .seg button { min-width: 44px; }
+  .seat .kick { width: 44px; height: 44px; padding: 10px; top: 2px; right: 2px; }
+  .seat .ava { margin-top: 12px; }
+  .top-actions { gap: 5px; }
+  .stage { min-height: 0; }
+  .prompt .p-opts .btn { min-height: 44px; }
+  .gallery { gap: 12px; }
+  .invite-link input { font-size: 16px; }
+}
+@media (max-width: 1000px) and (orientation: landscape) and (max-height: 550px) {
+  #game { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "top" "stage" "dock"; }
+  #game .side, .rankbar { display: none; }
+  .topbar { flex-wrap: nowrap; gap: 6px; padding-bottom: 4px; }
+  .top-title { display: none; }
+  .races { gap: 4px; }
+  .race-pill { padding: 3px 6px; }
+  .top-actions { margin-left: auto; }
+  .dock { padding-top: 4px; }
+  .prompt { flex-wrap: nowrap; gap: 8px; padding: 6px 10px; }
+  .prompt .p-ava { display: none; }
+  .prompt .p-txt { min-width: 0; }
+  .prompt .p-txt b { font-size: 13px; }
+  .prompt .p-txt span { font-size: 11px; }
+  .prompt .p-opts { width: auto; display: flex; flex-wrap: wrap; flex: 1; justify-content: flex-end; max-height: 26dvh; }
+  .prompt .p-opts .btn { padding: 6px 10px; }
+  .prompt .p-opts:has(.num-opts) { flex-basis: 100%; min-width: 0; }
+  .prompt:has(.num-opts) { flex-wrap: wrap; }
+  .prompt .p-opts .num-opts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; width: 100%; min-width: 0; }
+  .prompt .p-opts .num-opts .btn { min-width: 0; padding: 4px; }
+  .board .tc-skill, .board .tc-st { display: none; }
+  .board .tc-who b { font-size: max(12px, calc(20 * var(--u))); }
+  .board .tc-player { font-size: max(10px, calc(11 * var(--u))); }
+  .draft { gap: 5px; }
+  .draft-head { display: none; }
+  .my-team { padding: 3px 8px; }
+  .mt-slot { width: 36px; height: 36px; }
+}
+@media (max-width: 360px) {
+  .top-actions { gap: 4px; }
+  .my-team { max-width: 100%; gap: 4px; }
+  .mt-slot { width: 44px; height: 44px; }
+  .mt-label { font-size: 11px; margin-right: 0; }
+}
+button:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
