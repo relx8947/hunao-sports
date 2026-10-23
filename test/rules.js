@@ -23,7 +23,59 @@ function run(g, gen, answers = {}) {
   } catch (e) { if (e.constructor.name !== 'RaceEnd') throw e; }
   return g;
 }
+// 回合顺序测试必须走 runRace / answer，不能只检查 takeTurn 设置的标志。
+function answer(g, value) {
+  const d = g.pending;
+  assert(d && !d.simul, '应有单人待决策');
+  assert.strictEqual(g.answer(d.seat, d.id, value), null);
+}
+function pickRace(g, ids) {
+  const d = g.pending;
+  assert(d && d.simul && d.kind === 'pickRacer', '应有同时暗选运动员的决策');
+  for (const s of d.seats) {
+    assert(d.optionsBySeat[s].some(o => o.v === ids[s]), '出场角色必须属于该席合法选项');
+    assert.strictEqual(g.answer(s, d.id, ids[s]), null);
+  }
+}
+function startRace(ids, dice, firstSeat = 0, prepare = () => {}) {
+  const g = new Game({ players: ids.map((_, i) => ({ name: `P${i}` })), seed: 42 });
+  ids.forEach((id, s) => { g.players[s].hand = [id]; });
+  g.raceNo = 1; g.trackKey = 'mild'; g.firstSeat = firstSeat;
+  g.d6 = dice;
+  prepare(g);
+  g.gen = g.runRace(0);
+  g.start();
+  pickRace(g, ids);
+  return g;
+}
+function draftedTurnOrderRace(ids, seed, dice) {
+  const g = new Game({ players: ids.map((_, i) => ({ name: `P${i}` })), seed });
+  const draftDice = [6, 1, 1, 6, 1, 1];
+  g.d6 = () => { assert(draftDice.length > 0); return draftDice.shift(); };
+  g.start();
+  while (g.phase === 'draft') {
+    const d = g.pending;
+    answer(g, d.options.some(o => o.v === ids[d.seat]) ? ids[d.seat] : d.options[0].v);
+  }
+  assert.strictEqual(draftDice.length, 0);
+  assert.strictEqual(g.firstSeat, 0);
+  g.d6 = dice;
+  pickRace(g, ids);
+  return g;
+}
 const R = (g, rid) => g.racers.find((r) => r.rid === rid);
+// 骰序数组与骰点函数具有不同契约，使用明确独有的 helper 名称。
+function draftedRollSequenceRace(seed, picks, rolls) {
+  return draftedTurnOrderRace(picks, seed, () => {
+    assert(rolls.length, '主移动骰点不得超出夹具');
+    return rolls.shift();
+  });
+}
+// 安全边界使用固定阵容；配置和探针必须在生成器首次推进前安装。
+function fixedRace(picks, configure = () => {}) {
+  return startRace(picks, () => 6, 0, configure);
+}
+const turnSeats = g => g.events.filter(e => e.t === 'turn').map(e => e.seat);
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
@@ -453,6 +505,387 @@ test('真实回合移动一格夺冠后仍触发起哄怪，但淘汰或比赛�
   run(out, out.takeTurn(R(out, 'legs')));
   assert.strictEqual(R(out, 'legs').out, true);
   assert.strictEqual(R(out, 'heckler').pos, 10);
+});
+
+// 原版英文说明书（第三方 CMYK 镜像）第23页：Genius 无连续次数上限；
+// 猜中1时 Skipper 后触发，抢走下一回合。第21页只要求截真正无限循环。
+test('可达 seed555：天才连续猜中四次得到第五个完整回合，再猜错才交下席', () => {
+  const g = draftedTurnOrderRace(['genius', 'legs', 'blimp'], 555, () => 2);
+  for (let i = 0; i < 4; i++) {
+    assert.strictEqual(g.pending.seat, 0);
+    answer(g, 'roll');
+    assert.strictEqual(g.pending.kind, 'genius');
+    answer(g, '2');
+  }
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [0, 0, 0, 0, 0]);
+  assert.strictEqual(g.pending.seat, 0);
+  assert.strictEqual(R(g, 'genius').pos, 8);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 4);
+  // 额外回合重新进入主移动、重新预言，不沿用上回合的猜测或技能预算。
+  answer(g, 'roll');
+  assert.strictEqual(g.pending.kind, 'genius');
+  answer(g, '3');
+  assert.strictEqual(g.pending.seat, 1);
+  assert.strictEqual(R(g, 'genius').pos, 10);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [0, 0, 0, 0, 0, 1]);
+  assert.strictEqual(g.events.filter(e => e.t === 'power' && e.key === 'genius').length, 4);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'move' && e.rid === 'genius').map(e => [e.from, e.to]), [[0, 2], [2, 4], [4, 6], [6, 8], [8, 10]]);
+  const boundaries = g.events.filter(e => ['turn', 'turnEnd', 'extraTurn'].includes(e.t)).map(e => e.t);
+  assert.deepStrictEqual(boundaries, ['turn', ...Array(4).fill(['turnEnd', 'extraTurn', 'turn']).flat(), 'turnEnd', 'turn']);
+});
+test('可达 seed936：天才猜中1后下一真实回合属于船长，随后从船长下席继续', () => {
+  const dice = [1, 2];
+  const g = draftedTurnOrderRace(['genius', 'skipper', 'legs'], 936, () => { assert(dice.length); return dice.shift(); });
+  answer(g, 'roll'); answer(g, '1');
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [0, 1]);
+  assert.strictEqual(g.pending.seat, 1);
+  assert.strictEqual(g.pending.kind, 'roll');
+  assert.strictEqual(R(g, 'genius').pos, 1);
+  const geniusPower = g.events.findIndex(e => e.t === 'power' && e.key === 'genius');
+  const skipperPower = g.events.findIndex(e => e.t === 'power' && e.key === 'skipper');
+  assert(geniusPower >= 0 && skipperPower > geniusPower);
+  assert(!g.events.some(e => e.t === 'extraTurn'));
+  answer(g, 'roll');
+  assert.strictEqual(g.pending.seat, 2);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [0, 1, 2]);
+  assert.strictEqual(R(g, 'skipper').pos, 2);
+  assert.strictEqual(dice.length, 0);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'power').map(e => e.key), ['genius', 'skipper']);
+});
+test('有船长时天才猜中2仍由天才自己开始下一真实回合', () => {
+  const g = startRace(['genius', 'skipper', 'legs'], () => 2);
+  answer(g, 'roll'); answer(g, '2');
+  assert.strictEqual(g.pending.seat, 0);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [0, 0]);
+  assert.strictEqual(R(g, 'genius').pos, 2);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 1);
+  assert(!g.events.some(e => e.t === 'power' && e.key === 'skipper'));
+});
+test('船长自己掷1也开始自己的下一真实回合，掷2再交下席', () => {
+  const dice = [1, 2];
+  const g = startRace(['genius', 'skipper', 'legs'], () => { assert(dice.length); return dice.shift(); }, 1);
+  answer(g, 'roll');
+  assert.strictEqual(g.pending.seat, 1);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [1, 1]);
+  assert.strictEqual(R(g, 'skipper').pos, 1);
+  answer(g, 'roll');
+  assert.strictEqual(g.pending.seat, 2);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [1, 1, 2]);
+});
+test('天才先连续猜中2，再在额外回合猜中1，船长立刻抢走下一真实回合', () => {
+  const dice = [2, 2, 2, 1];
+  const g = startRace(['genius', 'skipper', 'legs'], () => { assert(dice.length); return dice.shift(); });
+  for (const prediction of ['2', '2', '2', '1']) { answer(g, 'roll'); answer(g, prediction); }
+  assert.strictEqual(g.pending.seat, 1);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [0, 0, 0, 0, 1]);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 3);
+  assert.strictEqual(R(g, 'genius').pos, 7);
+});
+test('天才额外回合摔倒后下一完整回合爬起，不掷骰且交下席', () => {
+  const g = startRace(['genius', 'babayaga', 'legs'], () => 2, 0, g => {
+    g.beforeRace = function* () { R(this, 'babayaga').pos = 2; };
+  });
+  answer(g, 'roll'); answer(g, '2');
+  assert.strictEqual(g.pending.seat, 1);
+  assert.strictEqual(R(g, 'genius').tripped, false);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [0, 0, 1]);
+  assert.strictEqual(g.events.filter(e => e.t === 'roll' && e.rid === 'genius').length, 1);
+  assert(g.events.some(e => e.t === 'recover' && e.rid === 'genius'));
+});
+test('连续额外回合遇真正技能循环仍执行每回合循环保护', () => {
+  const g = startRace(['genius', 'scoocher', 'hugebaby'], () => 2, 0, g => {
+    g.beforeRace = function* () { R(this, 'scoocher').pos = 4; R(this, 'hugebaby').pos = 5; };
+  });
+  answer(g, 'roll'); answer(g, '2');
+  answer(g, 'roll'); answer(g, '2');
+  assert.strictEqual(g.pending.seat, 0);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'turn').map(e => e.seat), [0, 0, 0]);
+  assert.strictEqual(R(g, 'scoocher').pos, 4);
+  assert.strictEqual(g.events.filter(e => e.t === 'info' && /无限循环/.test(e.text)).length, 2);
+});
+test('永远猜中的天才被较真怪卡住：连续回合在240回合有限结算，保留赛前分数', () => {
+  let rolls = 0;
+  const g = startRace(['genius', 'stickler', 'sisyphus'], () => { assert(++rolls <= 240); return 2; }, 0, g => {
+    const before = g.beforeRace;
+    g.beforeRace = function* () { yield* before.call(this); R(this, 'genius').pos = 29; };
+  });
+  for (let steps = 0; g.pending; steps++) {
+    assert(steps < 500, '连续回合必须有限终止');
+    assert.strictEqual(g.pending.seat, 0);
+    answer(g, g.pending.kind === 'genius' ? '2' : 'roll');
+  }
+  assert.strictEqual(rolls, 240);
+  assert.strictEqual(g.phase, 'between');
+  assert.strictEqual(g.results.length, 1);
+  assert.strictEqual(g.results[0].turns, 240);
+  assert.strictEqual(g.results[0].reason, 'turn-limit');
+  assert.deepStrictEqual(g.results[0].scores, [0, 0, 4]);
+  assert.strictEqual(g.firstSeat, 1);
+  assert.strictEqual(g.curSeat, null);
+  assert.strictEqual(g.extraTurn, false);
+  assert.strictEqual(g.skipperNext, null);
+  assert.strictEqual(g.events.filter(e => e.t === 'turn').length, 240);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 239);
+  assert.strictEqual(g.events.filter(e => e.t === 'raceEnd').length, 1);
+  assert(!g.events.some(e => e.t === 'finish'));
+  const eventScores = [0, 0, 0];
+  for (const e of g.events) if (e.t === 'chip') eventScores[e.seat] += e.v;
+  assert.deepStrictEqual(eventScores, g.results[0].scores);
+  assert.deepStrictEqual(g.players.map(p => g.score(p.seat)), eventScores);
+});
+test('连续回合到达240立即结算，不能先多跑至242', () => {
+  const g = startRace(['genius', 'stickler', 'legs'], () => 2, 0, g => {
+    g.beforeRace = function* () { this.turns = 238; R(this, 'genius').pos = 29; };
+  });
+  for (let i = 0; i < 8 && g.pending; i++) answer(g, g.pending.kind === 'genius' ? '2' : 'roll');
+  assert.strictEqual(g.pending, null);
+  assert.strictEqual(g.results[0].turns, 240);
+  assert.strictEqual(g.results[0].reason, 'turn-limit');
+  assert.strictEqual(g.events.filter(e => e.t === 'turn').length, 2);
+});
+test('额外回合淘汰天才后不能恢复旧回合，最早淘汰者成为下一场先手', () => {
+  const g = startRace(['genius', 'mouth', 'legs'], () => 2, 0, g => {
+    const take = g.takeTurn;
+    g.takeTurn = function* (r) {
+      if (r.rid === 'genius' && this.turns === 1) {
+        this.curSeat = r.seat; this.turns++;
+        this.emit({ t: 'turn', seat: r.seat, rid: r.rid });
+        // 固定额外回合内的淘汰，验证调度器不会把已淘汰运动员再次入队。
+        yield* this.eliminate(r, R(this, 'mouth'));
+        this.extraTurn = true;
+        this.emit({ t: 'turnEnd', seat: r.seat });
+      } else yield* take.call(this, r);
+    };
+  });
+  answer(g, 'roll'); answer(g, '2');
+  assert.strictEqual(g.pending.seat, 1);
+  assert.strictEqual(R(g, 'genius').out, true);
+  let steps = 0;
+  while (g.pending) { assert(++steps < 80); answer(g, g.pending.kind === 'mode' ? 'legs' : 'roll'); }
+  assert.strictEqual(g.results.length, 1);
+  assert.strictEqual(g.firstSeat, 0);
+  assert.strictEqual(g.events.filter(e => e.t === 'turn' && e.rid === 'genius').length, 2);
+});
+test('天才额外回合触发主谋终止比赛后进入下一场，不恢复旧场回合', () => {
+  const g = draftedTurnOrderRace(['genius', 'legs', 'blimp'], 555, () => 2);
+  R(g, 'legs').power = 'mastermind'; R(g, 'legs').mmPredict = 'genius';
+  for (let i = 0; i < 15; i++) { answer(g, 'roll'); answer(g, '2'); }
+  assert.strictEqual(g.raceNo, 2);
+  assert.strictEqual(g.pending.kind, 'pickRacer');
+  assert.strictEqual(g.results.length, 1);
+  assert.strictEqual(g.results[0].reason, 'finished');
+  assert.deepStrictEqual(g.results[0].scores, [3, 1, 0]);
+  assert.strictEqual(g.firstSeat, 2);
+  const picks = g.players.map(p => p.hand.find(id => !p.used.includes(id)));
+  pickRace(g, picks);
+  assert.strictEqual(g.results.length, 1);
+  const end = g.events.findIndex(e => e.t === 'raceEnd');
+  const nextTurns = g.events.slice(end + 1).filter(e => e.t === 'turn');
+  assert.strictEqual(nextTurns.length, 1);
+  assert.strictEqual(nextTurns[0].seat, 2);
+  assert.strictEqual(nextTurns[0].rid, picks[2]);
+});
+
+// 英文规则书镜像第 23 页：Genius 没有连续次数上限；Skipper 后触发会抢走下一回合。
+test('正常选秀 seed555：天才连续猜中4次获得第5个完整回合，猜错后才交给下席', () => {
+  const rolls = [2, 2, 2, 2, 3];
+  const g = draftedRollSequenceRace(555, ['genius', 'legs', 'blimp'], rolls);
+  for (let i = 0; i < 4; i++) {
+    assert.strictEqual(g.pending.seat, 0);
+    assert.strictEqual(g.pending.kind, 'roll');
+    answer(g, 'roll');
+    assert.strictEqual(g.pending.kind, 'genius');
+    answer(g, '2');
+  }
+  assert.deepStrictEqual(turnSeats(g), [0, 0, 0, 0, 0]);
+  assert.strictEqual(g.pending.seat, 0);
+  assert.strictEqual(g.pending.kind, 'roll');
+  assert.strictEqual(R(g, 'genius').pos, 8);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 4);
+  assert.strictEqual(g.events.filter(e => e.t === 'power' && e.key === 'genius').length, 4);
+  assert.strictEqual(g.events.filter(e => e.t === 'turnEnd').length, 4);
+  answer(g, 'roll'); answer(g, '2'); // 第 5 回合实际掷出 3，预言失败。
+  assert.strictEqual(rolls.length, 0);
+  assert.strictEqual(R(g, 'genius').pos, 11);
+  assert.strictEqual(g.pending.seat, 1);
+  assert.deepStrictEqual(turnSeats(g), [0, 0, 0, 0, 0, 1]);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 4);
+});
+test('正常选秀 seed936：天才猜中2仍得到自己的下一真实回合', () => {
+  const g = draftedRollSequenceRace(936, ['genius', 'skipper', 'legs'], [2]);
+  answer(g, 'roll'); answer(g, '2');
+  assert.deepStrictEqual(turnSeats(g), [0, 0]);
+  assert.strictEqual(g.pending.seat, 0);
+  assert.strictEqual(g.pending.kind, 'roll');
+  assert.strictEqual(R(g, 'genius').pos, 2);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 1);
+  assert(!g.events.some(e => e.t === 'power' && e.key === 'skipper'));
+});
+test('船长自己连续掷1可重复获得完整回合，掷2后从自己的下席继续', () => {
+  const rolls = [1, 1, 1, 2];
+  const g = fixedRace(['skipper', 'legs', 'blimp'], game => {
+    game.d6 = () => { assert(rolls.length); return rolls.shift(); };
+  });
+  for (let i = 0; i < 3; i++) {
+    answer(g, 'roll');
+    assert.deepStrictEqual(turnSeats(g), Array(i + 2).fill(0));
+    assert.strictEqual(g.pending.seat, 0);
+    assert.strictEqual(g.pending.kind, 'roll');
+    assert.strictEqual(R(g, 'skipper').pos, i + 1);
+  }
+  answer(g, 'roll');
+  assert.strictEqual(rolls.length, 0);
+  assert.deepStrictEqual(turnSeats(g), [0, 0, 0, 0, 1]);
+  assert.strictEqual(g.pending.seat, 1);
+  assert.strictEqual(R(g, 'skipper').pos, 5);
+  assert.strictEqual(g.events.filter(e => e.t === 'power' && e.key === 'skipper').length, 3);
+});
+test('连续天才回合内仍执行240回合安全上限，reason和已得分一致且不发剩余奖牌', () => {
+  const g = fixedRace(['genius', 'gunk', 'sisyphus', 'legs'], game => { game.d6 = () => 1; });
+  // Gunk 将 1 格降成 0；Genius 可以一直猜中，但不会有人冲线。
+  let decisions = 0;
+  while (g.pending) {
+    assert(++decisions <= 1000, '连续额外回合必须有限终止');
+    answer(g, g.pending.kind === 'genius' ? '1' : 'roll');
+  }
+  assert.strictEqual(g.phase, 'between');
+  assert.strictEqual(g.results.length, 1);
+  const result = g.results[0];
+  assert.strictEqual(result.turns, 240);
+  assert.strictEqual(result.reason, 'turn-limit');
+  assert.deepStrictEqual(turnSeats(g), Array(240).fill(0));
+  assert.deepStrictEqual(result.scores, [0, 0, 4, 0]);
+  assert.deepStrictEqual(result.scores, g.players.map(p => g.score(p.seat)));
+  const chipScores = Array(4).fill(0);
+  for (const e of g.events.filter(e => e.t === 'chip')) chipScores[e.seat] += e.v;
+  assert.deepStrictEqual(result.scores, chipScores);
+  assert(!g.events.some(e => e.t === 'finish' || (e.t === 'chip' && e.kind !== 'bronze')));
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 239);
+  assert.strictEqual(g.events.filter(e => e.t === 'raceEnd').length, 1);
+  assert.strictEqual(g.extraTurn, false);
+  assert.strictEqual(g.skipperNext, null);
+});
+test('天才连续猜中冲线即停止自身额外回合，单场计分一次并保持下一场先手', () => {
+  const g = fixedRace(['genius', 'legs', 'blimp'], game => { game.d6 = () => 6; });
+  for (let i = 0; i < 5; i++) { answer(g, 'roll'); answer(g, '6'); }
+  assert.strictEqual(R(g, 'genius').finished, 1);
+  assert.strictEqual(g.pending.seat, 1);
+  assert.deepStrictEqual(turnSeats(g), [0, 0, 0, 0, 0, 1]);
+  assert.strictEqual(g.score(0), 3);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 4);
+  let decisions = 0;
+  while (g.pending) {
+    assert(++decisions < 100);
+    answer(g, g.pending.kind === 'mode' ? 'legs' : 'roll');
+  }
+  assert.strictEqual(g.results.length, 1);
+  assert.strictEqual(g.results[0].reason, 'finished');
+  // 固定骰6：飞艇主移动为9、9、5、5、5，比每次走5的大长腿先拿银牌。
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'calc' && e.rid === 'blimp').map(e => [e.base, e.total]), [[6, 9], [6, 9], [6, 5], [6, 5], [6, 5]]);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'move' && e.rid === 'blimp').map(e => [e.from, e.to]), [[0, 9], [9, 18], [18, 23], [23, 28], [28, 30]]);
+  assert.strictEqual(R(g, 'legs').pos, 25);
+  assert.deepStrictEqual(turnSeats(g), [...Array(5).fill(0), ...Array(5).fill([1, 2]).flat()]);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'finish').map(e => [e.rid, e.place]), [['genius', 1], ['blimp', 2]]);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'chip').map(e => [e.seat, e.kind, e.v]), [[0, 'gold', 3], [2, 'silver', 1]]);
+  assert.deepStrictEqual(g.results[0].scores, [3, 0, 1]);
+  assert.strictEqual(g.firstSeat, 1, '未冲线且在25格的大长腿成为下场先手');
+  assert.strictEqual(g.pending, null);
+  assert.strictEqual(g.extraTurn, false);
+  assert.strictEqual(g.skipperNext, null);
+  assert.strictEqual(g.events.filter(e => e.t === 'finish' && e.rid === 'genius').length, 1);
+  assert.strictEqual(g.events.filter(e => e.t === 'chip' && e.kind === 'gold').length, 1);
+});
+test('天才额外回合成为自然第二名时立即结束比赛，不发出后续回合或第三枚奖牌', () => {
+  let geniusRolls = 0;
+  const g = fixedRace(['legs', 'genius', 'blimp'], game => {
+    game.d6 = () => game.curSeat === 1 ? (++geniusRolls <= 5 ? 2 : 6) : 1;
+  });
+  for (let i = 0; i < 5; i++) {
+    answer(g, 'legs');
+    answer(g, 'roll'); answer(g, '3'); // 前5轮猜错，保留正常席序。
+    answer(g, 'roll');
+  }
+  assert.deepStrictEqual(g.racers.map(r => r.pos), [25, 10, 16]);
+  answer(g, 'legs');
+  assert.strictEqual(R(g, 'legs').finished, 1);
+  assert.strictEqual(g.pending.seat, 1);
+  for (let i = 0; i < 4; i++) { answer(g, 'roll'); answer(g, '6'); }
+  assert.strictEqual(geniusRolls, 9);
+  assert.strictEqual(g.pending, null);
+  assert.strictEqual(g.phase, 'between');
+  assert.deepStrictEqual(turnSeats(g), [...Array(5).fill([0, 1, 2]).flat(), 0, 1, 1, 1, 1]);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 3);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'finish').map(e => [e.rid, e.place]), [['legs', 1], ['genius', 2]]);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'chip').map(e => [e.seat, e.kind, e.v]), [[0, 'gold', 3], [1, 'silver', 1]]);
+  assert.strictEqual(g.results.length, 1);
+  assert.strictEqual(g.results[0].reason, 'finished');
+  assert.strictEqual(g.results[0].turns, 20);
+  assert.deepStrictEqual(g.results[0].scores, [3, 1, 0]);
+  assert.strictEqual(g.firstSeat, 2);
+  assert.strictEqual(g.extraTurn, false);
+  assert.strictEqual(g.skipperNext, null);
+  const end = g.events.findIndex(e => e.t === 'raceEnd');
+  assert(!g.events.slice(end + 1).some(e => ['turn', 'turnEnd', 'extraTurn', 'chip'].includes(e.t)));
+});
+test('额外回合中的比赛终止不会恢复旧回合：主谋触发后下一场只产生新阵容回合', () => {
+  const first = ['genius', 'mastermind', 'legs'];
+  const second = ['coach', 'skipper', 'blimp'];
+  const g = new Game({ players: first.map((_, i) => ({ name: `P${i}` })), seed: 42 });
+  g.players.forEach((p, i) => { p.hand = [first[i], second[i]]; });
+  g.d6 = () => 6;
+  g.gen = (function* () {
+    g.raceNo = 1; g.trackKey = 'mild';
+    yield* g.runRace(0);
+    g.raceNo = 2;
+    yield* g.runRace(1);
+  })();
+  g.start(); pickRace(g, first);
+  R(g, 'mastermind').mmPredict = 'genius'; // 固定主谋已作出的预言，只隔离终止时点。
+  for (let i = 0; i < 5; i++) { answer(g, 'roll'); answer(g, '6'); }
+  assert.strictEqual(g.pending.kind, 'pickRacer');
+  assert.strictEqual(g.raceNo, 2);
+  assert.strictEqual(g.results.length, 1);
+  assert.strictEqual(g.results[0].turns, 5);
+  assert.deepStrictEqual(g.results[0].scores, [3, 1, 0]);
+  assert.strictEqual(g.firstSeat, 2);
+  const end = g.events.findIndex(e => e.t === 'raceEnd');
+  assert(end >= 0);
+  assert(!g.events.slice(end + 1).some(e => e.t === 'turnEnd' || e.t === 'extraTurn' || e.rid === 'genius'));
+  pickRace(g, second);
+  assert.strictEqual(g.pending.seat, 2);
+  assert.strictEqual(g.pending.kind, 'roll');
+  assert.strictEqual(g.turns, 1);
+  assert.deepStrictEqual(g.events.slice(end + 1).filter(e => e.t === 'turn').map(e => [e.seat, e.rid]), [[2, 'blimp']]);
+});
+test('额外回合中天才被淘汰后不能再执行旧席回合，最先淘汰者仍为下场先手', () => {
+  let geniusMoves = 0;
+  const g = fixedRace(['genius', 'mouth', 'legs'], game => {
+    game.d6 = () => 2;
+    const originalMainMove = game.mainMove;
+    // 首次 mainMove 在 pickRace 中已推进到 yield，必须提前安装计数探针。
+    game.mainMove = function* (r, startPos) {
+      yield* originalMainMove.call(this, r, startPos);
+      if (r.rid === 'genius' && ++geniusMoves === 2) yield* this.eliminate(r, R(this, 'mouth'));
+    };
+  });
+  answer(g, 'roll'); answer(g, '2');
+  assert.strictEqual(geniusMoves, 1);
+  assert.strictEqual(R(g, 'genius').out, false);
+  assert.strictEqual(g.pending.seat, 0);
+  assert.strictEqual(g.pending.kind, 'roll');
+  answer(g, 'roll'); answer(g, '2');
+  assert.strictEqual(geniusMoves, 2);
+  assert.strictEqual(R(g, 'genius').out, true);
+  assert.strictEqual(R(g, 'genius').pos, 4);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'move' && e.rid === 'genius').map(e => [e.from, e.to]), [[0, 2], [2, 4]]);
+  assert.deepStrictEqual(g.events.filter(e => e.t === 'out').map(e => [e.rid, e.by]), [['genius', 'mouth']]);
+  assert.deepStrictEqual(turnSeats(g), [0, 0, 1]);
+  assert.strictEqual(g.pending.seat, 1);
+  assert.strictEqual(g.events.filter(e => e.t === 'extraTurn').length, 1);
+  let decisions = 0;
+  while (g.pending) { assert(++decisions < 100); answer(g, g.pending.kind === 'mode' ? 'legs' : 'roll'); }
+  assert.strictEqual(g.results.length, 1);
+  assert.strictEqual(g.firstSeat, 0);
 });
 
 let fail = 0;

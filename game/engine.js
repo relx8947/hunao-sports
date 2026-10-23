@@ -265,22 +265,19 @@ class Game {
     this.emit({ t: 'reveal', picks: seats.map((s) => ({ seat: s, rid: picks[s] })), text: `上场：${seats.map((s) => `${this.players[s].name}·${BY_ID[picks[s]].name}`).join('，')}` });
 
     let seat = this.firstSeat;
+    let isExtra = false;
     this.skipperNext = null;
     this.extraTurn = false;
     this.resetTurnCounters();
     try {
       yield* this.beforeRace();
+      // 额外回合也是完整的新回合，必须经过同一调度循环与全部安全检查。
       for (let guard = 0; guard < 400; guard++) {
         const r = this.racerOfSeat(seat);
+        this.extraTurn = false;
         if (this.active(r)) {
+          if (isExtra) this.emit({ t: 'extraTurn', rid: r.rid, text: `${this.nm(r)} 再来一回合！` });
           yield* this.takeTurn(r);
-          let extra = 0;
-          while (this.extraTurn && this.active(r) && extra++ < 3) {
-            this.extraTurn = false;
-            this.emit({ t: 'extraTurn', rid: r.rid, text: `${this.nm(r)} 再来一回合！` });
-            yield* this.takeTurn(r);
-          }
-          this.extraTurn = false;
         }
         this.checkEnd();
         if (this.turns >= MAX_TURNS) {
@@ -288,7 +285,13 @@ class Game {
           this.emit({ t: 'info', text: '本场达到回合上限，保留已获得分数并进入结算' });
           throw new RaceEnd();
         }
-        if (this.skipperNext != null) { seat = this.skipperNext; this.skipperNext = null; } else seat = (seat + 1) % this.n;
+        const extra = this.extraTurn && this.active(r);
+        this.extraTurn = false;
+        isExtra = false;
+        // 规则书 Genius 注释：猜中1时，后触发的 Skipper 抢走下一回合。
+        if (this.skipperNext != null) { seat = this.skipperNext; this.skipperNext = null; }
+        else if (extra) isExtra = true;
+        else seat = (seat + 1) % this.n;
       }
       this.raceEndReason = 'loop-limit';
       this.emit({ t: 'info', text: '本场达到循环保护上限，保留已获得分数并进入结算' });
@@ -296,6 +299,9 @@ class Game {
     } catch (e) {
       if (!(e instanceof RaceEnd)) throw e;
     }
+    // 比赛在技能链或回合上限处结束时，不能把旧场的下一回合带入下一场。
+    this.extraTurn = false;
+    this.skipperNext = null;
     this.afterRace(idx);
   }
 
