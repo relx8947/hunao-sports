@@ -1310,25 +1310,30 @@
     const box = $('#players');
     if (!box) return;
     const first = $('.prow', box);
-    const narrow = !!first && first.getBoundingClientRect().width > 0 && first.getBoundingClientRect().width < 118 && matchMedia('(max-width: 1000px) and (orientation: portrait)').matches;
+    const fw = first ? first.getBoundingClientRect().width : 0;
+    const narrow = fw > 0 && fw < 118 && matchMedia('(max-width: 1000px) and (orientation: portrait)').matches;
     box.classList.toggle('pf-stack', narrow);
-    for (const nm of $$('.prow .pnm', box)) {
-      nm.style.fontSize = '';
-      nm.classList.remove('clip');
-      for (const fs of [11.5, 10.5]) {
-        if (nm.scrollWidth <= nm.clientWidth + 1) break;
-        nm.style.fontSize = `${fs}px`;
-      }
-      if (nm.scrollWidth > nm.clientWidth + 1) nm.classList.add('clip');
+    // 先统一写、再统一读：每一档字号只触发一次布局，不再逐个名字读写交替（布局抖动）
+    const names = $$('.prow .pnm', box);
+    for (const nm of names) { nm.style.fontSize = ''; nm.classList.remove('clip'); }
+    let over = names.filter((nm) => nm.scrollWidth > nm.clientWidth + 1);
+    for (const fs of [11.5, 10.5]) {
+      if (!over.length) break;
+      for (const nm of over) nm.style.fontSize = `${fs}px`;
+      over = over.filter((nm) => nm.scrollWidth > nm.clientWidth + 1);
     }
+    for (const nm of over) nm.classList.add('clip');
   }
 
+  // 每批事件收尾会连着调好几次 renderPlayers：内容没变就不重建 DOM、不重新量名字（省掉强制布局）
+  let playersHtml = '';
   function renderPlayers() {
     if (!vs) return;
     const d = snap && snap.pending;
     const racing = vs.phase === 'race' || vs.phase === 'between';
     const ahead = vs.phase === 'race' ? turnsAhead() : null;
-    $('#players').innerHTML = vs.players.map((p) => {
+    const box = $('#players');
+    const html = vs.players.map((p) => {
       const c = PCOL[p.seat % 6];
       const cur = vs.racers.find((r) => r.seat === p.seat);
       const ava = cur && racing ? art(cur.rid) : `<span class="init">${esc(p.name.slice(0, 1))}</span>`;
@@ -1356,6 +1361,9 @@
         <div class="pn"><b><span class="pnm">${esc(pname(p))}</span>${tags}</b>${line}<div class="hand">${hand}</div></div>
         <div class="sc" title="${scoreTitle}"><b data-score="${p.seat}">${p.score}</b><span>分</span></div>${think}${soon ? '<span class="soon-tag">下一个是你</span>' : ''}</div>`;
     }).join('');
+    if (html === playersHtml && box.firstElementChild) return;
+    playersHtml = html;
+    box.innerHTML = html;
     fitPlayerNames();
   }
 
