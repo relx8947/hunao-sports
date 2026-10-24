@@ -1942,7 +1942,7 @@
     overlayDecision = d.id;
     fitOverlayCards(true);
     for (const el of $$('#overlay .rcard, #overlay [data-v]')) {
-      el.onclick = () => { if (answer(d, el.dataset.id || el.dataset.v)) { Sound.card(); el.classList.add('chosen'); hideOverlay(); } else haptic('deny'); };
+      el.onclick = () => { if (answer(d, el.dataset.id || el.dataset.v)) { Sound.card(); el.classList.add('chosen'); hideOverlay(); } };
     }
     focusFirst('#overlay .wpc-main, #overlay .rcard.pickable:not([hidden])', `choose:${d.id}`);
   }
@@ -1961,7 +1961,7 @@
   /* ---------- WP-C：触觉 / 焦点 / 键盘 ---------- */
   // 有物理键盘与精确指针（电脑）时才提示快捷键、自动把焦点移到操作上
   const hasKeyboard = matchMedia('(hover: hover) and (pointer: fine)');
-  const HAPTIC = { tap: 8, deny: 10, land: 15, turn: 30, hit: [20, 40, 20], finish: [30, 50, 60], champ: [40, 60, 40, 60, 120] };
+  const HAPTIC = { deny: 10, land: 15, turn: 30, hit: [20, 40, 20], finish: [30, 50, 60], champ: [40, 60, 40, 60, 120] };
   // 振动跟随声音设置：「全部静音」时一起关掉；只在用户已与页面交互后触发（浏览器也要求如此）
   function haptic(kind) {
     const pattern = HAPTIC[kind];
@@ -2023,7 +2023,6 @@
     // 旧后端没有 gameId 字段；新后端始终下发并严格校验，升级前仍可继续现有对局。
     if (!send({ type: 'act', ...(gameId ? { gameId } : {}), id: d.id, value: v })) return false;
     submitted = { gameId, id: d.id, value: v };
-    haptic('tap');
     lockPrompt();
     clearPromptLive();
     // 没有独立 ack 的协议下，长时间不确认就重新握手拿权威快照，绝不重播旧 act。
@@ -2215,7 +2214,6 @@
       Sound.click();
       if (!send({ type: 'skip' })) { haptic('deny'); nudge(b); return; }
       skipSentRace = `${gameId}:${vs.raceNo}`;
-      haptic('tap');
       b.disabled = true; b.classList.add('is-loading'); $('.lbl', b).textContent = '正在快进…';
       clearTimeout(skipTimer);
       // 服务端拒绝或旧服务端不认识时，按钮恢复可点
