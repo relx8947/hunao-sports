@@ -249,6 +249,62 @@ test('同房间完赛重开也隔离旧标签保存的动作', f => {
   assert.equal(f.hub.errorContext(tab, 'act').gameId, room.gameId);
 });
 
+test('快速局一键重开（again）与跑完快进（skip）：权限、闸门、只覆盖本场', f => {
+  const A = f.socket('A');
+  f.command(A, 'quick', { ai: 2 });
+  const room = f.hub.rooms.get(A.room);
+  assert.match(f.command(A, 'skip'), /不能快进/, '选秀阶段不能快进');
+  assert.match(f.command(A, 'again'), /没结束/);
+  f.command(A, 'auto', { on: true });
+  // 托管跑到某一场里自己的选手已冲线或出局、比赛仍在继续
+  const mine = () => room.game.racers.find(r => r.seat === 0);
+  let guard = 0;
+  while (room.game.pending && !(room.game.phase === 'race' && mine() && (mine().finished || mine().out)) && guard++ < 6000) assert(f.runNext());
+  assert.equal(room.game.phase, 'race', '四场里至少有一场自己先跑完');
+  const raceNo = room.game.raceNo;
+  assert.equal(f.command(A, 'skip'), null);
+  assert.equal(room.speed, 6);
+  assert.equal(f.last(A, 'speed').speed, 6);
+  assert.equal(f.command(A, 'skip'), null, '重复快进幂等');
+  while (room.game.phase === 'race' && room.game.raceNo === raceNo && guard++ < 6000) assert(f.runNext());
+  assert.equal(room.speed, 1, '跑出本场后恢复原速度');
+  assert.equal(room.boost, null);
+  assert.equal(f.last(A, 'game').speed, 1, '结算批次按原速度下发');
+  while (room.game.pending && guard++ < 6000) assert(f.runNext());
+  assert.equal(room.status, 'over');
+  room.busyUntil = f.now() + 300;
+  assert.match(f.command(A, 'again'), /动画/);
+  assert.equal(f.hub.errorContext(A, 'again').retryIn, 300);
+  f.tick(301);
+  const oldGame = room.gameId;
+  assert.equal(f.command(A, 'again'), null);
+  assert.equal(f.hub.rooms.get(A.room), room, '沿用同一房间');
+  assert.notEqual(room.gameId, oldGame);
+  assert.equal(room.status, 'playing');
+  assert.equal(room.game.phase, 'draft');
+  assert.equal(room.seats.length, 3);
+  assert(room.seats.every(s => s.autoMode === null), '重开清除托管');
+  assert.equal(f.last(A, 'game').full, true);
+});
+
+test('多人房不能 again，真人还在比赛时不能 skip，观众不能 skip', f => {
+  const { A, B, room } = roomWithHumans(f);
+  f.command(A, 'auto', { on: true });
+  f.command(B, 'auto', { on: true });
+  let guard = 0;
+  while (room.game.phase !== 'race' && guard++ < 3000) assert(f.runNext());
+  const done = s => { const r = room.game.racers.find(x => x.seat === s); return r.finished || r.out; };
+  if (!done(0) || !done(1)) assert.match(f.command(A, 'skip'), /真人/);
+  while (room.game.pending && guard++ < 6000) assert(f.runNext());
+  f.tick(Math.max(0, room.busyUntil - f.now()) + 1);
+  assert.match(f.command(A, 'again'), /大厅/);
+  assert.equal(f.command(A, 'lobby'), null);
+  const C = f.socket('观众');
+  f.command(C, 'watch', { ai: 3 });
+  assert.match(f.command(C, 'skip'), /观众/);
+  assert.match(f.command(C, 'again'), /观战/);
+});
+
 test('dispose 同步清所有身份与计时器，重复调用及迟到 hello/quick 不复活', f => {
   const { A, B, room } = roomWithHumans(f);
   const idle = f.socket('大厅身份'), tab = f.socket('另一个标签');

@@ -1788,7 +1788,8 @@
   function holdForResults(fn, minMs) {
     if (overlayKind !== 'results' || fast) return false;
     const until = minMs != null ? resultsShownAt + minMs : resultsHold;
-    const left = until - performance.now();
+    // 测试钩子：一屏验收要在结算浮层上把各尺寸量完，期间一直让结果停着
+    const left = window.__hnHoldResults ? 250 : until - performance.now();
     if (left <= 30) return false;
     clearTimeout(overlayDeferTimer);
     overlayDeferTimer = animationLater(fn, left);

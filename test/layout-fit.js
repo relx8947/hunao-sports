@@ -17,7 +17,7 @@ const SHOTS = process.env.SHOTS;
 const failures = [];
 const seen = new Map();
 
-async function measure(page, sizes, screen, home) {
+async function measure(page, sizes, screen, home, expectOverlay) {
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
     await page.waitForTimeout(260);
@@ -43,7 +43,7 @@ async function measure(page, sizes, screen, home) {
         ? [...document.querySelectorAll('body *')].filter(visible).filter((el) => getComputedStyle(el).position !== 'fixed' && !el.closest('#overlay, #modal, #toasts, #tip'))
           .map((el) => ({ el, r: el.getBoundingClientRect() })).filter(({ r }) => r.bottom > innerHeight + 1 || r.right > innerWidth + 1)
           .slice(-3).map(({ el, r }) => `${name(el)}(${Math.round(r.right)}×${Math.round(r.bottom)})`) : [];
-      return { sh: se.scrollHeight, sw: se.scrollWidth, ih: innerHeight, iw: innerWidth, overflow, culprits, outside: [...new Set(outside)].slice(0, 6) };
+      return { sh: se.scrollHeight, sw: se.scrollWidth, ih: innerHeight, iw: innerWidth, overflow, culprits, outside: [...new Set(outside)].slice(0, 6), overlayKind: window.__hn ? window.__hn().overlayKind : null };
     });
     const tag = `${screen} @${width}×${height}`;
     const bad = [];
@@ -51,6 +51,8 @@ async function measure(page, sizes, screen, home) {
     if (m.sw > m.iw + 1) bad.push(`页面横向滚动 ${m.sw}>${m.iw}`);
     if (m.overflow.length) bad.push(`容器溢出 ${m.overflow.join('；')}`);
     if (m.outside.length) bad.push(`超出视口 ${m.outside.join('、')}`);
+    // 量的必须真是要验收的那个浮层（倍速下单场结算曾被下一场暗选顶掉，量到的其实是暗选）
+    if (expectOverlay && m.overlayKind !== expectOverlay) bad.push(`拍到的是 ${m.overlayKind || '无浮层'}，不是 ${expectOverlay}`);
     if (bad.length) failures.push(`${tag}：${bad.join(' | ')}`);
     seen.set(tag, bad.length === 0);
     if (SHOTS) {
@@ -109,8 +111,11 @@ async function playThrough(app, label, sizes) {
     else if (st.final) moment = 'final';
     if (moment && !captured.has(moment)) {
       captured.add(moment);
+      // 单场结算：用测试钩子让结果浮层停住（下一场出战排队），各尺寸量完再放行
+      if (moment === 'results') await page.evaluate(() => { window.__hnHoldResults = true; });
       if (moment === 'results' || moment === 'final') await page.waitForTimeout(1200);
-      await measure(page, sizes, `${label}-${moment}`, home);
+      await measure(page, sizes, `${label}-${moment}`, home, moment === 'results' || moment === 'final' ? moment : null);
+      if (moment === 'results') await page.evaluate(() => { window.__hnHoldResults = false; });
     }
     if (st.final && v.phase === 'over' && !v.playing) break;
     if (!(await step(page))) await page.waitForTimeout(150);
