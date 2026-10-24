@@ -1567,7 +1567,7 @@ class Game {
       return;
     }
 
-    let base, roll = null, dice = [];
+    let base, roll = null, dice = [], showSum = 0;
     let tripPassed = false;
     const nemFollow = [];
     if (mode === 'legs') {
@@ -1637,7 +1637,7 @@ class Game {
               break;
             }
           }
-          if (dice.length > 1) yield* this.pw(r, 'showoff');
+          if (dice.length > 1) { showSum = dice.reduce((a, b) => a + b, 0); yield* this.pw(r, 'showoff'); }
         }
       }
       if (!this.active(r)) return;
@@ -1659,8 +1659,8 @@ class Game {
         this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 算到了！回合结束后再来一回合` });
         yield* this.pw(r, 'genius');
       }
-      // 伊卡洛斯：最终掷出 6 就淘汰
-      if (this.has(r, 'icarus') && (dice.includes(6) || roll === 6)) {
+      // 伊卡洛斯：最终采用的点数里有 6 就淘汰（显摆王累加的每一颗都算）
+      if (this.has(r, 'icarus') && (roll === 6 || (showSum && dice.includes(6)))) {
         yield* this.pw(r, 'icarus');
         yield* this.eliminate(r, null, 'icarus');
         return;
@@ -1716,9 +1716,9 @@ class Game {
       }
       if (skip || !this.active(r)) return;
       if (bust) { yield* this.nemesisFollow(nemFollow, roll); return; }
-      base = dice.length > 1 ? dice.reduce((a, b) => a + b, 0) : roll;
-      // 魔法健将：按点数发动（掷 2、3、5 不再主移动）
-      if (this.has(r, 'magicalathlete') && dice.length <= 1) {
+      base = showSum || roll;
+      // 魔法健将：按点数发动（掷 2、3、5 不再主移动）；显摆王累加时不再发动（暂定）
+      if (this.has(r, 'magicalathlete') && !showSum) {
         const out = yield* this.magicalAthlete(r, roll);
         if (out === 'done') { yield* this.nemesisFollow(nemFollow, roll); return; }
         base = out.base;
