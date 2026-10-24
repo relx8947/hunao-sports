@@ -156,15 +156,108 @@
   let roomsReceived = false;
 
   /* ================= 连接 ================= */
+  // WP-D 自用的手绘图标（与 Art.icon 同一套笔触），避免改动 art.js
+  const WPD_IC = {
+    wifiOff: '<path d="M2.5 9a14 14 0 0 1 6-3.3M13.8 5.3A14 14 0 0 1 21.5 9"/><path d="M5.5 12.3a9.5 9.5 0 0 1 3.8-2.1M15.6 10.5a9.5 9.5 0 0 1 2.9 1.8"/><path d="M8.7 15.5a5 5 0 0 1 6.6 0"/><circle cx="12" cy="19" r="1.1" fill="currentColor"/><path d="M3.5 3.5l17 17"/>',
+    pencil: '<path d="M4.5 19.5l1-4.3L15.8 4.9a2.1 2.1 0 0 1 3 3L8.5 18.2z"/><path d="M13.8 7l3 3"/>',
+    share: '<circle cx="17.5" cy="5.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/><path d="M8.7 10.8l6.6-4M8.7 13.2l6.6 4"/>',
+    alert: '<path d="M12 3.8l9 15.7H3z"/><path d="M12 10v4.3M12 17h.01"/>',
+    retry: '<path d="M19.3 12.5a7.3 7.3 0 1 1-2.1-5.6"/><path d="M19.5 3.8v4.6h-4.6"/>',
+    spin: '<path d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5" stroke-dasharray="3 3.2"/>',
+  };
+  const wpdIcon = (n) => `<svg viewBox="0 0 24 24" class="icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${WPD_IC[n] || ''}</svg>`;
+  // 提示条/toast 贴在顶栏（对局）或离开按钮（房间）下方，不挡住任何按钮
+  function placeNotices() {
+    const scr = document.body.dataset.screen;
+    const anchor = scr === 'game' ? $('#game .topbar') : scr === 'lobby' ? $('#leaveLobby') : null;
+    const top = anchor && anchor.offsetParent ? Math.max(0, Math.round(anchor.getBoundingClientRect().bottom)) : 0;
+    const root = document.documentElement.style;
+    root.setProperty('--wpd-top', `${top}px`);
+    const box = $('#connectionStatus');
+    root.setProperty('--wpd-cs-h', box && !box.hidden ? `${Math.round(box.offsetHeight) + 8}px` : '0px');
+  }
+  const conn = { ever: false, since: 0, retryAt: 0, tries: 0, tick: null, show: null, hide: null };
+  function connBox() {
+    const box = $('#connectionStatus');
+    if (box && !box.dataset.wpd) {
+      box.dataset.wpd = '1';
+      box.innerHTML = `<span class="cs-ico"></span><span class="cs-text"><b class="cs-main"></b><small class="cs-sub"></small></span><button type="button" class="cs-retry" hidden>${wpdIcon('retry')}<span>立即重试</span></button>`;
+      $('.cs-retry', box).addEventListener('click', retryNow);
+    }
+    return box;
+  }
+  function retryNow() {
+    Sound.click();
+    const s = ws;
+    if (s && s.readyState !== WebSocket.OPEN) { ws = null; try { s.close(); } catch (e) { /* ignore */ } }
+    reconnectDelay = 800;
+    conn.retryAt = Date.now() + 6000;
+    connect();
+  }
+  function paintConnection(box, kind, main, sub, retry) {
+    box.dataset.kind = kind;
+    const ico = $('.cs-ico', box);
+    if (ico.dataset.k !== kind) { ico.dataset.k = kind; ico.innerHTML = kind === 'back' ? icon('check') : wpdIcon(kind === 'lost' ? 'wifiOff' : 'spin'); }
+    const m = $('.cs-main', box), s = $('.cs-sub', box), b = $('.cs-retry', box);
+    if (m.textContent !== main) m.textContent = main;
+    if (s.textContent !== sub) s.textContent = sub;
+    s.hidden = !sub;
+    b.hidden = !retry;
+  }
+  function showConnection(box) {
+    clearTimeout(conn.hide);
+    if (box.hidden) { box.hidden = false; void box.offsetWidth; }
+    box.classList.add('cs-on');
+    placeNotices();
+  }
+  function hideConnection(box) {
+    box.classList.remove('cs-on');
+    clearTimeout(conn.hide);
+    conn.hide = setTimeout(() => { if (!box.classList.contains('cs-on')) { box.hidden = true; placeNotices(); } }, 260);
+  }
+  function renderConnection() {
+    const box = connBox();
+    if (!box) return;
+    const st = connection;
+    clearTimeout(conn.show);
+    if (st === 'ready') {
+      conn.ever = true;
+      clearInterval(conn.tick); conn.tick = null;
+      if (conn.since) {
+        conn.since = 0; conn.tries = 0;
+        paintConnection(box, 'back', '已重新连上', document.body.dataset.screen === 'game' ? '画面已同步到最新局面' : '', false);
+        showConnection(box);
+        conn.hide = setTimeout(() => hideConnection(box), 1800);
+      } else if (!box.hidden) hideConnection(box);
+      return;
+    }
+    if (st === 'offline' && !conn.since) { conn.since = Date.now(); conn.retryAt = conn.since + 10000; }
+    if (st === 'connecting' && conn.since) conn.tries++;
+    let kind = 'wait', main, sub = '';
+    if (!conn.since) main = st === 'syncing' ? '正在进入…' : '正在连接服务器…';
+    else if (st === 'syncing') main = '连上了，正在同步最新局面…';
+    else {
+      kind = 'lost';
+      const n = conn.tries ? `（第 ${conn.tries} 次）` : '…';
+      main = conn.ever ? `网络断了，正在重连${n}` : `连不上服务器，正在重试${n}`;
+      sub = conn.ever ? '恢复后会自动回到刚才的局面' : '检查一下网络，或者稍后再来';
+    }
+    paintConnection(box, kind, main, sub, kind === 'lost' && Date.now() >= conn.retryAt);
+    if (conn.since && !conn.tick) {
+      conn.tick = setInterval(() => {
+        const b = $('.cs-retry', box);
+        if (connection !== 'ready' && box.dataset.kind === 'lost' && b.hidden && Date.now() >= conn.retryAt) { b.hidden = false; placeNotices(); }
+      }, 500);
+    }
+    // 首次连接通常 100ms 内完成，晚一点再出现，避免每次打开页面都闪一下
+    if (!conn.since && !conn.ever) { if (box.hidden) conn.show = setTimeout(() => showConnection(box), 700); }
+    else showConnection(box);
+  }
   function setConnection(state) {
     connection = state;
     if (state !== 'ready') { roomsFresh = false; roomsLoading = false; }
     document.body.dataset.connection = state;
-    const status = $('#connectionStatus');
-    if (status) {
-      status.hidden = state === 'ready';
-      status.textContent = state === 'syncing' ? '正在同步房间，请稍候…' : state === 'connecting' ? '正在连接服务器…' : '连接断开，正在重连；未确认操作将核对最新局面';
-    }
+    renderConnection();
     if (state === 'ready') clearTimeout(handshakeTimer);
     for (const el of $$('[data-network]')) el.disabled = state !== 'ready';
     for (const el of $$('[data-navigation]')) el.disabled = state !== 'ready' || !!navigationPending;
@@ -350,21 +443,34 @@
       case 'left':
         returnHome();
         break;
-      case 'error':
+      case 'error': {
         if (msg.for === 'act' && msg.gameId != null && msg.gameId !== gameId) break;
         setDeadline(msg);
-        toast(msg.msg, true);
+        const raw = typeof msg.msg === 'string' ? msg.msg : '';
         if (msg.for === 'hello') {
+          toast('登录信息过期了，正在换个新身份重连', true);
           me = { name: typeof me.name === 'string' ? me.name : '' };
           store.set('hn_me', me);
           if (ws) ws.close();
           break;
         }
-        if (msg.for === 'join') returnHome();
+        if (msg.for === 'join') {
+          // 失效邀请链接 / 错码 / 目录里刚关掉的房间：回首页，并在对应位置留下行内说明和下一步
+          const via = inviteRoom ? 'link' : joinTry && joinTry.via || 'input';
+          const code = (inviteRoom || joinTry && joinTry.code || '').toUpperCase();
+          joinTry = null;
+          returnHome();
+          showJoinProblem(code, raw, via);
+        } else if (msg.for === 'setName') {
+          lobbyEdit = true;
+          if (room && room.status === 'lobby') renderLobby();
+          toast(raw.includes('名字') ? '这个名字用不了，换一个试试（最多 12 个字）' : friendlyError(raw), true);
+        } else toast(friendlyError(raw), true);
         if (!msg.for || msg.for === 'act') { clearSubmission(); hideOverlay(true); unlockPrompt(); }
         if (!msg.for || msg.for === navigationPending) { clearNavigation(); renderPrompt(); }
         if (msg.retryIn > 0 && msg.for === 'lobby') toast('最终动画还没结束，请稍后再试');
         break;
+      }
       case 'emote': showEmote(msg.seat, msg.key); break;
       case 'auto':
         if (msg.gameId != null && msg.gameId !== gameId) break;
@@ -378,9 +484,72 @@
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
   function setRoomUrl(code) {
+    // 只在变化时改地址栏；失效链接回首页时清掉 ?room=，刷新不会再撞一次
     const u = new URL(location.href);
     if (code) u.searchParams.set('room', code); else u.searchParams.delete('room');
-    history.replaceState(null, '', u.toString());
+    if (u.href !== location.href) history.replaceState(history.state, '', u.toString());
+  }
+
+  /* ---------- WP-D：异常文案 ---------- */
+  let joinTry = null; // 最近一次手动加入：{ code, via: 'input' | 'list' }
+  let homeNotice = null; // 首页公开房间上方的行内说明
+  let lobbyEdit = false; // 房间里正在改名
+  const ERR_TEXT = [
+    [/请先连接|连接已关闭|尚未连接/, '还没连上服务器，稍等一下再试'],
+    [/只有房主/, '只有房主能这样做'],
+    [/需要 3–6 名选手/, '至少要 3 名选手才能开赛，点「加一个 AI」凑人数'],
+    [/最多 6 人/, '房间最多 6 名选手'],
+    [/已过期/, '这一步已经过时了，画面已同步到最新局面'],
+    [/当前没有待决策项/, '现在还没轮到你，等一下'],
+    [/结算动画还没结束/, '结算动画还没播完，稍等一下'],
+    [/你是观众/, '观战时不能操作选手'],
+    [/服务已关闭/, '服务器正在维护，稍后再来'],
+  ];
+  function friendlyError(raw) {
+    for (const [re, text] of ERR_TEXT) if (re.test(raw)) return text;
+    return raw || '出了点小问题，再试一次';
+  }
+  function joinProblem(code, raw, via) {
+    const label = code ? `房间 ${code} ` : '这个房间';
+    if (/格式/.test(raw)) return { title: '房间码是 4 位字母或数字', next: '例如 S9D8，再输一次试试' };
+    if (/不存在/.test(raw)) {
+      if (via === 'link') return { title: `邀请链接里的${label}已经解散了`, next: '让朋友重新发一次链接，或者加入下面的公开房间、自己开一局' };
+      if (via === 'list') return { title: `${label}刚刚关闭了`, next: '列表已经刷新，换一个房间试试' };
+      return { title: `${label}不存在或已解散`, next: '核对一下房间码，或者加入下面的公开房间' };
+    }
+    if (/开始|开赛/.test(raw)) return { title: `${label}已经开赛了`, next: '等这一局结束再加入，或者先和 AI 开一局' };
+    if (/满/.test(raw)) return { title: `${label}已经满员`, next: '请房主移除一个 AI 空出位置，或者自己开一局' };
+    return { title: raw || `进不去${label}`, next: '刷新一下公开房间，或者自己开一局' };
+  }
+  function showJoinProblem(code, raw, via) {
+    const p = joinProblem(code, raw, via);
+    if (via === 'list') { toast(`${p.title}，${p.next}`, true); return; } // 目录随后自动刷新
+    showCodeError(p, via);
+  }
+  // 错码 / 失效链接的行内说明：在「加入」那一行正下方，占掉分隔线的位置；改房间码或点叉收起
+  function showCodeError(p, via = 'input') {
+    const input = $('#codeInput'), box = $('#codeError');
+    if (!input || !box) return;
+    homeNotice = via === 'link' ? p : null;
+    if (via === 'input') {
+      input.setAttribute('aria-invalid', 'true');
+      input.classList.remove('wpd-shake'); void input.offsetWidth; input.classList.add('wpd-shake');
+    } else input.removeAttribute('aria-invalid');
+    box.dataset.via = via;
+    box.innerHTML = `<span class="ce-ico">${wpdIcon('alert')}</span><span class="ce-text"><b>${esc(p.title)}</b><small>${esc(p.next)}</small></span><button type="button" class="ce-close" aria-label="知道了">${icon('close')}</button>`;
+    box.hidden = false;
+    $('.home-card')?.classList.add('wpd-err');
+    renderRoomDirectory();
+  }
+  function clearCodeError() {
+    const input = $('#codeInput'), box = $('#codeError');
+    if (!box || box.hidden) return;
+    input?.removeAttribute('aria-invalid');
+    input?.classList.remove('wpd-shake');
+    box.hidden = true; box.innerHTML = '';
+    homeNotice = null;
+    $('.home-card')?.classList.remove('wpd-err');
+    renderRoomDirectory();
   }
 
   /* ================= 屏幕 ================= */
@@ -441,7 +610,10 @@
       ? (connection === 'offline' ? '已离线' : '正在连接服务器…') + (roomsReceived ? ' · 以下为上次列表，重连后更新' : ' · 连接后显示公开房间')
       : roomsLoading ? '正在加载公开房间…'
       : !roomsFresh ? '房间列表尚未更新，请点击刷新'
-      : roomRows.length ? `当前 ${roomRows.length} 个公开房间 · 实时更新` : '暂无在线房间，创建一个邀请大家吧';
+      // 刚打开失效链接时，状态行顺带指一条出路（不额外占高度）
+      : roomRows.length ? `当前 ${roomRows.length} 个公开房间 · ${homeNotice ? '点「加入」就能直接进' : '实时更新'}`
+      : homeNotice ? '暂无在线房间，可以点「创建房间」自己开一局' : '暂无在线房间，创建一个邀请大家吧';
+    status.classList.toggle('wpd-hint', !!homeNotice && online && roomsFresh);
     list.innerHTML = roomRows.map((r) => {
       const watch = r.mode === 'spectator';
       const state = r.status === 'lobby' ? '等待开赛' : r.status === 'playing' ? '进行中' : '已结束';
@@ -484,7 +656,7 @@
     $('#nameInput').value = me.name || '';
     $('#nameInput').addEventListener('change', () => {
       const name = $('#nameInput').value.trim();
-      if (name) { me.name = name; store.set('hn_me', me); send({ type: 'setName', name }); }
+      if (name) { me.name = name; store.set('hn_me', me); store.set('hn_named', true); send({ type: 'setName', name }); }
     });
     let aiN = store.get('hn_ai', 3);
     const seg = $('#aiCount');
@@ -496,7 +668,7 @@
     });
     const ensureName = () => {
       const name = $('#nameInput').value.trim();
-      if (name && name !== me.name) { me.name = name; store.set('hn_me', me); send({ type: 'setName', name }); }
+      if (name && name !== me.name) { me.name = name; store.set('hn_me', me); store.set('hn_named', true); send({ type: 'setName', name }); }
     };
     let watchN = store.get('hn_watch_ai', 4);
     if (!Number.isInteger(watchN) || watchN < 3 || watchN > 6) watchN = 4;
@@ -527,20 +699,31 @@
     $('#createBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'create' }); };
     const join = () => {
       const code = $('#codeInput').value.trim().toUpperCase();
-      if (code.length !== 4) return toast('房间码是 4 位', true);
-      Sound.click(); ensureName(); send({ type: 'join', code });
+      if (!/^[A-Z0-9]{4}$/.test(code)) { showCodeError(joinProblem(code, '格式', 'input')); return; }
+      Sound.click(); ensureName();
+      if (send({ type: 'join', code })) joinTry = { code, via: 'input' };
     };
     $('#joinBtn').onclick = join;
     $('#codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
+    // 改了房间码就收起错误提示
+    $('#codeInput').addEventListener('input', clearCodeError);
     $('#refreshRooms').onclick = () => { Sound.click(); requestRooms(); };
+    $('#codeError').addEventListener('click', (e) => { if (e.target.closest('.ce-close')) { Sound.click(); clearCodeError(); } });
     $('#roomList').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-room-code]');
       if (!b || b.disabled || $('#home').hidden || connection !== 'ready' || !roomsFresh) return;
       const code = b.dataset.roomCode;
       if (!validRoomCode(code) || !roomRows.some(r => r.code === code && r.canJoin)) return;
-      Sound.click(); ensureName(); send({ type: 'join', code });
+      Sound.click(); ensureName();
+      if (send({ type: 'join', code })) joinTry = { code, via: 'list' };
     });
     renderRoomDirectory();
+    // 提示条跟着顶栏/离开按钮的位置走（顶栏换行、横竖屏切换都会变）
+    window.addEventListener('resize', placeNotices);
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => placeNotices());
+      for (const el of [$('#game .topbar'), $('#leaveLobby')]) if (el) ro.observe(el);
+    }
   }
 
   /* ---------- 房间 ---------- */
@@ -549,44 +732,146 @@
     $('#roomCode').textContent = room.code;
     $('#inviteLinkInput').value = `${location.origin}${location.pathname}?room=${room.code}`;
     const host = room.host === me.id;
+    // 进了房间，首页的错误提示就过时了
+    clearCodeError();
+    const unnamed = !isNamed();
     const cards = room.seats.map((s, i) => {
       const c = PCOL[i % 6];
+      const mine = !s.ai && s.pid === me.id;
       const inner = s.ai ? `<span class="ico" data-icon="robot"></span>` : esc((s.name || '?').slice(0, 1));
-      const kick = host && s.ai ? `<button class="kick" data-kick="${i}" title="移除">${icon('close')}</button>` : '';
-      const tag = s.ai ? 'AI 选手' : `<span class="dot ${s.online ? '' : 'off'}"></span>${s.pid === room.host ? '房主' : '玩家'}${s.pid === me.id ? ' · 你' : ''}`;
-      return `<div class="seat" style="--c:${c}">${kick}<div class="ava">${inner}</div><div class="nm">${esc(s.name)}</div><div class="tag">${tag}</div></div>`;
+      const kick = host && s.ai ? `<button class="kick" data-kick="${i}" title="移除" aria-label="移除 ${esc(s.name)}">${icon('close')}</button>` : '';
+      const tag = s.ai ? 'AI 选手' : `<span class="dot ${s.online ? '' : 'off'}"></span>${s.pid === room.host ? '房主' : '玩家'}${mine ? ' · 你' : ''}`;
+      if (mine && (lobbyEdit || unnamed)) {
+        // 行内起名：受邀者第一次进来是随机名，直接在自己的座位上改
+        return `<div class="seat wpd-me wpd-editing${unnamed ? ' wpd-unnamed' : ''}" style="--c:${c}"><div class="ava">${inner}</div>`
+          + `<label class="wpd-name"><input id="lobbyName" maxlength="12" value="${unnamed ? '' : esc(s.name)}" placeholder="${esc(s.name)}" aria-label="你的名字" autocomplete="nickname" enterkeyhint="done" spellcheck="false">${wpdIcon('pencil')}</label>`
+          + `<div class="tag wpd-name-tag">${unnamed ? '点上面起个名字' : '回车保存'}</div></div>`;
+      }
+      // 自己的名字本身就是改名按钮（带一支小铅笔），点一下变回输入框
+      const nm = mine ? `<button type="button" class="nm wpd-nm" data-rename aria-label="改名，现在叫 ${esc(s.name)}"><span>${esc(s.name)}</span>${wpdIcon('pencil')}</button>` : `<div class="nm">${esc(s.name)}</div>`;
+      return `<div class="seat${mine ? ' wpd-me' : ''}" style="--c:${c}">${kick}<div class="ava">${inner}</div>${nm}<div class="tag">${tag}</div></div>`;
     });
     for (let i = room.seats.length; i < 6; i++) cards.push(`<div class="seat empty">${i < 3 ? '至少 3 人' : '空位'}</div>`);
-    $('#seats').innerHTML = cards.join('');
-    fillIcons($('#seats'));
+    // 逐个座位比对：只重画变了的那张，正在输入名字的座位不打断，新来的人才有弹入动画
+    const box = $('#seats');
+    const kids = [...box.children];
+    const typing = document.activeElement && document.activeElement.id === 'lobbyName';
+    cards.forEach((html, i) => {
+      const old = kids[i];
+      if (old && old.__html === html) return;
+      if (old && typing && old.contains(document.activeElement)) return;
+      const t = document.createElement('template');
+      t.innerHTML = html;
+      const el = t.content.firstElementChild;
+      el.__html = html;
+      if (old) old.replaceWith(el); else box.appendChild(el);
+    });
+    for (const extra of kids.slice(cards.length)) extra.remove();
+    fillIcons(box);
     $('#addAI').hidden = !host;
     $('#addAI').disabled = room.seats.length >= 6 || connection !== 'ready';
     $('#startBtn').hidden = !host;
     $('#startBtn').disabled = room.seats.length < 3 || connection !== 'ready';
-    $('#lobbyTip').textContent = host
-      ? (room.seats.length < 3 ? '把房间码发给朋友，人不够可以加 AI。3-6 人开赛。' : '人齐了就开始吧！')
+    const tip = unnamed
+      ? '先在自己的座位上起个名字，朋友才认得出你'
+      : host ? (room.seats.length < 3 ? '把房间码发给朋友，人不够可以加 AI。3-6 人开赛。' : '人齐了就开始吧！')
       : '等待房主开始比赛…';
+    if ($('#lobbyTip').textContent !== tip) $('#lobbyTip').textContent = tip;
+    renderInviteButton();
+  }
+  const RANDOM_NAME = /^选手\d{3}$/;
+  // 名字是否由用户自己起过：本机标记过，或者不是服务端发的随机名
+  const isNamed = () => store.get('hn_named', false) === true || (!!me.name && !RANDOM_NAME.test(me.name));
+  const canShare = () => typeof navigator.share === 'function' && matchMedia('(pointer: coarse)').matches;
+  function renderInviteButton() {
+    const label = $('#copyLinkLabel'), b = $('#copyLink');
+    if (!label || !b || b.dataset.done) return;
+    const share = canShare();
+    const text = share ? '邀请朋友' : '复制邀请链接';
+    if (label.textContent !== text) {
+      label.textContent = text;
+      const ico = $('.ico', b);
+      if (ico) ico.innerHTML = share ? wpdIcon('share') : icon('link');
+    }
+  }
+  function commitLobbyName(input) {
+    const name = input.value.trim().slice(0, 12);
+    const seat = room ? room.seats.findIndex((s) => !s.ai && s.pid === me.id) : -1;
+    if (!name) { if (isNamed()) { lobbyEdit = false; renderLobby(); } return; }
+    lobbyEdit = false;
+    store.set('hn_named', true);
+    if (name !== me.name || seat < 0 || room.seats[seat].name !== name) {
+      if (!send({ type: 'setName', name })) { lobbyEdit = true; return; }
+      me.name = name; store.set('hn_me', me);
+      if (seat >= 0) room.seats[seat] = { ...room.seats[seat], name }; // 先在本地显示，服务端广播会确认
+      toast(`好的，大家会看到你叫「${name}」`);
+    }
+    $('#nameInput').value = name;
+    Sound.click();
+    input.blur();
+    renderLobby();
   }
   function initLobby() {
-    $('#seats').addEventListener('click', (e) => {
+    const seats = $('#seats');
+    seats.addEventListener('click', (e) => {
+      const r = e.target.closest('[data-rename]');
+      if (r) {
+        Sound.click(); lobbyEdit = true; renderLobby();
+        const input = $('#lobbyName');
+        if (input) { input.focus(); input.select(); }
+        return;
+      }
       const b = e.target.closest('[data-kick]'); if (!b) return;
       Sound.click(); send({ type: 'removeAI', seat: Number(b.dataset.kick) });
+    });
+    // 行内改名：回车或离开输入框保存，Esc 取消
+    seats.addEventListener('keydown', (e) => {
+      if (e.target.id !== 'lobbyName' || e.isComposing) return;
+      if (e.key === 'Enter') { e.preventDefault(); commitLobbyName(e.target); }
+      if (e.key === 'Escape' && isNamed()) { lobbyEdit = false; e.target.blur(); renderLobby(); }
+    });
+    seats.addEventListener('focusout', (e) => {
+      if (e.target.id !== 'lobbyName') return;
+      const input = e.target;
+      setTimeout(() => { if (input.isConnected && document.activeElement !== input) commitLobbyName(input); }, 0);
     });
     $('#addAI').onclick = () => { Sound.click(); send({ type: 'addAI' }); };
     $('#startBtn').onclick = () => { Sound.click(); send({ type: 'start' }); };
     $('#leaveLobby').onclick = () => { Sound.click(); navigate('leave', $('#leaveLobby')); };
+    const flashInvite = (text) => {
+      const b = $('#copyLink'), label = $('#copyLinkLabel');
+      if (!b || !label) return;
+      b.dataset.done = '1'; b.classList.add('wpd-done');
+      label.textContent = text;
+      const ico = $('.ico', b); if (ico) ico.innerHTML = icon('check');
+      clearTimeout(flashInvite.t);
+      flashInvite.t = setTimeout(() => { delete b.dataset.done; b.classList.remove('wpd-done'); label.textContent = ''; renderInviteButton(); }, 1800);
+    };
     $('#copyLink').onclick = async () => {
+      if (!room) return;
       const link = `${location.origin}${location.pathname}?room=${room.code}`;
+      Sound.click();
+      // 手机优先调起系统分享（微信、飞书等）；用户取消就什么都不做，其他失败再退回复制
+      if (canShare()) {
+        try {
+          await navigator.share({ title: '胡闹运动会', text: `来胡闹运动会，房间码 ${room.code}`, url: link });
+          flashInvite('已发出邀请');
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+        }
+      }
       try {
         await navigator.clipboard.writeText(link);
-        toast('邀请链接已复制');
+        flashInvite('已复制');
+        toast(`邀请链接已复制，发给朋友就能进房间 ${room.code}`);
       } catch (e) {
         $('#inviteLinkBox').hidden = false;
         const input = $('#inviteLinkInput');
         input.value = link;
         input.focus();
         input.select();
-        toast('邀请链接已选中，可以手动复制');
+        toast('链接已选中，长按或按 Ctrl/Cmd+C 复制');
       }
     };
     $('#inviteLinkInput').onclick = (e) => e.target.select();
@@ -967,8 +1252,11 @@
   }
   // 首页、房间里的声音开关：和对局顶栏的 #soundBtn 一样读 Sound.ui
   function renderSoundToggles() {
+    // 首页页脚的开关和旁边的文字链接统一：图标 + 当前档位短标签
+    const short = { all: '音乐', sfx: '音效', off: '静音' }[Sound.mode] || '声音';
     for (const b of $$('[data-sound]')) {
-      b.innerHTML = `<span class="ico">${icon(Sound.ui.icon)}</span>`;
+      b.innerHTML = `<span class="ico">${icon(Sound.ui.icon)}</span>${b.closest('.home-foot') ? `<span class="sound-label">${short}</span>` : ''}`;
+      b.dataset.mode = Sound.mode;
       b.title = Sound.ui.label;
       b.setAttribute('aria-label', Sound.ui.label);
     }
@@ -2982,12 +3270,23 @@
 
 
   /* ================= 提示 & 彩纸 ================= */
+  // 首页/房间显示在底部居中（不挡输入框和标题），对局里贴在顶栏下方（不挡操作栏）。
+  // 停留时长按字数和轻重给：错误至少 4 秒，读得完；同一句话重复出现只刷新，不叠罗汉。
   function toast(text, err) {
+    const host = $('#toasts');
+    if (!host) return;
+    placeNotices();
+    const ms = Math.min(6500, (err ? 4000 : 2400) + Math.max(0, String(text).length - 14) * 90);
+    for (const old of $$('.toast', host)) if (old.dataset.text === text) old.remove();
+    while (host.children.length >= 3) host.firstElementChild.remove();
     const t = document.createElement('div');
-    t.className = `toast ${err ? 'err' : ''}`;
-    t.textContent = text;
-    $('#toasts').appendChild(t);
-    setTimeout(() => t.remove(), 2700);
+    t.className = `toast wpd-toast${err ? ' err' : ''}`;
+    t.dataset.text = text;
+    t.style.setProperty('--toast-ms', `${ms}ms`);
+    t.innerHTML = `${err ? `<span class="t-ico">${wpdIcon('alert')}</span>` : ''}<span class="t-text"></span>`;
+    $('.t-text', t).textContent = text;
+    host.appendChild(t);
+    setTimeout(() => t.remove(), ms + 120);
   }
   const confettiState = { parts: [], raf: 0 };
   function confetti(n = 150, x, y) {
