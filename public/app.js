@@ -62,7 +62,7 @@
       st.ro = new ResizeObserver(() => {
         if (!box.isConnected || !box.offsetParent || Math.abs(box.clientHeight - st.h) < 2) return;
         cancelAnimationFrame(st.raf);
-        st.raf = requestAnimationFrame(() => st.run());
+        st.raf = requestAnimationFrame(() => (st.refit || st.run)());
       });
       st.ro.observe(box);
     }
@@ -472,6 +472,8 @@
       paginate('rooms', list, () => $$('#roomList .room-list-item'), $('#roomPager'));
       if (list.scrollHeight <= list.clientHeight + 1 && inner.scrollHeight <= inner.clientHeight + 1) break;
     }
+    // 房间列表被挤压时要连同首页收紧级别一起重算，单独重排分页会和收紧级别打架
+    pagers.rooms.refit = fitRooms;
   }
 
   /* ---------- 首页 ---------- */
