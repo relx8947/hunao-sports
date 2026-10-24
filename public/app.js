@@ -909,17 +909,34 @@
       return `<div class="race-pill ${cls}" title="${TRACKS[t].name}"><span class="no">${n}</span><span class="tn">${t === 'wild' ? '狂野' : '温和'}</span><span class="pts">金${GOLD[i]}·银${SILVER[i]}</span></div>`;
     }).join('');
   }
+  // 顶栏标题只讲「现在是什么局面」：场次 + 轮到谁 + 离你还有几位（手机上场次名会让位给后两项）
   function renderTitle() {
-    let t = '';
     if (!vs) return;
-    if (vs.phase === 'draft') t = isParticipant() ? '选秀：组建你的 4 人队伍' : 'AI 选秀：自动组建队伍';
-    else if (vs.phase === 'pick') t = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name} · ${isParticipant() ? '派谁上场？' : 'AI 正在暗选出战'}`;
-    else if (vs.phase === 'race') {
+    const el = $('#topTitle');
+    const part = (cls, text) => `<span class="${cls}">${esc(text)}</span>`;
+    let html = '', plain = '';
+    if (vs.phase === 'draft') {
+      plain = isParticipant() ? '选秀：组建你的 4 人队伍' : 'AI 选秀：自动组建队伍';
+      html = esc(plain);
+    } else if (vs.phase === 'pick') {
+      plain = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name} · ${isParticipant() ? '派谁上场？' : 'AI 正在暗选出战'}`;
+      html = esc(plain);
+    } else if (vs.phase === 'race') {
       const p = vs.curSeat != null ? vs.players[vs.curSeat] : null;
-      t = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}${p ? ` · 轮到 ${p.name}` : ''}`;
-    } else if (vs.phase === 'between') t = `第 ${vs.raceNo} 场结束`;
-    else if (vs.phase === 'over') t = '比赛结束';
-    $('#topTitle').textContent = t;
+      const race = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}`;
+      const ahead = turnsAhead();
+      const who = !p ? '' : ahead === 0 ? '轮到你了' : `轮到 ${pname(p)}`;
+      const cue = ahead > 0 ? aheadText(ahead) : '';
+      plain = [race, who, cue].filter(Boolean).join(' · ');
+      html = part('tt-race', race) + (who ? `<span class="tt-sep"> · </span>${part(`tt-turn ${ahead === 0 ? 'mine' : ''}`, who)}` : '')
+        + (cue ? `<span class="tt-sep"> · </span>${part(`tt-cue ${ahead === 1 ? 'soon' : ''}`, cue)}` : '');
+      if (p) el.style.setProperty('--c', PCOL[p.seat % 6]);
+    } else if (vs.phase === 'between') { plain = `第 ${vs.raceNo} 场结束`; html = esc(plain); }
+    else if (vs.phase === 'over') { plain = '比赛结束'; html = esc(plain); }
+    if (el.dataset.plain === plain) return;
+    el.dataset.plain = plain;
+    el.innerHTML = html;
+    el.title = plain;
   }
   function renderSpectatorStatus() {
     const show = isSpectator() && !$('#game').hidden;
@@ -960,10 +977,53 @@
     renderSoundToggles();
   }
 
+  /* ================= WP-B 局势：显示名 / 行动顺序 ================= */
+  // AI 座位的名字去掉「（AI）」后缀，改由 AI 徽章表示，窄卡片里能多露出几个字
+  function pname(p) { return !p ? '' : p.ai ? String(p.name).replace(/（AI）$/, '') : p.name; }
+  const activeRacer = (r) => !!r && !r.finished && !r.out;
+  // 比赛中从当前行动者开始、顺时针排列的在场选手（当前行动者在前）
+  function turnOrder() {
+    if (!vs || vs.phase !== 'race' || vs.curSeat == null) return [];
+    const n = vs.players.length, out = [];
+    for (let k = 0; k < n; k++) {
+      const r = vs.racers.find((x) => x.seat === (vs.curSeat + k) % n);
+      if (activeRacer(r)) out.push(r);
+    }
+    return out;
+  }
+  // 还要等几位才轮到你：0 = 正轮到你，1 = 下一个就是你；你不在场或已冲线/出局返回 null
+  function turnsAhead() {
+    if (!isParticipant()) return null;
+    const order = turnOrder();
+    const k = order.findIndex((r) => r.seat === you);
+    if (k < 0) return null;
+    const cur = vs.racers.find((r) => r.seat === vs.curSeat);
+    return activeRacer(cur) ? k : k + 1;
+  }
+  const aheadText = (n) => (n === 0 ? '轮到你了' : n === 1 ? '下一个就是你' : `再过 ${n} 位轮到你`);
+  // 窄屏玩家卡：卡片太窄时把名字放到头像下面一行；名字还放不下就缩字号，最后只保留前几个字（不加省略号）
+  function fitPlayerNames() {
+    const box = $('#players');
+    if (!box) return;
+    const first = $('.prow', box);
+    const narrow = !!first && first.getBoundingClientRect().width > 0 && first.getBoundingClientRect().width < 118 && matchMedia('(max-width: 1000px) and (orientation: portrait)').matches;
+    box.classList.toggle('pf-stack', narrow);
+    for (const nm of $$('.prow .pnm', box)) {
+      nm.style.fontSize = '';
+      nm.classList.remove('clip');
+      for (const fs of [11.5, 10.5]) {
+        if (nm.scrollWidth <= nm.clientWidth + 1) break;
+        nm.style.fontSize = `${fs}px`;
+      }
+      if (nm.scrollWidth > nm.clientWidth + 1) nm.classList.add('clip');
+    }
+  }
+
   function renderPlayers() {
     if (!vs) return;
     const d = snap && snap.pending;
     const racing = vs.phase === 'race' || vs.phase === 'between';
+    const ahead = vs.phase === 'race' ? turnsAhead() : null;
     $('#players').innerHTML = vs.players.map((p) => {
       const c = PCOL[p.seat % 6];
       const cur = vs.racers.find((r) => r.seat === p.seat);
@@ -984,12 +1044,15 @@
       }
       const offline = !p.ai && room && room.seats[p.seat] && room.seats[p.seat].online === false;
       const modeLabel = offline ? '离线' : autoModes[p.seat] === 'timeout' ? '超时托管' : '托管';
-      const tags = `${p.seat === you ? '<span class="you">你</span>' : ''}${(autoFlags[p.seat] || offline) && !p.ai ? `<span class="auto">${modeLabel}</span>` : ''}${p.ai ? '<span class="auto">AI</span>' : ''}`;
-      return `<div class="prow ${vs.curSeat === p.seat && vs.phase === 'race' ? 'cur' : ''} ${p.seat === you ? 'me' : ''}" data-seat="${p.seat}" style="--c:${c}">
+      const tags = `${p.seat === you ? '<span class="you">你</span>' : ''}${(autoFlags[p.seat] || offline) && !p.ai ? `<span class="auto">${modeLabel}</span>` : ''}${p.ai ? '<span class="auto ai">AI</span>' : ''}`;
+      // 快轮到你：你的选手下一个行动时，你的玩家卡轻轻脉冲
+      const soon = p.seat === you && ahead === 1 && !think;
+      return `<div class="prow ${vs.curSeat === p.seat && vs.phase === 'race' ? 'cur' : ''} ${p.seat === you ? 'me' : ''} ${soon ? 'soon' : ''} ${p.ai ? 'is-ai' : ''}" data-seat="${p.seat}" data-fly-target="seat-${p.seat}" style="--c:${c}" title="${esc(p.name)}">
         <div class="pav" ${cur && racing ? `data-tip="${cur.rid}"` : ''}>${ava}</div>
-        <div class="pn"><b>${esc(p.name)}${tags}</b>${line}<div class="hand">${hand}</div></div>
-        <div class="sc" title="${scoreTitle}"><b data-score="${p.seat}">${p.score}</b><span>分</span></div>${think}</div>`;
+        <div class="pn"><b><span class="pnm">${esc(pname(p))}</span>${tags}</b>${line}<div class="hand">${hand}</div></div>
+        <div class="sc" title="${scoreTitle}"><b data-score="${p.seat}">${p.score}</b><span>分</span></div>${think}${soon ? '<span class="soon-tag">下一个是你</span>' : ''}</div>`;
     }).join('');
+    fitPlayerNames();
   }
 
   function rcard(id, opts = {}) {
@@ -1056,7 +1119,7 @@
         el.dataset.rid = r.rid;
         el.dataset.tip = r.rid;
         el.style.setProperty('--c', PCOL[r.seat % 6]);
-        el.innerHTML = `<span class="sr"></span><span class="sa">${art(r.rid)}</span><span class="sn"><b>${esc(R[r.rid].name)}</b><i>${esc(vs.players[r.seat].name)}</i></span><span class="ss"></span><span class="sbar"><em></em></span>`;
+        el.innerHTML = `<span class="sr"></span><span class="sa">${art(r.rid)}</span><span class="sn"><b>${esc(R[r.rid].name)}</b><i>${esc(pname(vs.players[r.seat]))}${r.seat === you && isParticipant() ? '<em class="st-you">你</em>' : ''}</i></span><span class="ss"></span><span class="sbar"><em></em></span>`;
         el.style.transition = 'none';
         box.appendChild(el);
       }
@@ -1065,36 +1128,54 @@
       const sr = $('.sr', el);
       sr.textContent = r.finished ? (r.finished === 1 ? '冠' : '亚') : r.out ? '出' : rank;
       sr.className = `sr ${r.finished ? `rk${r.finished}` : r.out ? 'rko' : ''}`;
-      $('.ss', el).textContent = r.finished ? '已冲线' : r.out ? '被吃掉' : `${r.pos} 格`;
-      $('.ss', el).classList.toggle('bad', !!r.tripped && !r.finished);
-      if (r.tripped && !r.finished && !r.out) $('.ss', el).textContent = `摔倒 · ${r.pos} 格`;
+      // 名次条直接写「还差几格到终点」，格数位置放在悬停说明里
+      const ss = $('.ss', el), left = FIN - r.pos;
+      ss.innerHTML = r.finished ? '已冲线' : r.out ? '被吃掉' : `${r.tripped ? '摔倒 · ' : ''}差 <b>${left}</b> 格`;
+      ss.title = r.finished || r.out ? '' : `在第 ${r.pos} 格，离终点还差 ${left} 格`;
+      ss.classList.toggle('bad', !!r.tripped && !r.finished);
       $('.sbar em', el).style.width = `${r.finished ? 100 : r.out ? 0 : Math.round(r.pos / FIN * 100)}%`;
       el.classList.toggle('cur', vs.curSeat === r.seat && vs.phase === 'race' && !r.finished && !r.out);
+      el.classList.toggle('me', r.seat === you && isParticipant());
       el.classList.toggle('gone', !!r.out);
       if (fresh) { void el.offsetWidth; el.style.transition = ''; }
     });
   }
 
-  let tcRid = null;
+  // 行动卡：谁在行动（头像、玩家、选手）→ 他的技能 → 位置进度 + 接下来的行动顺序；右上角标签告诉你还有几位轮到你
+  let tcRid = null, tcSoonSaid = null;
   function renderTurnCard() {
     const tc = $('#turnCard');
+    $('#center').classList.toggle('hud-race', !!(vs && vs.phase === 'race'));
     const r = vs && vs.phase === 'race' && vs.curSeat != null ? vs.racers.find((x) => x.seat === vs.curSeat) : null;
     if (!r || r.finished || r.out) { tc.hidden = true; tcRid = null; return; }
     const base = R[r.rid];
     const effective = Object.prototype.hasOwnProperty.call(r, 'eff') ? r.eff : r.power;
     const pw = effective && effective !== r.rid && R[effective] ? R[effective] : null;
     const p = vs.players[r.seat];
-    const status = r.tripped
-      ? '<div class="tc-st bad">摔倒中 · 本回合不掷骰</div>'
-      : `<div class="tc-st"><b>${r.pos}</b> 格 · 离终点还差 <b>${FIN - r.pos}</b> 格</div>`;
+    const ahead = turnsAhead();
+    const left = FIN - r.pos;
+    const pos = r.tripped
+      ? '<span class="tc-pos bad">摔倒中 · 本回合爬起来，不掷骰</span>'
+      : `<span class="tc-pos" title="在第 ${r.pos} 格，离终点还差 ${left} 格">第 <b>${r.pos}</b> 格 · 差 <b>${left}</b> 格</span>`;
+    // 行动顺序：当前行动者在最前，最多显示 4 位，你的选手标「你」
+    const order = turnOrder();
+    const q = order.slice(0, 4).map((x, k) => `<i class="tq ${k === 0 ? 'now' : ''} ${x.seat === you && isParticipant() ? 'me' : ''}" style="--c:${PCOL[x.seat % 6]}" title="${k === 0 ? '正在行动' : `第 ${k} 位`}：${esc(pname(vs.players[x.seat]))}的${esc(R[x.rid].name)}">${art(x.rid)}${x.seat === you && isParticipant() ? '<em>你</em>' : ''}</i>`).join('<span class="tq-arr" aria-hidden="true"></span>');
+    const more = order.length > 4 ? `<span class="tq-more">+${order.length - 4}</span>` : '';
+    const cue = ahead == null ? '' : `<span class="tc-cue ${ahead === 0 ? 'mine' : ahead === 1 ? 'soon' : ''}">${aheadText(ahead)}</span>`;
     tc.hidden = false;
     tc.style.setProperty('--c', PCOL[r.seat % 6]);
     tc.style.setProperty('--rc', rcol(r.rid));
-    tc.innerHTML = `<div class="tc-head"><div class="tc-ava">${art(r.rid)}</div><div class="tc-who"><span class="tc-player">${esc(p.name)}${r.seat === you ? ' · 你' : ''}</span><b>${esc(base.name)}</b></div></div>
-      <div class="tc-skill"><span class="sk">${esc((pw || base).skill)}</span>${pw ? `<em>借自${esc(pw.name)}</em>` : ''}<p>${esc((pw || base).text)}</p></div>${status}`;
+    tc.innerHTML = `${cue}<div class="tc-head"><div class="tc-ava">${art(r.rid)}</div><div class="tc-who"><span class="tc-player">${esc(pname(p))}${r.seat === you ? ' · 你' : p.ai ? ' · AI' : ''}</span><b>${esc(base.name)}</b></div></div>
+      <div class="tc-bar" aria-hidden="true"><em style="width:${Math.round(r.pos / FIN * 100)}%"></em></div>
+      <div class="tc-skill"><span class="sk">${esc((pw || base).skill)}</span>${pw ? `<em>借自${esc(pw.name)}</em>` : ''}<p>${esc((pw || base).text)}</p></div>
+      <div class="tc-st ${r.tripped ? 'bad' : ''}">${pos}${order.length > 1 ? `<span class="tc-q" aria-label="行动顺序">${q}${more}</span>` : ''}</div>`;
     if (tcRid !== r.rid) { tc.classList.remove('in'); void tc.offsetWidth; tc.classList.add('in'); tcRid = r.rid; }
+    // 读屏：只在「下一个就是你」时提醒一次（轮到你由出牌提示负责播报）
+    if (ahead !== 1) tcSoonSaid = null;
+    else if (tcSoonSaid !== r.rid) { tcSoonSaid = r.rid; say('下一个就轮到你了'); }
   }
 
+  // 悬停/点按说明：名字与归属 → 技能名 → 什么时候触发、效果 → 补充说明 → 本场状态（位置进度条）
   function tipHtml(id) {
     const base = R[id];
     if (!base) return '';
@@ -1104,14 +1185,18 @@
     const effective = r && (Object.prototype.hasOwnProperty.call(r, 'eff') ? r.eff : r.power);
     const pw = effective && effective !== id && R[effective] ? R[effective] : null;
     let st = '';
-    if (r) st = r.finished ? `第 ${r.finished} 名冲线` : r.out ? '已被淘汰' : `在第 ${r.pos} 格 · 离终点 ${FIN - r.pos} 格${r.tripped ? ' · 摔倒中' : ''}`;
-    else if (owner && owner.used.includes(id)) st = '已经上过场';
+    if (r) {
+      st = r.finished ? `<b>第 ${r.finished} 名</b>冲线` : r.out ? '已被淘汰'
+        : `在第 <b>${r.pos}</b> 格 · 离终点 <b>${FIN - r.pos}</b> 格${r.tripped ? ' · <i>摔倒中</i>' : ''}`;
+      st += `<span class="tip-bar"><em style="width:${r.finished ? 100 : r.out ? 0 : Math.round(r.pos / FIN * 100)}%"></em></span>`;
+    } else if (owner && owner.used.includes(id)) st = '已经上过场';
+    const mine = owner && owner.seat === you && isParticipant();
     return `<div class="tip-card" style="--rc:${rcol(id)}"><div class="tip-art">${art(id)}</div><div class="tip-body">
-      <div class="tip-name"><b>${esc(base.name)}</b>${owner ? `<span style="--c:${PCOL[owner.seat % 6]}">${esc(owner.name)}</span>` : ''}</div>
-      <span class="sk">${esc(base.skill)}</span><p>${esc(base.text)}</p>${base.note ? `<small>${esc(base.note)}</small>` : ''}
-      ${pw ? `<div class="tip-pw">本场获得「${esc(pw.skill)}」：${esc(pw.text)}</div>` : ''}${st ? `<div class="tip-st">${esc(st)}</div>` : ''}</div></div>`;
+      <div class="tip-name"><b>${esc(base.name)}</b>${owner ? `<span style="--c:${PCOL[owner.seat % 6]}">${esc(pname(owner))}${mine ? ' · 你' : ''}</span>` : ''}</div>
+      <div class="tip-skill"><em>技能</em><span class="sk">${esc(base.skill)}</span></div><p>${esc(base.text)}</p>${base.note ? `<small>${esc(base.note)}</small>` : ''}
+      ${pw ? `<div class="tip-pw"><em>本场借用</em>「${esc(pw.skill)}」${esc(pw.text)}</div>` : ''}${st ? `<div class="tip-st">${st}</div>` : ''}</div></div>`;
   }
-  let tipFor = null, tipTimer = null;
+  let tipFor = null, tipTimer = null, tipTapFor = null;
   function showTip(id, anchor) {
     const tip = $('#tip');
     const html = tipHtml(id);
@@ -1128,8 +1213,9 @@
     tip.style.left = `${x}px`;
     tip.style.top = `${y}px`;
   }
-  function hideTip() { $('#tip').hidden = true; tipFor = null; clearTimeout(tipTimer); }
+  function hideTip() { $('#tip').hidden = true; tipFor = null; tipTapFor = null; clearTimeout(tipTimer); }
   function initTips() {
+    $('#tip').setAttribute('role', 'tooltip');
     document.addEventListener('pointerover', (e) => {
       if (e.pointerType === 'touch') return;
       const t = e.target.closest('[data-tip]');
@@ -1139,17 +1225,28 @@
       const t = e.target.closest('[data-tip]');
       if (t && !(e.relatedTarget && t.contains(e.relatedTarget))) hideTip();
     });
-    // 触屏：点一下看说明，点别处关闭
+    // 触屏：点一下看说明，再点同一处或点别处关闭；说明停留时间按字数给足
     document.addEventListener('click', (e) => {
       const t = e.target.closest('[data-tip]');
       if (t && (e.pointerType === 'touch' || matchMedia('(hover: none)').matches)) {
         if (t.classList.contains('selectable') || t.closest('.pickable')) return;
+        // 只有上一次也是点按打开的同一张说明才收起（悬停已打开的不算，避免点一下反而关掉）
+        if (tipTapFor === t && tipFor === t && !$('#tip').hidden) { hideTip(); return; }
         showTip(t.dataset.tip, t);
+        tipTapFor = t;
         clearTimeout(tipTimer);
-        tipTimer = setTimeout(hideTip, 4000);
+        const len = ($('#tip').textContent || '').length;
+        tipTimer = setTimeout(hideTip, Math.min(9000, Math.max(4000, len * 90)));
       } else if (!t) hideTip();
     });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#tip').hidden) hideTip(); });
     window.addEventListener('scroll', hideTip, true);
+    // 尺寸变化后重新收紧顺位条和窄屏玩家名
+    let fitRaf = 0;
+    window.addEventListener('resize', () => {
+      cancelAnimationFrame(fitRaf);
+      fitRaf = requestAnimationFrame(() => { fitDraftOrder(); fitPlayerNames(); });
+    });
   }
 
   /* ================= 选秀：顺位条 & 我的队伍 ================= */
@@ -1157,38 +1254,123 @@
     const box = $('#draftOrder');
     const d = vs && vs.draft;
     if (!d) { box.innerHTML = ''; return; }
-    const chips = d.order.map((seat, k) => `<span class="do ${k < d.idx ? 'past' : ''} ${k === d.idx ? 'now' : ''}" style="--c:${PCOL[seat % 6]}">${esc(vs.players[seat].name)}${seat === you ? '（你）' : ''}</span>`);
-    box.innerHTML = `<span class="do-label">第 ${d.round + 1}/2 轮</span>${chips.join('<span class="do-arrow">›</span>')}`;
-    const now = $('.do.now', box);
-    if (now) now.scrollIntoView({ block: 'nearest', inline: 'center', behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+    // 紧凑顺位条：每一手是一颗彩色小圆（玩家首字，你的那几手写「你」），正在选的那手展开成名字；
+    // 末尾写「再过 n 位轮到你」。放不下时逐级收紧（去首字 → 去轮次 → 收起已选的手），整条始终完整可见、不横向滚动。
+    const mine = isParticipant();
+    const k0 = mine ? d.order.indexOf(you, d.idx) : -1;
+    const ahead = k0 < 0 ? null : k0 - d.idx;
+    const chips = d.order.map((seat, k) => {
+      const p = vs.players[seat], me = mine && seat === you;
+      const cls = `do ${k < d.idx ? 'past' : ''} ${k === d.idx ? 'now' : ''} ${me ? 'me' : ''}`;
+      const label = k === d.idx ? (me ? '你来选' : pname(p)) : me ? '你' : pname(p).slice(0, 1);
+      return `<span class="${cls}" style="--c:${PCOL[seat % 6]}" title="第 ${d.round * d.order.length + k + 1} 手 · ${esc(p.name)}"><span>${esc(label)}</span></span>`;
+    });
+    const cue = ahead == null ? (mine ? '<span class="do-cue">本轮你已选完</span>' : '')
+      : `<span class="do-cue ${ahead === 0 ? 'mine' : ahead === 1 ? 'soon' : ''}">${ahead === 0 ? '轮到你选' : ahead === 1 ? '下一个是你' : `再过 ${ahead} 位到你`}</span>`;
+    box.innerHTML = `<span class="do-label">第 ${d.round + 1}/2 轮</span><span class="do-row">${chips.join('')}</span>${cue}`;
+    box.setAttribute('aria-label', `第 ${d.round + 1}/2 轮选秀，正在选：${pname(vs.players[d.order[d.idx]] || {})}${ahead != null ? `，${ahead === 0 ? '轮到你' : `还有 ${ahead} 位到你`}` : ''}`);
+    fitDraftOrder();
+  }
+  function fitDraftOrder() {
+    const box = $('#draftOrder');
+    if (!box || !box.firstChild) return;
+    box.classList.remove('fit1', 'fit2', 'fit3');
+    for (const lv of ['fit1', 'fit2', 'fit3']) {
+      if (box.scrollWidth <= box.clientWidth + 1) break;
+      box.classList.add(lv);
+    }
   }
   function renderMyTeam() {
     const box = $('#myTeam');
     const p = vs && isParticipant() ? vs.players[you] : null;
-    if (!p) { box.innerHTML = ''; return; }
-    const slots = p.hand.map((id) => `<div class="mt-slot filled" data-tip="${id}" style="--rc:${rcol(id)}">${art(id)}<span>${esc(R[id].name)}</span></div>`);
-    for (let i = p.hand.length; i < 4; i++) slots.push('<div class="mt-slot"><span>待选</span></div>');
-    box.innerHTML = `<span class="mt-label">你的队伍</span>${slots.join('')}`;
+    if (!p) { box.innerHTML = ''; delete box.dataset.shown; return; }
+    // data-slot = 队伍槽位序号（0–3，与 hand 下标一致），供选秀飞卡定位落点；只有新加入的那张播入场动画
+    let shown = Number(box.dataset.shown || 0);
+    if (shown > p.hand.length) shown = 0;
+    const slots = p.hand.map((id, i) => `<div class="mt-slot filled ${i < shown ? 'old' : 'fresh'}" data-slot="${i}" data-tip="${id}" style="--rc:${rcol(id)}">${art(id)}<span>${esc(R[id].name)}</span></div>`);
+    for (let i = p.hand.length; i < 4; i++) slots.push(`<div class="mt-slot ${i === p.hand.length ? 'next' : ''}" data-slot="${i}"><span>${i === p.hand.length ? '下一位' : '待选'}</span></div>`);
+    box.innerHTML = `<span class="mt-label">你的队伍<small>${p.hand.length}/4</small></span>${slots.join('')}`;
+    box.dataset.shown = p.hand.length;
   }
 
   /* ================= 赛况 / 解说 ================= */
+  // 赛况：AI 名字去掉「（AI）」后缀（行首色点已经标明是谁）；同时记下本回合最近几条，供技能解说找「造成了什么」
+  let feedLog = [];
   function addFeed(text, cls = '', seat) {
     if (!text) return;
     const f = $('#feed');
     const ln = document.createElement('div');
     ln.className = `ln ${cls}`;
     if (seat != null && seat >= 0) { ln.classList.add('p'); ln.style.setProperty('--c', PCOL[seat % 6]); }
-    ln.textContent = text;
+    const shown = String(text).replace(/（AI）/g, '');
+    ln.textContent = shown;
     f.appendChild(ln);
     while (f.children.length > 160) f.firstChild.remove();
     f.scrollTop = f.scrollHeight;
+    if (cls === 'turn' || cls === 'race') feedLog = [];
+    // 掷骰、主移动算式不算技能的效果
+    else if (!/掷出|重掷|主移动：/.test(shown)) feedLog.push({ text: shown, cls, seat });
+    if (feedLog.length > 6) feedLog.shift();
   }
-  let comTimer = null;
+  // 技能解说的素材：谁（玩家的选手）发动了哪个技能，造成了什么。
+  // 引擎先播放效果事件、再发 power 事件，所以「效果」取本回合 power 之前最近的一条赛况；
+  // 事件里带 targets（WP-A 补充，可能缺失）时点名受影响的选手。返回给 commentary() 的对象。
+  function skillLine(e) {
+    if (!e || !vs) return null;
+    const r = vr(e.rid);
+    const pw = R[e.key] || R[e.rid];
+    if (!pw || !R[e.rid]) return null;
+    const owner = r ? vs.players[r.seat] : null;
+    const who = `${owner ? `${pname(owner)}的` : ''}${R[e.rid].name}`;
+    const borrowed = e.key && e.key !== e.rid && R[e.key] ? R[e.key].name : '';
+    const targets = (Array.isArray(e.targets) ? e.targets : []).map((t) => (typeof t === 'string' ? t : t && t.rid)).filter((rid) => rid && R[rid] && rid !== e.rid);
+    const last = feedLog.length ? feedLog[feedLog.length - 1].text : '';
+    feedLog = [];
+    let effect = last;
+    if (!effect && targets.length) effect = `影响了 ${targets.map((rid) => { const o = vr(rid); return o ? `${pname(vs.players[o.seat])}的${R[rid].name}` : R[rid].name; }).join('、')}`;
+    if (!effect) effect = pw.text.split(/[。；]/)[0];
+    // 效果句以发动者开头时去掉重复的主语
+    if (effect.startsWith(who)) effect = effect.slice(who.length).replace(/^[：:\s]+/, '');
+    return { kind: 'skill', seat: r ? r.seat : null, who, skill: pw.skill, borrowed, effect, targets };
+  }
+
+  // 解说条：可见文字随事件更新；读屏只播报节流后的摘要（同一句不重复，至少间隔 2.6 秒，期间只保留最新一句）
+  let comTimer = null, comSaid = '', comPending = '', comSayTimer = null;
+  function say(text) {
+    if (!text) return;
+    comPending = text;
+    if (comSayTimer) return;
+    const flush = () => {
+      comSayTimer = null;
+      const c = $('#commentary');
+      if (!comPending || comPending === comSaid || !c) { comPending = ''; return; }
+      let s = $('.com-sr', c);
+      if (!s) { s = document.createElement('div'); s.className = 'com-sr sr-only'; c.appendChild(s); }
+      s.textContent = comSaid = comPending;
+      comPending = '';
+      comSayTimer = setTimeout(flush, 2600);
+    };
+    flush();
+  }
   function commentary(text) {
     const c = $('#commentary');
-    c.innerHTML = text ? `<span>${esc(text)}</span>` : '';
+    if (!c.hasAttribute('aria-live')) { c.setAttribute('role', 'status'); c.setAttribute('aria-live', 'polite'); c.setAttribute('aria-atomic', 'false'); }
+    let vis = $('.com-vis', c);
+    if (!vis) { c.innerHTML = '<div class="com-vis" aria-hidden="true"></div><div class="com-sr sr-only"></div>'; vis = $('.com-vis', c); }
+    const info = text && typeof text === 'object' ? text : null;
+    let html = '', plain = '';
+    if (info && info.kind === 'skill') {
+      const col = info.seat != null ? `style="--c:${PCOL[info.seat % 6]}"` : '';
+      html = `<span class="com-skill" ${col}><small class="cs-tag">技能</small><b class="cs-name">「${esc(info.skill)}」</b><i class="cs-who">${esc(info.who)}${info.borrowed ? `（借自${esc(info.borrowed)}）` : ''}</i><em class="cs-eff">${esc(info.effect)}</em></span>`;
+      plain = `${info.who} 发动「${info.skill}」：${info.effect}`;
+    } else if (text) {
+      plain = String(text).replace(/（AI）/g, '');
+      html = `<span>${esc(plain)}</span>`;
+    }
+    vis.innerHTML = html;
     clearTimeout(comTimer);
-    if (text) comTimer = setTimeout(() => { c.innerHTML = ''; }, 3200);
+    if (html) comTimer = setTimeout(() => { vis.innerHTML = ''; }, info ? 3800 : 3200);
+    if (plain) say(plain);
   }
   function setDice(html) {
     $('#diceZone').innerHTML = html || '';
@@ -1458,6 +1640,7 @@
         const r = vr(e.rid);
         const key = e.key;
         floater(e.rid, `${R[key] ? R[key].skill : key}！`, '', r ? '#FFF3C4' : undefined);
+        commentary(skillLine(e)); // WP-B：技能解说（谁发动、造成了什么）
         Sound.power();
         await pause(260);
         break;
