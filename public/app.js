@@ -990,9 +990,11 @@
       s += '</g>';
     }
     // 终点：棋盘格 + 竖排「终点」
-    const f = G.rect(FIN);
+    // 横屏时终点画成整列高的柱子（左列不再空着），棋子落点仍是下面那一格
+    const f0 = G.rect(FIN);
+    const f = lay === 'wide' ? { x: f0.x, y: G.rect(0).y, w: f0.w, h: f0.y + f0.h - G.rect(0).y } : f0;
     s += `<g class="cell" data-p="${FIN}"><rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="8" fill="url(#chk)" stroke="${INK}" stroke-width="2.5"/>`;
-    if (lay === 'wide') s += `<rect x="${f.x + 9}" y="${f.y + 16}" width="${f.w - 18}" height="${f.h - 32}" rx="7" fill="${INK}"/><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 - 3}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">终</text><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 + 15}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">点</text>`;
+    if (lay === 'wide') s += `<rect x="${f.x + 9}" y="${f.y + f.h / 2 - 28}" width="${f.w - 18}" height="56" rx="7" fill="${INK}"/><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 - 3}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">终</text><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 + 15}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">点</text>`;
     s += '</g>';
     // 领奖台：冲线的运动员会站上来
     const pd = G.pod;
@@ -1474,7 +1476,7 @@
     });
   }
 
-  // 行动卡：谁在行动（头像、玩家、选手）→ 他的技能 → 位置进度 + 接下来的行动顺序；右上角标签告诉你还有几位轮到你
+  // 行动卡：谁在行动（头像、玩家、选手）→ 位置进度（技能点头像可看，卡里只在借用他人技能时标出） + 接下来的行动顺序；右上角标签告诉你还有几位轮到你
   let tcRid = null, tcSoonSaid = null;
   function renderTurnCard() {
     const tc = $('#turnCard');
@@ -1500,7 +1502,7 @@
     tc.style.setProperty('--rc', rcol(r.rid));
     tc.innerHTML = `${cue}<div class="tc-head"><div class="tc-ava">${art(r.rid)}</div><div class="tc-who"><span class="tc-player">${esc(pname(p))}${r.seat === you ? ' · 你' : p.ai ? ' · AI' : ''}</span><b>${esc(base.name)}</b></div></div>
       <div class="tc-bar" aria-hidden="true"><em style="width:${Math.round(r.pos / FIN * 100)}%"></em></div>
-      <div class="tc-skill"><span class="sk">${esc((pw || base).skill)}</span>${pw ? `<em>借自${esc(pw.name)}</em>` : ''}<p>${esc((pw || base).text)}</p></div>
+      ${pw ? `<div class="tc-skill"><span class="sk">借用「${esc(pw.skill)}」</span><em>来自${esc(pw.name)}</em></div>` : ''}
       <div class="tc-st ${r.tripped ? 'bad' : ''}">${pos}${order.length > 1 ? `<span class="tc-q" aria-label="行动顺序">${q}${more}</span>` : ''}</div>`;
     if (tcRid !== r.rid) { tc.classList.remove('in'); void tc.offsetWidth; tc.classList.add('in'); tcRid = r.rid; }
     // 读屏：只在「下一个就是你」时提醒一次（轮到你由出牌提示负责播报）
@@ -1543,6 +1545,12 @@
     x = Math.max(8, Math.min(innerWidth - t.width - 8, x));
     let y = a.top - t.height - 10;
     if (y < 8) y = a.bottom + 10;
+    // 锚点在名次栏下方时，提示卡不盖住名次栏：改放到锚点下方，放不下就贴着名次栏底边
+    const rb = $('.rankbar')?.getBoundingClientRect();
+    if (rb && rb.height && a.top >= rb.bottom && y < rb.bottom + 4) {
+      y = a.bottom + 10;
+      if (y + t.height > innerHeight - 8) y = Math.max(rb.bottom + 4, innerHeight - t.height - 8);
+    }
     tip.style.left = `${x}px`;
     tip.style.top = `${y}px`;
   }

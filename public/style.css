@@ -426,7 +426,7 @@ input { font: inherit; color: inherit; }
   padding: 8px 10px; background: var(--paper); border: 2px solid var(--ink); border-radius: 14px;
   box-shadow: var(--shadow-sm); transition: transform .25s var(--ease), background .25s;
 }
-.prow.cur { background: #FFF6DA; transform: translateX(-4px); box-shadow: 4px 3px 0 var(--ink); }
+.prow.cur { background: #FFF6DA; transform: translateY(-2px); box-shadow: 0 4px 0 var(--ink); }
 .prow.me { border-width: 2.5px; }
 .prow .pav { width: 46px; height: 46px; border-radius: 50%; border: 3px solid var(--c); box-shadow: 0 0 0 2px var(--ink); background: var(--paper); overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .prow .pav svg { width: 118%; height: 118%; }
@@ -479,7 +479,8 @@ input { font: inherit; color: inherit; }
 
 /* 表情 */
 .emotes { display: flex; gap: 6px; flex-wrap: wrap; }
-.emotes button { flex: 1 0 auto; padding: 5px 8px; border: 2px solid var(--ink); border-radius: 99px; background: var(--paper); font-weight: 900; font-size: 12px; box-shadow: var(--shadow-sm); transition: transform .15s var(--ease), background .15s; }
+@media (min-width: 1001px) { .emotes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.emotes button { min-width: 0; white-space: nowrap; padding: 5px 8px; border: 2px solid var(--ink); border-radius: 99px; background: var(--paper); font-weight: 900; font-size: 12px; box-shadow: var(--shadow-sm); transition: transform .15s var(--ease), background .15s; }
 .emotes button:hover { transform: translateY(-2px); background: var(--yellow); }
 .emotes button:active { transform: translateY(1px); box-shadow: none; }
 .emotes .toggle { display: none; }
@@ -874,15 +875,21 @@ body { overflow: hidden; }
   .home-inner {
     width: min(1180px, 100%); display: grid; align-content: center;
     grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto minmax(0, auto) auto auto;
     column-gap: clamp(20px, 4vw, 60px); row-gap: clamp(8px, 1.8dvh, 18px);
   }
-  .hall-back, .logo, .parade, .room-directory, .home-foot, .home-inner > .icp-beian { grid-column: 1; }
-  .home-card { grid-column: 2; grid-row: 1 / -1; align-self: center; }
-  .room-directory { align-self: start; max-height: 100%; }
-  .home-foot { align-self: end; }
+  /* 左栏（标志、角色、公开房间）和右边开局卡片等高，页脚链接横跨两栏居中 */
+  .hall-back { position: absolute; left: 0; top: 0; }
+  .logo { grid-column: 1; grid-row: 1; }
+  .parade { grid-column: 1; grid-row: 2; }
+  .room-directory { grid-column: 1; grid-row: 3; align-self: stretch; max-height: 100%; }
+  .home-card { grid-column: 2; grid-row: 1 / 4; align-self: center; }
+  .home-foot { grid-column: 1 / -1; grid-row: 4; justify-self: center; }
+  .home-inner > .icp-beian { grid-column: 1 / -1; grid-row: 5; justify-self: center; }
 }
 @media (min-aspect-ratio: 5/4) and (max-height: 620px) {
+  .home-inner { grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
+  .room-directory { align-self: start; }
   .parade, .logo-badge, .tagline { display: none; }
   .logo-text { font-size: clamp(36px, 11dvh, 64px); }
   .home-card { gap: 8px; padding: 12px 14px; }
@@ -1012,7 +1019,8 @@ body { overflow: hidden; }
 .modal-body { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 14px 16px 16px; }
 .gallery, .rules { flex: 0 1 auto; min-height: 0; overflow: hidden; }
 .gallery { padding: 2px 6px 8px 2px; grid-template-columns: repeat(auto-fill, minmax(var(--gw, 160px), 1fr)); }
-.rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 4px 22px; align-content: start; }
+.rules { display: block; columns: 2 380px; column-gap: 22px; }
+.rules .rule-sec { break-inside: avoid; margin-bottom: 8px; }
 .rule-sec h4, .rules .rule-sec h4:first-child { margin: 4px 0; }
 .rule-sec p, .rule-sec ul { margin: 0 0 6px; }
 .rules p, .rules li { line-height: 1.6; }
@@ -1415,6 +1423,10 @@ body { overflow: hidden; }
 .st-head { display: grid; grid-template-columns: 28px minmax(0, 1fr) 40px 52px 44px; gap: 8px; width: min(560px, 100%); margin: 14px auto -4px; padding: 0 12px; font-size: 11px; font-weight: 800; color: var(--ink3); text-align: left; }
 .st-head span:nth-child(n + 3) { text-align: center; }
 .st-head span:last-child { text-align: right; }
+/* 结算和总决算：按钮行和积分表等宽，上下间距统一 */
+.wpc-final .st-head, .wpc-results .st-head { margin-top: 16px; }
+.wpc-final .ov-actions, .wpc-results .ov-actions { width: min(560px, 100%); margin: 24px auto 0; flex-wrap: nowrap; }
+.wpc-final .ov-actions .btn, .wpc-results .ov-actions .btn { flex: 1 1 0; min-width: 0; justify-content: center; }
 .wpc-row { grid-template-columns: 28px minmax(0, 1fr) 40px 52px 44px; gap: 8px; }
 .wpc-row.flip-go { transition: translate .6s var(--ease); }
 .wpc-row.flip-prep { z-index: 0; }
@@ -1858,4 +1870,22 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 @media (max-height: 620px) {
   .pod.p2 .blk { flex-direction: row; flex-wrap: wrap; align-content: center; align-items: baseline; justify-content: center; column-gap: 4px; }
   .wpc-final .pod .blk, .wpc-results .pod .blk { flex-wrap: wrap; align-content: center; justify-content: center; }
+}
+
+/* ---------- 对齐修复：手机端 ---------- */
+/* 大厅「离开」与音乐按钮等高、顶对齐 */
+.lobby-inner .back, .lobby-sound { height: 44px; min-height: 44px; box-sizing: border-box; }
+.lobby-sound { min-width: 44px; }
+/* 选秀「你的队伍」撑满卡牌区宽度，槽位均分 */
+@media (max-width: 1000px) {
+  .draft .my-team { align-self: stretch; margin-inline: 2px; }
+  .draft .my-team .mt-slot { flex: 1 1 0; width: auto; min-width: 0; }
+}
+/* 360 窄屏：赛程胶囊与五个按钮挤进同一行 */
+@media (max-width: 380px) and (orientation: portrait) {
+  .races { gap: 3px; }
+  .race-pill { padding: 3px 4px; }
+  .top-actions { gap: 3px; }
+  .icon-btn { min-width: 33px; padding: 0 3px; }
+  .icon-btn .ico { width: 17px; height: 17px; }
 }
