@@ -875,7 +875,15 @@
     f.textContent = text;
     if (color) f.style.setProperty('--fc', color);
     if (el) { f.style.left = el.style.left; f.style.top = el.style.top; } else { f.style.left = '50%'; f.style.top = '50%'; }
-    $('#floaters').appendChild(f);
+    const fl = $('#floaters');
+    fl.appendChild(f);
+    // 靠赛道左右边缘的飘字往里收，连放大到 1.08 时也不出赛道，免得页面横向多出几像素
+    const W = fl.clientWidth, half = f.offsetWidth * 0.55 + 2;
+    if (W > 0 && half * 2 < W) {
+      const x = parseFloat(f.style.left) / 100 * W;
+      const cx = Math.max(half, Math.min(W - half, x));
+      if (Math.abs(cx - x) > 0.5) f.style.left = `${cx / W * 100}%`;
+    }
     setTimeout(() => f.remove(), 1400);
   }
   function pulseCell(p) {
@@ -1845,15 +1853,13 @@
     animationLater(() => card.classList.add('out'), life);
     animationLater(() => card.remove(), life + 260);
     if (el) restartClass(el, 'sk-cast', 1000);
-    const tnames = [];
+    // 解说文字由 WP-B 在 case 'power' 里统一出（commentary(skillLine(e))），这里只管画面
     for (const t of targets) {
       const tel = tokenOf(t);
-      if (vr(t) && R[t]) tnames.push(R[t].name);
       if (!tel || !el || t === rid) continue;
       drawArc(tokenPt(el), tokenPt(tel), 'power', Math.max(700, 1100 / speed), col);
       animationLater(() => { restartClass(tel, 'sk-hit', 560); buzz('hit', t); }, reducedMotion.matches ? 0 : 380 / Math.min(speed, 1.5));
     }
-    commentary(`${who} 发动「${info.skill}」${tnames.length ? `：${tnames.join('、')}` : ''}`);
   }
   // 主移动预览：路径逐格亮起，落点放一个幽灵棋子；返回清理函数
   function previewPath(r, path) {
