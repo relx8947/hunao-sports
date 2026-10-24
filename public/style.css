@@ -1314,6 +1314,9 @@ body { overflow: hidden; }
 .commentary .com-skill .cs-who { font-style: normal; color: var(--ink2); font-size: .86em; margin: 0 calc(4 * var(--u)); }
 .commentary .com-skill .cs-eff { font-style: normal; font-weight: 800; color: var(--ink); }
 .commentary .com-skill .cs-eff::before { content: "→ "; color: var(--ink3); }
+/* 换行时别把效果的最后一两个字甩到第二行：短效果整体不断行，长效果交给 text-wrap: pretty */
+.commentary .com-skill { text-wrap: pretty; }
+.commentary .com-skill .cs-eff.nw { white-space: nowrap; }
 
 /* 选秀顺位条：一行完整可见；当前那手展开成名字 */
 .draft-order { overflow: hidden; max-width: 100%; gap: 6px; }
@@ -1403,9 +1406,9 @@ body { overflow: hidden; }
 /* ---------- 单场结算 ---------- */
 .me-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 10px; font-style: normal; font-weight: 900; line-height: 1.6; vertical-align: 2px; }
 .wpc-results .wpc-note { margin-top: 4px; font-size: 12px; color: var(--red); }
-.wpc-pod .who { animation: wpcPop .5s var(--ease) both, podBounce 1s ease-in-out infinite alternate; animation-delay: calc(220ms + var(--k) * 240ms), calc(720ms + var(--k) * 240ms); }
-.wpc-pod .blk, .wpc-fpod .blk { transform-origin: bottom; animation: wpcRise .55s var(--ease) both; animation-delay: calc(120ms + var(--k) * 240ms); }
-.wpc-pod .nm, .wpc-pod .rn { animation: fadeIn .3s ease both; animation-delay: calc(420ms + var(--k) * 240ms); }
+.wpc-pod .who { animation: wpcPop .5s var(--ease) both, podBounce 1s ease-in-out infinite alternate; animation-delay: calc(420ms + var(--k) * 300ms), calc(920ms + var(--k) * 300ms); }
+.wpc-pod .blk, .wpc-fpod .blk { transform-origin: bottom; animation: wpcRise .55s var(--ease) both; animation-delay: calc(200ms + var(--k) * 300ms); }
+.wpc-pod .nm, .wpc-pod .rn { animation: fadeIn .3s ease both; animation-delay: calc(520ms + var(--k) * 300ms); }
 .pod .blk .medal-no { line-height: 1; }
 @keyframes wpcPop { 0% { opacity: 0; transform: scale(.3) rotate(-12deg); } 70% { opacity: 1; transform: scale(1.12) rotate(3deg); } }
 @keyframes wpcRise { from { transform: scaleY(0); } }
@@ -1613,8 +1616,10 @@ body { overflow: hidden; }
   animation: skcIn .3s var(--ease) both;
 }
 .skc.tall { --cw: 280; grid-template-columns: calc(52 * var(--u)) 1fr; }
-.skc.above { transform: translateY(-100%); }
 .skc.below { transform-origin: calc(var(--ax) * var(--u)) 0; }
+/* 为避开行动卡/骰子挪到空白处的卡片：不带尖角，改由引线连回发动者 */
+.skc.free { transform-origin: center; }
+.skc.free::after { display: none; }
 .skc::after {
   content: ""; position: absolute; left: calc(var(--ax) * var(--u) - 8 * var(--u)); width: calc(14 * var(--u)); height: calc(14 * var(--u));
   background: var(--paper); border: calc(2.5 * var(--u)) solid var(--ink); rotate: 45deg;
@@ -1642,6 +1647,9 @@ body { overflow: hidden; }
 .sk-arc.warp .under, .sk-arc.swap .under, .sk-arc.swap2 .under { stroke-width: 7; opacity: .8; }
 .sk-arc.warp .over, .sk-arc.swap .over, .sk-arc.swap2 .over { stroke-width: 3.5; }
 .sk-arc.out { opacity: 0; transition: opacity .3s; }
+.skc-lead .under { stroke-width: 7; }
+.skc-lead .over { stroke-width: 3.5; }
+.skc-lead .dot { fill: var(--ac, var(--yellow)); stroke: var(--ink); stroke-width: 2.5; animation: fadeIn .2s ease .3s both; }
 @keyframes arcDraw { to { stroke-dashoffset: 0; } }
 @keyframes arcHit { 0% { opacity: 1; scale: .3; } 100% { opacity: 0; scale: 1.5; } }
 
@@ -1826,4 +1834,28 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   #dock .prompt, #dock .prompt > .p-ava, #dock .prompt > .p-txt, #dock .prompt > .p-opts { animation: none; }
+}
+
+/* === 打磨：窄屏底栏 === */
+/* 360px 一档：说明文字的弹性基准从 150px 收到 96px，让「掷骰子」按钮和文字留在同一排，
+   轮到你 / 等待切换时底栏不再从一排跳到两排；按钮文字本身不折行（说明文字已是单行省略）。 */
+@media (max-width: 1000px) and (orientation: portrait) {
+  #dock .prompt .p-opts .btn.roll-btn { white-space: nowrap; }
+}
+@media (max-width: 400px) and (orientation: portrait) {
+  #dock .prompt .p-txt { flex: 1 1 96px; }
+}
+
+/* === 打磨：领奖台 === */
+/* 柱子颜色跟名次走（并列第 2 两根都是银色），高度仍按左右位置区分 */
+.wpc-fpod.m1 .blk { background: var(--gold); }
+.wpc-fpod.m2 .blk { background: var(--silver); }
+.wpc-fpod.m3 .blk { background: var(--bronze); }
+/* 矮柱：名次和分数并排居中，不再上下挤在 30–40px 的柱子里 */
+@media (max-width: 520px), (max-height: 760px) {
+  .pod.p3 .blk { flex-direction: row; flex-wrap: wrap; align-content: center; align-items: baseline; justify-content: center; column-gap: 4px; }
+}
+@media (max-height: 620px) {
+  .pod.p2 .blk { flex-direction: row; flex-wrap: wrap; align-content: center; align-items: baseline; justify-content: center; column-gap: 4px; }
+  .wpc-final .pod .blk, .wpc-results .pod .blk { flex-wrap: wrap; align-content: center; justify-content: center; }
 }

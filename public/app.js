@@ -1675,7 +1675,7 @@
     let html = '', plain = '';
     if (info && info.kind === 'skill') {
       const col = info.seat != null ? `style="--c:${PCOL[info.seat % 6]}"` : '';
-      html = `<span class="com-skill" ${col}><small class="cs-tag">技能</small><b class="cs-name">「${esc(info.skill)}」</b><i class="cs-who">${esc(info.who)}${info.borrowed ? `（借自${esc(info.borrowed)}）` : ''}</i><em class="cs-eff">${esc(info.effect)}</em></span>`;
+      html = `<span class="com-skill" ${col}><small class="cs-tag">技能</small><b class="cs-name">「${esc(info.skill)}」</b><i class="cs-who">${esc(info.who)}${info.borrowed ? `（借自${esc(info.borrowed)}）` : ''}</i><em class="cs-eff${[...String(info.effect)].length <= 14 ? ' nw' : ''}">${esc(info.effect)}</em></span>`;
       plain = `${info.who} 发动「${info.skill}」：${info.effect}`;
     } else if (text) {
       plain = String(text).replace(/（AI）/g, '');
@@ -2147,8 +2147,8 @@
       case 'raceEnd': {
         vs.phase = 'between';
         await pause(560);
+        // 号角由 showResultsOverlay 在小领奖台柱子升完后接上
         showResultsOverlay(e);
-        Sound.fanfare();
         // 结果至少停 Timing.FIXED.raceEnd，不随倍速缩短；服务端排程同样单独累加
         await hold(Timing.FIXED.raceEnd, epoch);
         break;
@@ -2309,6 +2309,89 @@
     if (!el || !el.style.left) return;
     drawArc(tokenPt(el), to, second ? 'swap2' : kind, 620 / Math.min(speed, 1.5), el.style.getPropertyValue('--c'));
   }
+  // 技能提示卡的落点：在棋盘坐标里挑一个不压行动卡、骰子、解说和被影响棋子的位置。
+  // 优先贴着发动者（上/下带小尖角）；贴不下就放到棋盘空白处，另画一条引线连回发动者。
+  function calloutSpot(card, pt, cw, hitEls) {
+    const [W, H] = VB();
+    const fl = $('#floaters');
+    const box = fl.getBoundingClientRect();
+    const k = W / (box.width || 1);
+    const ch = card.offsetHeight * k || 90;
+    const vbRect = (r, pad = 0) => ({ x: (r.left - box.left) * k - pad, y: (r.top - box.top) * k - pad, w: r.width * k + pad * 2, h: r.height * k + pad * 2 });
+    const obs = [];
+    const add = (el, wgt, pad) => { if (!el) return; const r = el.getBoundingClientRect(); if (r.width && r.height) obs.push({ ...vbRect(r, pad), wgt }); };
+    const tc = $('#turnCard');
+    if (tc && !tc.hidden) add(tc, 6, 4);
+    // 骰子区：骰子可能稍后才出现，按中央区域中间一块预留
+    const main = $('#center .center-main');
+    if (main) {
+      const m = vbRect(main.getBoundingClientRect());
+      const dw = Math.min(m.w, 230), dh = Math.min(m.h, 130);
+      obs.push({ x: m.x + (m.w - dw) / 2, y: m.y + (m.h - dh) / 2 - 8, w: dw, h: dh, wgt: 4 });
+      obs.push({ x: m.x, y: m.y + m.h - 64, w: m.w, h: 64, wgt: 1.5 });
+    }
+    for (const d of $$('#diceZone > *')) add(d, 4, 4);
+    for (const t of hitEls) add(t, 8, 6);
+    for (const t of $$('#tokens .token')) if (!hitEls.includes(t)) add(t, 1.5, 0);
+    const tok = 30;
+    obs.push({ x: pt.x - tok, y: pt.y - tok, w: tok * 2, h: tok * 2, wgt: 8 });
+    const area = cw * ch;
+    const cost = (x, y) => {
+      let c = 0;
+      for (const o of obs) {
+        const ix = Math.min(x + cw, o.x + o.w) - Math.max(x, o.x), iy = Math.min(y + ch, o.y + o.h) - Math.max(y, o.y);
+        if (ix > 0 && iy > 0) c += o.wgt * ix * iy / area * 100;
+      }
+      return c;
+    };
+    const clampX = (x) => Math.max(6, Math.min(W - cw - 6, x));
+    const clampY = (y) => Math.max(6, Math.min(H - ch - 6, y));
+    const off = layout === 'tall' ? 30 : 34;
+    let best = null;
+    const consider = (x, y, side, extra) => {
+      const c = cost(x, y) + extra;
+      if (!best || c < best.c) best = { x, y, side, c };
+    };
+    // 1) 贴着发动者：上方或下方，尖角在卡片宽度内滑动
+    for (const side of ['above', 'below']) {
+      const y = side === 'above' ? pt.y - off - ch : pt.y + off;
+      if (y < 4 || y + ch > H - 4) continue;
+      for (let f = 0; f <= 1.0001; f += 0.125) {
+        const x = clampX(pt.x - 18 - f * (cw - 36));
+        if (pt.x - x < 16 || pt.x - x > cw - 16) continue;
+        consider(x, y, side, Math.abs(f - 0.5) * 2);
+      }
+    }
+    // 2) 棋盘内任意空白处（带引线），离发动者越远代价越高
+    if (best && best.c > 3) {
+      for (let y = 6; y <= H - ch - 6; y += 12) {
+        for (let x = 6; x <= W - cw - 6; x += 16) {
+          const cx = Math.max(x, Math.min(x + cw, pt.x)), cy = Math.max(y, Math.min(y + ch, pt.y));
+          consider(x, y, 'free', 4 + Math.hypot(cx - pt.x, cy - pt.y) / 18);
+        }
+      }
+    }
+    if (!best) best = { x: clampX(pt.x - cw / 2), y: clampY(pt.y < H * 0.3 ? pt.y + off : pt.y - off - ch), side: pt.y < H * 0.3 ? 'below' : 'above' };
+    return { x: best.x, y: best.y, w: cw, h: ch, side: best.side, ax: Math.max(16, Math.min(cw - 16, pt.x - best.x)) };
+  }
+  function calloutLeader(spot, pt, color, life) {
+    if (reducedMotion.matches) return;
+    const svg = arcLayer();
+    // 从卡片边缘离发动者最近的点连到棋子边缘
+    const ex = Math.max(spot.x + 10, Math.min(spot.x + spot.w - 10, pt.x)), ey = Math.max(spot.y + 8, Math.min(spot.y + spot.h - 8, pt.y));
+    const d = Math.hypot(pt.x - ex, pt.y - ey);
+    if (d < 32) return;
+    const r = (layout === 'tall' ? 25 : 29) + 2;
+    const tx = pt.x - (pt.x - ex) / d * r, ty = pt.y - (pt.y - ey) / d * r;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'sk-arc skc-lead');
+    g.style.setProperty('--ac', color);
+    const p = `M${ex.toFixed(1)} ${ey.toFixed(1)} L${tx.toFixed(1)} ${ty.toFixed(1)}`;
+    g.innerHTML = `<path class="under" d="${p}" pathLength="1"/><path class="over" d="${p}" pathLength="1"/><circle class="dot" cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="6"/>`;
+    svg.appendChild(g);
+    animationLater(() => g.classList.add('out'), life);
+    animationLater(() => g.remove(), life + 320);
+  }
   // 技能提示卡
   function skillCallout(rid, key, targets = []) {
     const info = R[key];
@@ -2325,17 +2408,19 @@
     card.className = 'skc';
     card.style.setProperty('--c', col);
     card.innerHTML = `<div class="skc-av">${art(rid)}</div><div class="skc-tx"><b>${esc(info.skill)}</b><span>${esc(owner ? `${owner} · ${who}` : who)}${key !== rid ? `（借用${esc(info.name)}）` : ''}</span><i>${esc(info.text)}</i></div>`;
-    // 卡片放在发动者上方（靠上的棋子放下方），左右夹在棋盘内
     const cw = layout === 'tall' ? 280 : 330;
     const pt = el && el.style.left ? tokenPt(el) : { x: W / 2, y: H / 2 };
-    const below = pt.y < H * 0.3;
-    const left = Math.max(6, Math.min(W - cw - 6, pt.x - cw / 2));
-    const off = layout === 'tall' ? 30 : 34;
-    card.style.left = `${left / W * 100}%`;
-    card.style.top = `${(below ? pt.y + off : pt.y - off) / H * 100}%`;
-    card.style.setProperty('--ax', Math.max(16, Math.min(cw - 16, pt.x - left)));
-    card.classList.add(below ? 'below' : 'above', layout === 'tall' ? 'tall' : 'wide');
+    card.classList.add(layout === 'tall' ? 'tall' : 'wide');
+    card.style.visibility = 'hidden';
     fl.appendChild(card);
+    const spot = calloutSpot(card, pt, cw, targets.filter((t) => t !== rid).map(tokenOf).filter(Boolean));
+    card.style.left = `${spot.x / W * 100}%`;
+    card.style.top = `${spot.y / H * 100}%`;
+    card.style.setProperty('--ax', spot.ax);
+    card.classList.add(spot.side);
+    card.style.visibility = '';
+    // 卡片没贴在发动者旁边时（为了避开行动卡/骰子），用一条引线连回发动者
+    if (spot.side === 'free') calloutLeader(spot, pt, col, Math.max(1000, 1700 / speed));
     const voiced = playSfx('callout');
     const life = reducedMotion.matches ? 1200 : Math.max(1000, 1700 / speed);
     animationLater(() => card.classList.add('out'), life);
@@ -2625,7 +2710,7 @@
     }).join('');
     const reason = e.reason === 'turn-limit' ? '<p class="sub wpc-note">回合数已到上限，按当前名次结算</p>' : e.reason === 'loop-limit' ? '<p class="sub wpc-note">技能连锁停不下来，按当前名次结算</p>' : '';
     showOverlay(`<div class="ov-box card wpc-results"><h2>第 ${e.race} 场结果</h2><p class="sub">${TRACKS[e.track].name} · 冠军 ${GOLD[idx]} 分 / 亚军 ${SILVER[idx]} 分</p>${reason}
-      <div class="podium">${pod(second, 'p2', '2', SILVER[idx], 1)}${pod(first, 'p1', '1', GOLD[idx], 0)}</div>
+      <div class="podium">${pod(second, 'p2', '2', SILVER[idx], 0)}${pod(first, 'p1', '1', GOLD[idx], 1)}</div>
       <div class="st-head" aria-hidden="true"><span></span><span>选手</span><span></span><span>本场</span><span>总分</span></div>
       <div class="standings">${rows}</div>
       <div class="ov-actions"><button class="btn" id="ovClose"><span class="ico">${icon('map')}</span>看看赛道</button><button class="btn primary wpc-next" id="ovNext" disabled><span class="wpc-ring" aria-hidden="true"></span><span class="lbl">继续</span><b class="cd"></b></button></div></div>`, 'results');
@@ -2633,6 +2718,13 @@
     const dwell = RESULTS_DWELL();
     resultsHold = resultsShownAt + dwell;
     const ov = $('#overlay');
+    // 小领奖台和终局一样由低到高升起（亚军 → 冠军），每根柱子升起时响一声，最后接号角；
+    // 与 .wpc-pod .blk 的 animation-delay（200ms + k×300ms）对齐
+    if (animOk() && typeof Sound.pillar === 'function') {
+      const pods = [[second, 2, 200], [first, 1, 500]];
+      pods.forEach(([x, i, ms]) => { if (x) animationLater(() => Sound.pillar(i), ms); });
+      animationLater(() => Sound.fanfare(), 850);
+    } else Sound.fanfare();
     // 分数：本场加分先弹出，总分随后滚动；名次再滑到新位置
     const rowEls = $$('.wpc-row', ov);
     rowEls.forEach((row, k) => {
@@ -2762,7 +2854,7 @@
       if (!x) return '';
       const rid = hero(x.seat);
       const rank = rankOf(x);
-      return `<div class="pod ${cls} wpc-fpod" style="--c:${PCOL[x.seat % 6]};--k:${k}"><div class="who">${rid ? art(rid) : ''}</div>${rank === 1 ? `<span class="crown" aria-hidden="true">${icon('crown')}</span>` : ''}<div class="nm">${esc(vs.players[x.seat].name)}${x.seat === you ? '<em class="me-tag">你</em>' : ''}</div><div class="blk"><span class="medal-no">${rank}</span><small><b class="pod-sc">${x.score}</b> 分</small></div></div>`;
+      return `<div class="pod ${cls} m${Math.min(rank, 3)} wpc-fpod" style="--c:${PCOL[x.seat % 6]};--k:${k}"><div class="who">${rid ? art(rid) : ''}</div>${rank === 1 ? `<span class="crown" aria-hidden="true">${icon('crown')}</span>` : ''}<div class="nm">${esc(vs.players[x.seat].name)}${x.seat === you ? '<em class="me-tag">你</em>' : ''}</div><div class="blk"><span class="medal-no">${rank}</span><small><b class="pod-sc">${x.score}</b> 分</small></div></div>`;
     };
     // 领奖台从左到右 2–1–3，依次升起：先第 3 名，再第 2 名，冠军压轴
     const podium = `${podCol(rows[1], 'p2', 1)}${podCol(rows[0], 'p1', 2)}${podCol(rows[2], 'p3', 0)}`;
