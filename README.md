@@ -61,9 +61,9 @@ location /hunao/ {
 
 
 ```
-             ├─ /hunao/ws            ─┐
-             ├─ /hunao/racers-data.js ├─► Node 127.0.0.1:18161（系统级 hunao-sports.service，用户 hunao）
-             └─ /hunao/healthz       ─┘
+             ├─ /game/hunao/ws            ─┐
+             ├─ /game/hunao/racers-data.js ├─► Node 127.0.0.1:18161（系统级 hunao-sports.service，用户 hunao）
+             └─ /game/hunao/healthz       ─┘
 ```
 
 | 文件 | 部署位置 |
@@ -74,6 +74,8 @@ location /hunao/ {
 ```bash
 ```
 
+
+旧地址 `/hunao/`（2026-10-24 之前）的页面一律 301 到 `/game/hunao/` 下的对应路径，查询串保留，旧邀请链接仍可用；`/hunao/ws`、`/hunao/racers-data.js`、`/hunao/healthz` 继续反代作兼容，因为旧地址上已打开的页面断线重连还会连这些地址，而 WebSocket 不跟随重定向。`/game/` 本身 302 到站点首页。
 
 nginx 在该站点对 `index.html` 做了两处替换：隐藏只对桌游大厅挂载有意义的「返回大厅」，并在首页页脚下方加上 ICP 备案号。
 
