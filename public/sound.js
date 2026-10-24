@@ -1,10 +1,22 @@
-// WebAudio 合成音效：无需音频文件
+// WebAudio 合成音效：无需音频文件。背景音乐在 music.js，和音效共用同一个 AudioContext。
 (function () {
   let ctx = null;
   let master = null;
-  let muted = false;
+  // 声音模式：all 音乐+音效 → sfx 仅音效 → off 全部静音；兼容旧版只存了 hn_mute 的设置
+  const MODES = ['all', 'sfx', 'off'];
+  const UI = {
+    all: { icon: 'music', label: '声音：音乐和音效（点击切换为仅音效）' },
+    sfx: { icon: 'sound', label: '声音：仅音效（点击切换为全部静音）' },
+    off: { icon: 'mute', label: '声音：已静音（点击开启音乐和音效）' },
+  };
+  let mode = 'all';
   const sources = new Set();
-  try { muted = localStorage.getItem('hn_mute') === '1'; } catch (e) { /* ignore */ }
+  try {
+    const saved = localStorage.getItem('hn_sound');
+    if (MODES.includes(saved)) mode = saved;
+    else if (localStorage.getItem('hn_mute') === '1') mode = 'off';
+  } catch (e) { /* ignore */ }
+  const music = () => window.Music;
 
   function ensure() {
     if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return null;
@@ -15,10 +27,13 @@
       master = ctx.createGain();
       master.gain.value = 0.55;
       master.connect(ctx.destination);
+      if (music()) { music().setEnabled(mode === 'all'); music().attach(ctx); }
     }
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    // 后台不恢复：切走的页面保持安静，回到前台或下次触摸时再恢复（iOS 可能处于 interrupted）
+    if (ctx.state !== 'running' && !document.hidden) ctx.resume().then(() => music() && music().wake(), () => {});
     return ctx;
   }
+  function duck() { if (mode === 'all' && music()) music().duck(); }
 
   function track(source, nodes) {
     sources.add(source);
@@ -30,7 +45,8 @@
   }
 
   function tone(freq, dur, { type = 'sine', vol = 0.3, at = 0, slide = 0, attack = 0.005 } = {}) {
-    if (muted || !ensure()) return;
+    if (mode === 'off' || !ensure()) return;
+    duck();
     const t = ctx.currentTime + at;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
@@ -46,7 +62,8 @@
   }
 
   function noise(dur, { vol = 0.2, at = 0, freq = 2000, q = 1, type = 'bandpass' } = {}) {
-    if (muted || !ensure()) return;
+    if (mode === 'off' || !ensure()) return;
+    duck();
     const t = ctx.currentTime + at;
     const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -63,15 +80,27 @@
     src.start(t);
   }
 
+  function setMode(m) {
+    if (!MODES.includes(m)) return;
+    mode = m;
+    if (mode === 'off') stop();
+    try {
+      localStorage.setItem('hn_sound', mode);
+      localStorage.setItem('hn_mute', mode === 'off' ? '1' : '0');
+    } catch (e) { /* ignore */ }
+    if (music()) music().setEnabled(mode === 'all');
+  }
+
   const S = {
     unlock() { ensure(); },
     stop,
-    get muted() { return muted; },
-    setMuted(m) {
-      muted = !!m;
-      if (muted) stop();
-      try { localStorage.setItem('hn_mute', muted ? '1' : '0'); } catch (e) { /* ignore */ }
-    },
+    get muted() { return mode === 'off'; },
+    setMuted(m) { setMode(m ? 'off' : 'all'); },
+    get mode() { return mode; },
+    setMode,
+    cycleMode() { setMode(MODES[(MODES.indexOf(mode) + 1) % MODES.length]); return mode; },
+    // 声音按钮的图标名与提示文字
+    get ui() { return UI[mode]; },
     click() { tone(660, 0.06, { type: 'triangle', vol: 0.15 }); },
     hover() { tone(880, 0.03, { type: 'sine', vol: 0.04 }); },
     dice() {
@@ -123,6 +152,9 @@
     reveal() { [392, 523, 659, 784].forEach((f, i) => tone(f, 0.18, { type: 'square', vol: 0.05, at: i * 0.07 })); },
     blocked() { tone(220, 0.12, { type: 'square', vol: 0.07 }); tone(196, 0.16, { type: 'square', vol: 0.07, at: 0.12 }); },
     fanfare() {
+      if (mode === 'off' || !ensure()) return;
+      // 开着音乐时由 music.js 放整段号角（单场 / 总冠军），不再叠一层音效
+      if (mode === 'all' && music() && music().stinger()) return;
       const seq = [523, 523, 659, 784, 659, 784, 1046];
       seq.forEach((f, i) => tone(f, 0.2, { type: 'triangle', vol: 0.15, at: i * 0.13 }));
       seq.forEach((f, i) => tone(f / 2, 0.2, { type: 'sine', vol: 0.08, at: i * 0.13 }));
@@ -130,5 +162,13 @@
     pop() { tone(900, 0.05, { type: 'sine', vol: 0.1, slide: 500 }); },
   };
   window.Sound = S;
-  window.addEventListener('pointerdown', () => ensure(), { once: true });
+  if (music()) music().setEnabled(mode === 'all');
+  // iOS Safari / 微信内置浏览器要在用户手势里启动或恢复 AudioContext；运行起来之后这些监听几乎没有开销
+  const wake = () => { if (!ctx || ctx.state !== 'running') ensure(); };
+  for (const type of ['pointerdown', 'touchend', 'click', 'keydown']) window.addEventListener(type, wake, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (!ctx) return;
+    if (document.hidden) setTimeout(() => { if (document.hidden && ctx.state === 'running') ctx.suspend().catch(() => {}); }, 200);
+    else ensure();
+  });
 })();
