@@ -1229,3 +1229,7 @@ body { overflow: hidden; }
 #home[data-tight="4"] .room-directory { padding: 8px 10px; }
 #home[data-tight="4"] .room-list { margin-top: 4px; }
 #home[data-tight="4"] .room-list-item { padding: 5px 8px; }
+/* 矮横屏左栏窄，标题字号同时受宽度约束，不要探出左边 */
+@media (min-aspect-ratio: 5/4) and (max-height: 620px) {
+  .logo-text { font-size: clamp(28px, min(11dvh, 5.4vw), 64px); }
+}
