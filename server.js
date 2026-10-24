@@ -48,7 +48,7 @@ function inside(root, file) {
 
 function boundedString(value, max) { return typeof value === 'string' && value.length <= max; }
 function optionalString(value, max) { return value == null || boundedString(value, max); }
-const NO_PAYLOAD = new Set(['create', 'leave', 'addAI', 'start', 'speed', 'lobby', 'replay']);
+const NO_PAYLOAD = new Set(['create', 'leave', 'addAI', 'start', 'speed', 'lobby', 'replay', 'again', 'skip']);
 
 // 不将数组/对象/字符串数字强制转换成业务字段，避免非法输入绕过席位、决策或开关校验。
 function messageError(msg) {
