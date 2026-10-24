@@ -401,7 +401,8 @@ function createHub(options = {}) {
   function flush(room, full) {
     const events = room.game.drain();
     const t = now();
-    room.busyUntil = Math.max(room.busyUntil, t) + batchMs(events) / room.speed;
+    // 动画随倍速缩短；结算停留（Timing.FIXED）不缩短，免得下一场的选人浮层顶掉结果
+    room.busyUntil = Math.max(room.busyUntil, t) + batchMs(events, room.speed);
     room.touched = t;
     if (room.game.phase === 'over') {
       room.status = 'over';
