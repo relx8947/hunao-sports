@@ -3,6 +3,8 @@
 const crypto = require('crypto');
 const { Game } = require('../game/engine');
 const { decide } = require('../game/ai');
+const { EDITIONS, DEFAULT_EDITION } = require('../game/tracks');
+const editionOf = (value) => (typeof value === 'string' && EDITIONS[value] ? value : DEFAULT_EDITION);
 const { batchMs } = require('../public/timing');
 
 const AI_NAMES = ['阿呆', '小飞', '豆豆', '球球', '闪电', '胖虎', '米粒', '大卫', '可乐', '跳跳'];
@@ -53,7 +55,7 @@ function createHub(options = {}) {
   function autoModes(room) { return room.seats.map((s) => s.autoMode || null); }
   function roomSummary(room) {
     return {
-      code: room.code, host: room.host, status: room.status,
+      code: room.code, host: room.host, status: room.status, edition: room.edition,
       seats: room.seats.map((s, seat) => ({ seat, name: s.name, ai: s.ai, pid: s.pid || null, online: s.ai || isOnline(s.pid, room) })),
       ...(room.mode === 'spectator' ? { mode: room.mode, spectators: memberIds(room).map((id) => ({ id, name: byId.get(id).name, online: isOnline(id, room) })) } : {}),
     };
@@ -72,7 +74,7 @@ function createHub(options = {}) {
       const host = members.includes(room.host) ? byId.get(room.host) : byId.get(members[0]);
       directorySnapshot.push({
         summary: {
-          code: room.code, mode: spectator ? 'spectator' : 'play', status: room.status,
+          code: room.code, mode: spectator ? 'spectator' : 'play', status: room.status, edition: room.edition,
           hostName: host?.name || room.seats.find((s) => !s.ai)?.name || '公开房间',
           playerCount: room.seats.length, aiCount, humanCount,
           onlineCount: online, maxPlayers: 6,
@@ -131,7 +133,7 @@ function createHub(options = {}) {
   }
   function gameMsg(room, p, events = [], full = false) {
     const seat = p ? seatOf(room, p.id) : -1;
-    return { type: 'game', gameId: room.gameId, you: seat, events, snap: room.game.snapshot(seat), full: !!full, auto: autoFlags(room), autoModes: autoModes(room), speed: room.speed, deadlineIn: deadlineIn(room, seat), ...(room.mode === 'spectator' ? { mode: room.mode } : {}) };
+    return { type: 'game', gameId: room.gameId, edition: room.edition, you: seat, events, snap: room.game.snapshot(seat), full: !!full, auto: autoFlags(room), autoModes: autoModes(room), speed: room.speed, deadlineIn: deadlineIn(room, seat), ...(room.mode === 'spectator' ? { mode: room.mode } : {}) };
   }
   function broadcastAuto(room) {
     if (!room.game) return;
@@ -281,11 +283,11 @@ function createHub(options = {}) {
       broadcastAuto(room);
     }
   }
-  function createRoom(ws, mode = 'play', aiCount = 0) {
+  function createRoom(ws, mode = 'play', aiCount = 0, edition = DEFAULT_EDITION) {
     const p = ws.player;
     if (p.room) leaveRoom(ws);
     const room = {
-      code: newCode(), host: p.id, status: 'lobby', seats: mode === 'spectator' ? [] : [{ pid: p.id, name: p.name, ai: false, autoMode: null }],
+      code: newCode(), host: p.id, status: 'lobby', edition: editionOf(edition), seats: mode === 'spectator' ? [] : [{ pid: p.id, name: p.name, ai: false, autoMode: null }],
       ...(mode === 'spectator' ? { mode } : {}), spectators: new Set(),
       clients: new Set(), game: null, gameId: null, timer: null, timing: null, scheduleVersion: 0, busyUntil: 0, touched: now(), speed: 1, deadline: 0,
     };
@@ -358,7 +360,7 @@ function createHub(options = {}) {
     room.status = 'playing';
     // 决策 ID 只在局内递增；跨房间/重开必须用独立的随机局标识隔离旧标签动作。
     room.gameId = crypto.randomUUID();
-    room.game = new Game({ players: room.seats.map((s) => ({ name: s.name, ai: s.ai })), seed: Math.floor(random() * 2 ** 31) });
+    room.game = new Game({ players: room.seats.map((s) => ({ name: s.name, ai: s.ai })), seed: Math.floor(random() * 2 ** 31), edition: room.edition });
     room.busyUntil = now();
     room.timing = null;
     room.game.start();
@@ -561,18 +563,31 @@ function createHub(options = {}) {
     for (const c of viewers(room)) send(c, { type: 'emote', seat, key });
     return null;
   }
-  function quick(ws, n) {
+  // 房主在大厅切换模式（一代/二代/混合）；开局后锁定
+  function setEdition(ws, edition) {
+    if (typeof edition !== 'string' || !EDITIONS[edition]) return '未知的模式';
+    const room = hostRoom(ws);
+    if (typeof room === 'string') return room;
+    if (room.mode === 'spectator') return '观战房间请在创建时选择模式';
+    if (room.status !== 'lobby') return '对局已开始，不能切换模式';
+    room.edition = edition;
+    broadcastRoom(room);
+    return null;
+  }
+  function quick(ws, n, edition) {
     const count = n === undefined ? 3 : n;
     if (!Number.isSafeInteger(count) || count < 2 || count > 5) return 'AI 数量必须是 2–5 的整数';
-    createRoom(ws);
+    if (edition !== undefined && !EDITIONS[edition]) return '未知的模式';
+    createRoom(ws, 'play', 0, edition);
     for (let i = 0; i < count; i++) addAI(ws);
     return startGame(ws);
   }
-  function watch(ws, n) {
+  function watch(ws, n, edition) {
     const count = n === undefined ? 4 : n;
     // 先校验后离开旧房间；非法参数不能退席或生成一个空观战房间。
     if (!Number.isSafeInteger(count) || count < 3 || count > 6) return 'AI 数量必须是 3–6 的整数';
-    return beginGame(createRoom(ws, 'spectator', count));
+    if (edition !== undefined && !EDITIONS[edition]) return '未知的模式';
+    return beginGame(createRoom(ws, 'spectator', count, edition));
   }
   function handle(ws, msg) {
     if (disposed) return '服务已关闭';
@@ -582,7 +597,7 @@ function createHub(options = {}) {
     // 列表查询是纯只读：不 touch、不改成员资格，也不重新调度或 drain 游戏事件。
     if (msg.type === 'listRooms') return listRooms(ws, msg);
     // watch 的人数校验先于 touched 更新，非法创建请求没有任何房间/身份副作用。
-    if (msg.type === 'watch') return watch(ws, msg.ai);
+    if (msg.type === 'watch') return watch(ws, msg.ai, msg.edition);
     if (ws.player) ws.player.touched = now();
     const room = currentRoom(ws);
     if (room) room.touched = now();
@@ -600,13 +615,17 @@ function createHub(options = {}) {
         for (const c of openSockets(p)) send(c, { type: 'hello', token: p.token, id: p.id, name: p.name, room: p.room });
         return null;
       }
-      case 'create': createRoom(ws); return null;
+      case 'create':
+        if (msg.edition !== undefined && !EDITIONS[msg.edition]) return '未知的模式';
+        createRoom(ws, 'play', 0, msg.edition);
+        return null;
+      case 'edition': return setEdition(ws, msg.edition);
       case 'join': return joinRoom(ws, msg.code);
       case 'leave': return leaveRoom(ws);
       case 'addAI': return addAI(ws);
       case 'removeAI': return removeAI(ws, msg.seat);
       case 'start': return startGame(ws);
-      case 'quick': return quick(ws, msg.ai);
+      case 'quick': return quick(ws, msg.ai, msg.edition);
       case 'replay': return replay(ws);
       case 'act': return act(ws, msg);
       case 'auto': return setAuto(ws, msg.on);

@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { launch, state, snapshot } = require('./browser-helper');
 
-const fields = ['code', 'mode', 'status', 'hostName', 'playerCount', 'aiCount', 'humanCount', 'onlineCount', 'maxPlayers', 'spectatorCount', 'onlineSpectatorCount', 'canJoin', 'isMember'].sort();
+const fields = ['code', 'mode', 'status', 'edition', 'hostName', 'playerCount', 'aiCount', 'humanCount', 'onlineCount', 'maxPlayers', 'spectatorCount', 'onlineSpectatorCount', 'canJoin', 'isMember'].sort();
 const button = (page, code) => page.locator(`#roomList button[data-room-code="${code}"]`);
 async function directory(page) {
   const rooms = await page.evaluate(() => window.__testMessages.findLast(message => message.type === 'roomList')?.rooms);

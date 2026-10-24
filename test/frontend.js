@@ -75,7 +75,7 @@ const { decide } = require('../game/ai');
     await page.locator('#refreshRooms').click();
     assert.equal(await listRequests(), beforeRefresh + 1);
     assert.equal(await page.locator('#roomList').getAttribute('aria-busy'), 'true');
-    const entry = (code, extra = {}) => ({ code, mode: 'play', status: 'lobby', hostName: '一起开赛', playerCount: 6, aiCount: 3, humanCount: 3, onlineCount: 3, maxPlayers: 6, spectatorCount: 0, onlineSpectatorCount: 0, canJoin: true, isMember: false, ...extra });
+    const entry = (code, extra = {}) => ({ code, mode: 'play', status: 'lobby', edition: 'v1', hostName: '一起开赛', playerCount: 6, aiCount: 3, humanCount: 3, onlineCount: 3, maxPlayers: 6, spectatorCount: 0, onlineSpectatorCount: 0, canJoin: true, isMember: false, ...extra });
     const xssName = `<img src=x onerror="window.__roomXSS=1"> & " ' <script>window.__roomXSS=1</script>`;
     const directoryRows = [
       entry('WAIT', { hostName: '昵称很长也不会把手机屏幕挤到横向滚动的房主' }),
