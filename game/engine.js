@@ -21,6 +21,8 @@ function mulberry32(seed) {
 const PW_PER_TURN = 30; // 同一技能每回合生效次数兜底上限
 const PW_BUDGET = 160; // 每回合技能生效总预算，兜底防止连锁爆炸
 const MAX_TURNS = 240; // 单场回合上限兜底
+// 仅用于前端/服务端动画节奏：AI 座位回合内的这些事件带 ai 标记，播放更快；不参与任何结算。
+const AI_PACED = new Set(['turn', 'recover', 'roll', 'calc', 'power', 'move']);
 
 class Game {
   constructor({ players, seed = Date.now() }) {
@@ -94,6 +96,7 @@ class Game {
     // 事件可能包含 results/champions 等内部数组，消费者不得反向改写对局。
     ev = structuredClone(ev);
     ev.seq = ++this.evSeq;
+    if (AI_PACED.has(ev.t) && this.phase === 'race' && this.curSeat != null && this.players[this.curSeat]?.ai) ev.ai = true;
     this.events.push(ev);
     if (ev.text) {
       this.log.push({ seq: ev.seq, text: ev.text, race: this.raceNo });
@@ -375,7 +378,8 @@ class Game {
   }
 
   /* ================= 技能生效 & 蹭蹭狗 ================= */
-  *pw(r, key, times = 1) {
+  // targets 只给前端画「谁影响了谁」，不参与结算
+  *pw(r, key, times = 1, targets) {
     yield* this.refreshCopies();
     for (let i = 0; i < times; i++) {
       const k = `${r.rid}:${key}`;
@@ -386,7 +390,7 @@ class Game {
       const looped = this.pwSeen.has(sig);
       this.pwSeen.add(sig);
       if (c > PW_PER_TURN || ++this.pwTotal > PW_BUDGET) return;
-      this.emit({ t: 'power', rid: r.rid, key });
+      this.emit({ t: 'power', rid: r.rid, key, ...(targets && targets.length ? { targets: targets.map((o) => o.rid) } : {}) });
       const scoochers = this.holders('scoocher').filter((s) => s !== r);
       if (looped && scoochers.length) {
         if (!this.loopNoted) { this.loopNoted = true; this.emit({ t: 'info', text: '触发了无限循环，按规则走完一遍就停' }); }
@@ -472,7 +476,7 @@ class Game {
       shoved.push({ racer: o, to, baby });
     }
     if (!shoved.length) return;
-    yield* this.pw(r, 'hugebaby');
+    yield* this.pw(r, 'hugebaby', 1, shoved.map((x) => x.racer));
     for (const { racer: o, to, baby } of shoved) {
       if (baby) yield* this.pw(baby, 'hugebaby');
       if (this.active(o) && o.pos === to) yield* this.afterStop(o, from, to, { passed: [], moved: false, sharedBefore: [] });
@@ -506,7 +510,7 @@ class Game {
         const st = this.holders('stickler').find((s) => s !== r);
         if (st) {
           this.emit({ t: 'blocked', rid: r.rid, by: st.rid, text: `${this.nm(st)}：「其实吧……步数不对，不能冲线。」${this.nm(r)} 原地不动` });
-          yield* this.pw(st, 'stickler');
+          yield* this.pw(st, 'stickler', 1, [r]);
           return;
         }
       }
@@ -516,7 +520,7 @@ class Game {
       const baby = this.babyPushed;
       if (final === from) {
         this.emit({ t: 'blocked', rid: r.rid, text: `${this.nm(r)} 被巨婴挡住，原地不动` });
-        if (baby) yield* this.pw(baby, 'hugebaby');
+        if (baby) yield* this.pw(baby, 'hugebaby', 1, [r]);
         return;
       }
       if (final !== pos) {
@@ -536,7 +540,7 @@ class Game {
       if (skipped) yield* this.pw(r, 'leaptoad', skipped);
       if (baby) {
         this.emit({ t: 'info', rid: baby.rid, text: `${this.nm(baby)} 太大了，${this.nm(r)} 只能停在它身后` });
-        yield* this.pw(baby, 'hugebaby');
+        yield* this.pw(baby, 'hugebaby', 1, [r]);
       }
       yield* this.afterStop(r, from, final, { passed, moved: true, sharedBefore });
     } finally {
@@ -564,7 +568,7 @@ class Game {
     const baby = this.babyPushed;
     r.pos = final;
     this.emit({ t: 'warp', rid: r.rid, from, to: final, text: why ? `${this.nm(r)} ${why}` : undefined });
-    if (baby) yield* this.pw(baby, 'hugebaby');
+    if (baby) yield* this.pw(baby, 'hugebaby', 1, [r]);
     if (final !== from) yield* this.afterStop(r, from, final, { passed: [], moved: false, sharedBefore: [] });
   }
 
@@ -601,7 +605,7 @@ class Game {
       add(this.seatOrder(b.seat), function* () {
         if (!this.active(r) || !this.active(b)) return;
         this.trip(r, `超过了${this.nm(b)}`);
-        yield* this.pw(b, 'banana');
+        yield* this.pw(b, 'banana', 1, [r]);
       });
     }
     // 半人马：被我超过的人后退 2
@@ -611,7 +615,7 @@ class Game {
           if (!this.active(o) || !this.active(r)) continue;
           this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 一记后蹄踢飞 ${this.nm(o)}` });
           yield* this.move(o, -2, 'power');
-          yield* this.pw(r, 'centaur');
+          yield* this.pw(r, 'centaur', 1, [o]);
         }
       });
     }
@@ -623,7 +627,7 @@ class Game {
         const hit = this.at(final, r);
         if (r.pos !== final || !hit.length) return;
         for (const o of hit) this.trip(o, `和${this.nm(r)}同格`);
-        yield* this.pw(r, 'babayaga');
+        yield* this.pw(r, 'babayaga', 1, hit);
       });
     }
     for (const by of here) {
@@ -631,7 +635,7 @@ class Game {
       add(this.seatOrder(by.seat), function* () {
         if (r.pos !== final || by.pos !== final || !this.active(by)) return;
         this.trip(r, `停到了${this.nm(by)}的格子`);
-        yield* this.pw(by, 'babayaga');
+        yield* this.pw(by, 'babayaga', 1, [r]);
       });
     }
     // 大嘴怪
@@ -640,7 +644,7 @@ class Game {
         const hit = this.at(final, r);
         if (r.pos !== final || hit.length !== 1 || !this.active(r)) return;
         yield* this.eliminate(hit[0], r);
-        yield* this.pw(r, 'mouth');
+        yield* this.pw(r, 'mouth', 1, [hit[0]]);
       });
     }
     // 浪漫鳄：恰好两人同格
@@ -764,7 +768,7 @@ class Game {
         this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 为最后一名加油！` });
         for (const l of ls) yield* this.move(l, 2, 'power');
         yield* this.move(r, 1, 'power');
-        yield* this.pw(r, 'cheerleader');
+        yield* this.pw(r, 'cheerleader', 1, ls.filter((l) => l !== r));
       }
     }
     if (this.active(r) && this.has(r, 'loser')) {
@@ -782,7 +786,7 @@ class Game {
         const o = this.byRid(v);
         if (v !== '_no' && this.active(o) && this.active(r)) {
           yield* this.warp(o, r.pos, `被${this.nm(r)}催眠，瞬移过来`);
-          yield* this.pw(r, 'hypnotist');
+          yield* this.pw(r, 'hypnotist', 1, [o]);
         }
       }
     }
@@ -830,7 +834,7 @@ class Game {
       const a = r.pos, b = o.pos;
       r.pos = b; o.pos = a;
       this.emit({ t: 'swap', a: r.rid, b: o.rid, pa: b, pb: a, text: `${this.nm(r)} 和 ${this.nm(o)} 乾坤大挪移，交换了位置` });
-      yield* this.pw(r, 'flipflop');
+      yield* this.pw(r, 'flipflop', 1, [o]);
       yield* this.afterStop(r, a, b, { passed: [], moved: false, sharedBefore: [] });
       yield* this.afterStop(o, b, a, { passed: [], moved: false, sharedBefore: [] });
       return;
@@ -888,7 +892,7 @@ class Game {
           skip = true;
           this.emit({ t: 'info', rid: w.rid, text: `${this.nm(w)} 扭一扭：${this.nm(r)} 这步作废` });
           yield* this.move(w, 1, 'power');
-          yield* this.pw(w, 'inchworm');
+          yield* this.pw(w, 'inchworm', 1, [r]);
         }
         const sk = this.holders('skipper')[0];
         if (sk && this.active(sk)) {
@@ -934,8 +938,8 @@ class Game {
 
     // ---- 加减值 ----
     const mods = [];
-    for (const c of this.holders('coach')) if (c.pos === r.pos) { mods.push({ label: '教练', v: 1 }); yield* this.pw(c, 'coach'); }
-    for (const gk of this.holders('gunk')) if (gk !== r) { mods.push({ label: '黏液怪', v: -1 }); yield* this.pw(gk, 'gunk'); }
+    for (const c of this.holders('coach')) if (c.pos === r.pos) { mods.push({ label: '教练', v: 1 }); yield* this.pw(c, 'coach', 1, c === r ? [] : [r]); }
+    for (const gk of this.holders('gunk')) if (gk !== r) { mods.push({ label: '黏液怪', v: -1 }); yield* this.pw(gk, 'gunk', 1, [r]); }
     if (this.has(r, 'hare')) { mods.push({ label: '野兔', v: 2 }); yield* this.pw(r, 'hare'); }
     if (this.has(r, 'blimp')) { const v = startPos < this.track.secondCorner ? 3 : -1; mods.push({ label: '飞艇', v }); yield* this.pw(r, 'blimp'); }
     if (partyBonus) mods.push({ label: '派对', v: partyBonus });
