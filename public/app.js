@@ -1634,6 +1634,8 @@
   }
   function hideOverlay(instant) {
     const ov = $('#overlay');
+    // 单场结算没停够时，下一场开场等非用户触发的收起先排队（用户点「继续 / 看看赛道」会先清掉停留）
+    if (!instant && overlayKind === 'results' && holdForResults(() => { if (overlayKind === 'results') hideOverlay(); })) return;
     overlayKind = null;
     overlayDecision = null;
     if (ov.hidden) return;
@@ -1758,7 +1760,7 @@
     flipRows(rowEls, 1500 + rowEls.length * 70);
     const mine = st.find((s) => s.seat === you);
     if (mine && mine.finished && animOk()) animationLater(() => haptic('finish'), 400);
-    $('#ovClose').onclick = () => { Sound.click(); hideOverlay(); };
+    $('#ovClose').onclick = () => { Sound.click(); resultsHold = 0; clearTimeout(overlayDeferTimer); hideOverlay(); };
     const next = $('#ovNext');
     const cdEl = $('.cd', next);
     next.style.setProperty('--wait', `${Math.min(RESULTS_NEXT_AT, dwell)}ms`);
@@ -1968,7 +1970,6 @@
     if (document.hidden) return false;
     try { return navigator.vibrate(pattern); } catch (e) { return false; }
   }
-  window.HN_haptic = haptic; // 事件播放区（WP-A）落骰、被撞、冲线时调用
   function nudge(el) {
     if (!el || reducedMotion.matches) return;
     el.classList.remove('wpc-nudge');
@@ -2203,6 +2204,10 @@
       sub = `${what} · 剩下的交给 AI`;
       opts = `<button class="btn primary wpc-skip ${sending ? 'is-loading' : ''}" data-x="skip" ${sending || connection !== 'ready' ? 'disabled' : ''}><span class="ico">${icon('bolt')}</span><span class="lbl">${sending ? '正在快进…' : '快进到结算'}</span></button>`;
     } else { title = '你的选手跑完了'; sub = `${what} · 等其他真人选手跑完后可以快进`; }
+    // AI 每走一步都会重排底栏：内容没变就不重建，避免提示条反复弹入
+    const key = `${gameId}:${vs.raceNo}:${title}:${sub}:${sending}:${connection}`;
+    if (dock.dataset.wpcDone === key && $('.wpc-done', dock)) return;
+    dock.dataset.wpcDone = key;
     dock.innerHTML = promptHtml({ seat: you, mine: false, title, sub, opts, cls: `wpc-done ${boosting ? 'boost' : ''}` });
     const b = $('#dock [data-x="skip"]');
     if (!b) return;
