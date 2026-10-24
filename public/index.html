@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="connectionStatus" class="connection-status" role="status" aria-live="polite">正在连接服务器…</div>
+  <div id="connectionStatus" class="connection-status" role="status" aria-live="polite" hidden>正在连接服务器…</div>
   <div id="app">
     <!-- 首页 -->
     <section id="home" class="screen">
@@ -27,7 +27,7 @@
         <div class="home-card card">
           <label class="field">
             <span>你的昵称</span>
-            <input id="nameInput" maxlength="12" placeholder="起个响亮的名字" autocomplete="off">
+            <input id="nameInput" maxlength="12" placeholder="起个响亮的名字" autocomplete="nickname" enterkeyhint="done">
           </label>
           <div class="quick-row">
             <button id="quickBtn" class="btn primary big" data-network disabled>
@@ -54,10 +54,11 @@
           <div class="join-row">
             <button id="createBtn" class="btn" data-network disabled><span class="ico" data-icon="users"></span>创建房间</button>
             <div class="code-join">
-              <input id="codeInput" maxlength="4" placeholder="房间码" autocomplete="off" spellcheck="false">
+              <input id="codeInput" maxlength="4" placeholder="房间码" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" aria-label="房间码" aria-describedby="codeError">
               <button id="joinBtn" class="btn" data-network disabled>加入</button>
             </div>
           </div>
+          <p id="codeError" class="code-error" role="alert" hidden></p>
         </div>
         <section class="room-directory card" aria-labelledby="roomDirectoryTitle" aria-describedby="roomDirectoryHint">
           <div class="room-directory-head">
@@ -65,6 +66,7 @@
             <div class="pager" id="roomPager" hidden></div>
             <button id="refreshRooms" class="btn small" data-network disabled><span class="ico" data-icon="swirl" aria-hidden="true"></span>刷新</button>
           </div>
+          <div id="roomNotice" class="room-notice" role="alert" hidden></div>
           <p id="roomDirectoryHint" class="room-directory-hint">只展示当前有成员在线的房间，点一下加入或观看；也可用房间码邀请朋友。</p>
           <p id="roomListStatus" class="room-list-status" role="status" aria-live="polite">正在加载公开房间…</p>
           <ul id="roomList" class="room-list" aria-label="公开房间列表" aria-busy="true" data-fit></ul>
@@ -85,8 +87,8 @@
         <button class="icon-btn sound-toggle lobby-sound" data-sound type="button"></button>
         <div class="room-head">
           <div class="room-label">房间码</div>
-          <div class="room-code" id="roomCode">----</div>
-          <button class="btn small" id="copyLink"><span class="ico" data-icon="link"></span>复制邀请链接</button>
+          <div class="room-code" id="roomCode" aria-live="polite">----</div>
+          <button class="btn small" id="copyLink" type="button"><span class="ico" data-icon="link" aria-hidden="true"></span><span id="copyLinkLabel">复制邀请链接</span></button>
           <div class="invite-link" id="inviteLinkBox" hidden>
             <label for="inviteLinkInput">邀请链接</label>
             <input id="inviteLinkInput" readonly aria-describedby="inviteLinkTip">
@@ -98,7 +100,7 @@
           <button class="btn" id="addAI"><span class="ico" data-icon="robot"></span>加一个 AI</button>
           <button class="btn primary big" id="startBtn"><span class="ico" data-icon="flag"></span>开始比赛</button>
         </div>
-        <p class="lobby-tip" id="lobbyTip">把房间码发给朋友，人不够可以加 AI。3-6 人开赛。</p>
+        <p class="lobby-tip" id="lobbyTip" aria-live="polite">把房间码发给朋友，人不够可以加 AI。3-6 人开赛。</p>
       </div>
     </section>
 
@@ -162,15 +164,15 @@
 
   <div class="overlay" id="overlay" hidden></div>
   <div class="modal" id="modal" hidden></div>
-  <div class="toasts" id="toasts"></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
   <div class="tip" id="tip" hidden></div>
   <canvas id="confetti" aria-hidden="true"></canvas>
 
-  <script src="timing.js"></script>
-  <script src="art.js"></script>
-  <script src="sound.js"></script>
-  <script src="music.js"></script>
-  <script src="racers-data.js"></script>
-  <script src="app.js"></script>
+  <script src="timing.js" defer></script>
+  <script src="art.js" defer></script>
+  <script src="sound.js" defer></script>
+  <script src="music.js" defer></script>
+  <script src="racers-data.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>

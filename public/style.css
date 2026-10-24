@@ -1234,3 +1234,131 @@ body { overflow: hidden; }
   .logo-text { font-size: clamp(28px, min(11dvh, 5.4vw), 64px); }
 }
 .room-directory-head h2 .ico { flex: none; }
+
+/* === WP-D 首页房间与异常 === */
+/* 连接提示条：贴在顶栏（对局）/离开按钮（房间）下方，首页在最上方的标志区；只有「立即重试」可点 */
+.connection-status {
+  top: max(calc(var(--wpd-top, 0px) + 6px), calc(10px + env(safe-area-inset-top)));
+  padding: 7px 10px 7px 8px; border-width: 2.5px; border-radius: 16px;
+  opacity: 0; transform: translateY(-8px) scale(.96); transform-origin: 50% 0;
+  transition: opacity .22s ease, transform .32s var(--ease), background .25s;
+}
+.connection-status:not([hidden]) { display: flex; align-items: center; gap: 8px; }
+.connection-status.cs-on { opacity: 1; transform: none; }
+.connection-status .cs-ico { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--ink); background: var(--yellow); display: flex; align-items: center; justify-content: center; padding: 3px; }
+.connection-status .cs-ico .icon { width: 100%; height: 100%; }
+.connection-status[data-kind="wait"] .cs-ico .icon { animation: wpdSpin 1.1s linear infinite; }
+.connection-status[data-kind="lost"] { background: #FFE9E4; }
+.connection-status[data-kind="lost"] .cs-ico { background: var(--red); color: #fff; animation: wpdBlink 1.6s ease-in-out infinite; }
+.connection-status[data-kind="back"] { background: #E3F7EC; }
+.connection-status[data-kind="back"] .cs-ico { background: var(--green); color: #fff; animation: pop .4s var(--ease) both; }
+.connection-status .cs-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.connection-status .cs-main { font-size: 13px; font-weight: 900; }
+.connection-status .cs-sub { font-size: 11.5px; font-weight: 700; color: var(--ink2); }
+.connection-status .cs-sub[hidden], .connection-status .cs-retry[hidden] { display: none; }
+.connection-status .cs-retry {
+  pointer-events: auto; flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 12px 0 9px;
+  border: 2px solid var(--ink); border-radius: 99px; background: var(--ink); color: #fff; font: inherit; font-size: 13px; font-weight: 900;
+  box-shadow: var(--shadow-sm); cursor: pointer; animation: pop .35s var(--ease) both; transition: transform .15s var(--ease);
+}
+.connection-status .cs-retry .icon { width: 16px; height: 16px; }
+.connection-status .cs-retry:active { transform: translate(1px, 1px); box-shadow: none; }
+@media (pointer: coarse) { .connection-status .cs-retry { min-height: 40px; } }
+@keyframes wpdSpin { to { transform: rotate(360deg); } }
+@keyframes wpdBlink { 0%, 100% { transform: none; } 50% { transform: scale(.88); } }
+
+/* toast：首页/房间在底部居中，对局里排在顶栏（和连接提示条）下面，不挡输入框、标题和操作栏 */
+body:not([data-screen="game"]) .toasts { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); flex-direction: column; }
+body[data-screen="game"] .toasts { top: calc(max(calc(var(--wpd-top, 0px) + 6px), calc(10px + env(safe-area-inset-top))) + var(--wpd-cs-h, 0px)); }
+.toast.wpd-toast {
+  --toast-ms: 2600ms; --toast-y: -12px;
+  display: flex; align-items: center; gap: 8px; max-width: min(440px, calc(100vw - 32px)); padding: 9px 16px; line-height: 1.4; text-align: left;
+  animation: wpdToastIn .32s var(--ease) both, wpdToastOut .3s ease-in calc(var(--toast-ms) - 300ms) forwards;
+}
+body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
+.toast.wpd-toast .t-ico { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #fff; border: 2px solid var(--ink); padding: 2px; display: flex; }
+.toast.wpd-toast .t-ico .icon { width: 100%; height: 100%; }
+@keyframes wpdToastIn { from { opacity: 0; transform: translateY(var(--toast-y)) scale(.96); } }
+@keyframes wpdToastOut { to { opacity: 0; transform: translateY(var(--toast-y)) scale(.97); } }
+
+/* 房间码输错：输入框红边 + 抖一下，下方行内说明下一步（占掉分隔线的位置，首页总高基本不变） */
+#codeInput[aria-invalid="true"] { border-color: var(--red); background: #FFF1EE; box-shadow: 0 0 0 3px rgba(242, 85, 60, .2); }
+#codeInput.wpd-shake { animation: wpdShake .42s ease-in-out; }
+@keyframes wpdShake { 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+.home-card.wpd-err .divider { display: none; }
+.code-error:not([hidden]) {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 7px 10px; border: 2px solid var(--red); border-radius: 12px;
+  background: #FFF1EE; font-size: 12.5px; line-height: 1.4; color: var(--ink); animation: wpdDrop .3s var(--ease) both;
+}
+.code-error .ce-ico { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--red); }
+.code-error .ce-ico .icon { width: 100%; height: 100%; }
+.code-error b { font-weight: 900; margin-right: 6px; }
+.code-error small { font-size: 12px; font-weight: 700; color: var(--ink2); }
+@keyframes wpdDrop { from { opacity: 0; transform: translateY(-6px); } }
+
+/* 打开失效链接 / 目录里房间刚关闭：公开房间上方的行内说明卡，有出路按钮 */
+.room-notice:not([hidden]) {
+  display: flex; align-items: center; gap: 10px; flex: none; margin-top: 10px; padding: 9px 10px 9px 12px;
+  border: 2.5px solid var(--ink); border-radius: 14px; background: #FFF6DC; box-shadow: var(--shadow-sm);
+  animation: wpdDrop .35s var(--ease) both;
+}
+.room-notice .rn-ico { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--ink); background: var(--red); color: #fff; padding: 4px; display: flex; transform: rotate(-6deg); }
+.room-notice .rn-ico .icon { width: 100%; height: 100%; }
+.room-notice .rn-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.room-notice .rn-text b { font-size: 14px; font-weight: 900; }
+.room-notice .rn-text small { font-size: 12px; font-weight: 700; color: var(--ink2); }
+.room-notice .rn-acts { flex: none; display: flex; align-items: center; gap: 6px; }
+.room-notice .rn-acts .btn { white-space: nowrap; }
+.room-notice .rn-acts .btn .icon { width: 16px; height: 16px; }
+.room-notice .rn-close { width: 36px; height: 36px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); padding: 7px; display: flex; cursor: pointer; }
+.room-notice .rn-close .icon { width: 100%; height: 100%; }
+@media (max-width: 560px) {
+  .room-notice:not([hidden]) { flex-wrap: wrap; row-gap: 6px; padding: 8px 8px 8px 10px; }
+  .room-notice .rn-text { flex-basis: calc(100% - 86px); }
+  .room-notice .rn-acts .btn { min-height: 36px; padding: 6px 10px; font-size: 13px; }
+  .room-notice .rn-close { width: 40px; height: 40px; }
+}
+#home[data-tight="3"] .room-notice:not([hidden]), #home[data-tight="4"] .room-notice:not([hidden]) { margin-top: 6px; padding-top: 6px; padding-bottom: 6px; }
+#home[data-tight="4"] .room-notice .rn-text small { display: none; }
+
+/* 房间：自己的座位高亮；受邀者在座位上直接起名，改过名的人点铅笔随时再改 */
+.seat.wpd-me { background: #FFFBEF; }
+.seat .wpd-rename {
+  position: absolute; top: 6px; left: 6px; width: 32px; height: 32px; padding: 6px; display: flex; border: 2px solid var(--ink); border-radius: 9px;
+  background: var(--paper); color: var(--ink); cursor: pointer; transition: transform .15s var(--ease), background .15s;
+}
+.seat .wpd-rename:hover { background: var(--yellow); transform: rotate(-8deg); }
+.seat .wpd-rename .icon { width: 100%; height: 100%; }
+@media (pointer: coarse) { .seat .wpd-rename { width: 40px; height: 40px; padding: 9px; top: 2px; left: 2px; } }
+.wpd-name { position: relative; display: block; width: 100%; max-width: 168px; margin: 0 auto; }
+.wpd-name input {
+  width: 100%; min-width: 0; height: 34px; padding: 0 20px 0 6px; border: 2px dashed var(--ink); border-radius: 10px; background: #FFF4CF;
+  font: inherit; font-size: 15px; font-weight: 900; text-align: center; color: var(--ink); outline: none; transition: background .15s, box-shadow .15s, border-color .15s;
+}
+.wpd-name input::placeholder { color: var(--ink3); font-weight: 800; }
+.wpd-name input:focus { border-style: solid; background: #fff; box-shadow: 0 0 0 4px rgba(255, 197, 61, .5); }
+.wpd-name .icon { position: absolute; right: 5px; top: 50%; width: 13px; height: 13px; margin-top: -6.5px; color: var(--ink2); pointer-events: none; }
+@media (pointer: coarse) { .wpd-name input { font-size: 16px; height: 38px; } }
+.seat .wpd-name-tag { color: #C2410C; font-weight: 900; }
+.seat.wpd-unnamed { animation: pop .4s var(--ease) both, wpdNudge 2.4s ease-in-out .8s infinite; }
+@keyframes wpdNudge { 0%, 100% { box-shadow: var(--shadow-sm); } 50% { box-shadow: var(--shadow-sm), 0 0 0 5px rgba(255, 197, 61, .6); } }
+#copyLink { transition: background .2s, color .2s, transform .15s var(--ease); }
+#copyLink.wpd-done { background: var(--green); color: #fff; }
+#copyLink .ico .icon { width: 100%; height: 100%; }
+
+/* 首页页脚的声音开关：和左边的文字链接同一套样式，图标 + 档位短标签（音乐 / 音效 / 静音） */
+.home-foot .sound-toggle { gap: 6px; padding-left: 8px; padding-right: 10px; }
+.home-foot .sound-toggle[data-mode="off"] { color: var(--ink3); }
+.home-foot .sound-toggle .sound-label { white-space: nowrap; }
+
+/* 公网 nginx 会在首页页脚后插入备案号（.icp-beian）：固定在首页底部留白里，不占布局高度 */
+#home .icp-beian {
+  position: fixed; left: 50%; bottom: env(safe-area-inset-bottom); transform: translateX(-50%); z-index: 1;
+  height: clamp(10px, 2.6dvh, 28px); display: flex; align-items: center; margin: 0;
+  font-size: clamp(9px, 2dvh, 12px); line-height: 1; white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connection-status, .toast.wpd-toast, .code-error, .room-notice, #codeInput.wpd-shake, .seat.wpd-unnamed { animation: none !important; transition: none !important; }
+  .connection-status .cs-ico, .connection-status .cs-ico .icon { animation: none !important; }
+}
