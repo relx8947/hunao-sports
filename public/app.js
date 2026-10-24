@@ -467,7 +467,7 @@
   function fitRooms() {
     const home = $('#home'), inner = $('.home-inner', home), list = $('#roomList');
     if (home.hidden) return;
-    for (let level = 0; level <= 3; level++) {
+    for (let level = 0; level <= 4; level++) {
       home.dataset.tight = level;
       paginate('rooms', list, () => $$('#roomList .room-list-item'), $('#roomPager'));
       if (list.scrollHeight <= list.clientHeight + 1 && inner.scrollHeight <= inner.clientHeight + 1) break;

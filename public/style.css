@@ -1217,3 +1217,15 @@ body { overflow: hidden; }
 @media (min-aspect-ratio: 5/4) and (max-height: 560px) {
   .lobby-sound { position: static; grid-column: 1; grid-row: 1; justify-self: end; align-self: start; }
 }
+
+/* 首页第 4 级收紧：极矮的竖屏（如 375×560）里还要放下一间公开房间 */
+#home[data-tight="4"] .parade, #home[data-tight="4"] .logo-badge, #home[data-tight="4"] .tagline, #home[data-tight="4"] .home-card .divider,
+#home[data-tight="4"] .room-list-meta, #home[data-tight="4"] .room-list-state, #home[data-tight="4"] .room-list-note, #home[data-tight="4"] #roomDirectoryHint { display: none; }
+#home[data-tight="4"] .logo-text { font-size: clamp(26px, 6dvh, 44px); }
+#home[data-tight="4"] .home-inner { gap: 4px; }
+#home[data-tight="4"] .home-card { gap: 6px; padding: 8px 10px; }
+#home[data-tight="4"] .watch-entry { padding-top: 6px; }
+#home[data-tight="4"] .home-foot .link { min-height: 36px; padding-top: 2px; padding-bottom: 2px; }
+#home[data-tight="4"] .room-directory { padding: 8px 10px; }
+#home[data-tight="4"] .room-list { margin-top: 4px; }
+#home[data-tight="4"] .room-list-item { padding: 5px 8px; }
