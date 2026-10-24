@@ -28,6 +28,81 @@
     for (const el of $$('[data-icon]', root)) if (!el.dataset.filled) { el.innerHTML = icon(el.dataset.icon); el.dataset.filled = '1'; }
   }
 
+  /* ================= 一屏分页 ================= */
+  // 页面不滚动：集合放不下时按页显示。容器高度由布局限定（flex 收缩），
+  // 二分找出真正放得下的每页条数；左右按钮、左右滑动、方向键都能翻页。
+  const pagers = {};
+  function paginate(key, box, getItems, host) {
+    const st = pagers[key] || (pagers[key] = { anchor: 0, dir: 0 });
+    st.run = () => paginate(key, box, getItems, host);
+    st.box = box;
+    if (!box.offsetParent) return st; // 还没显示出来量不了尺寸，显示后由 refitPagers 补排
+    const items = getItems();
+    const n = items.length;
+    const apply = (per) => {
+      const page = Math.floor(Math.min(st.anchor, Math.max(0, n - 1)) / per);
+      items.forEach((el, i) => { el.hidden = Math.floor(i / per) !== page; });
+      return page;
+    };
+    const fits = () => box.scrollHeight <= box.clientHeight + 1;
+    let per = Math.max(1, n);
+    apply(per);
+    if (n > 1 && !fits()) {
+      let lo = 1, hi = n - 1;
+      while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); apply(mid); if (fits()) lo = mid; else hi = mid - 1; }
+      per = lo;
+    }
+    const page = apply(per);
+    const pages = Math.max(1, Math.ceil(n / per));
+    st.anchor = page * per;
+    st.per = per; st.pages = pages; st.page = page;
+    st.h = box.clientHeight;
+    // 旁边的提示栏、状态条变高变矮时容器会被挤压/放开，尺寸变了就重新分页
+    if (!st.ro && window.ResizeObserver) {
+      st.ro = new ResizeObserver(() => {
+        if (!box.isConnected || !box.offsetParent || Math.abs(box.clientHeight - st.h) < 2) return;
+        cancelAnimationFrame(st.raf);
+        st.raf = requestAnimationFrame(() => st.run());
+      });
+      st.ro.observe(box);
+    }
+    if (st.dir) {
+      box.classList.remove('pg-in-next', 'pg-in-prev');
+      void box.offsetWidth;
+      box.classList.add(st.dir > 0 ? 'pg-in-next' : 'pg-in-prev');
+      st.dir = 0;
+    }
+    if (host) {
+      host.hidden = pages <= 1;
+      host.innerHTML = pages <= 1 ? '' : `<button class="pg-btn" data-pg="-1" aria-label="上一页"${page === 0 ? ' disabled' : ''}>${icon('arrowL')}</button><span class="pg-no" aria-live="polite">${page + 1} / ${pages}</span><button class="pg-btn" data-pg="1" aria-label="下一页"${page >= pages - 1 ? ' disabled' : ''}>${icon('arrowR')}</button>`;
+      host.onclick = (e) => { const b = e.target.closest('[data-pg]'); if (b && !b.disabled) turnPage(key, Number(b.dataset.pg)); };
+    }
+    if (!box.dataset.swipe) {
+      box.dataset.swipe = '1';
+      let sx = 0, sy = 0, swiped = false;
+      box.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; swiped = false; });
+      box.addEventListener('pointerup', (e) => {
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5 && (pagers[key].pages || 1) > 1) { swiped = true; turnPage(key, dx < 0 ? 1 : -1); }
+      });
+      // 滑动翻页后不要把这次手势当成点击（选秀卡牌本身是按钮）
+      box.addEventListener('click', (e) => { if (swiped) { swiped = false; e.stopPropagation(); e.preventDefault(); } }, true);
+    }
+    return st;
+  }
+  function turnPage(key, d) {
+    const st = pagers[key];
+    if (!st || !st.run) return;
+    const page = Math.max(0, Math.min(st.pages - 1, st.page + d));
+    if (page === st.page) return;
+    st.anchor = page * st.per; st.dir = d;
+    Sound.click();
+    st.run();
+  }
+  function refitPagers() {
+    for (const st of Object.values(pagers)) if (st.run && st.box && st.box.isConnected && st.box.offsetParent) st.run();
+  }
+
   /* ================= 状态 ================= */
   let ws = null;
   let me = store.get('hn_me', {});
@@ -320,8 +395,9 @@
   function showScreen(id) {
     for (const s of ['home', 'lobby', 'game']) $(`#${s}`).hidden = s !== id;
     document.body.dataset.screen = id;
+    if (id === 'home') requestAnimationFrame(fitRooms);
     renderSpectatorStatus();
-    if (id === 'game') requestAnimationFrame(checkLayout);
+    if (id === 'game') requestAnimationFrame(() => { checkLayout(); refitPagers(); });
   }
 
   /* ---------- 首页公开房间（只读订阅，不驱动屏幕或对局） ---------- */
@@ -378,6 +454,17 @@
         <div class="room-list-action"><button class="btn small${watch ? '' : ' primary'}" data-room-code="${esc(r.code)}" aria-label="${esc(`${label}：${r.hostName}，房间 ${r.code}`)}"${!usable || !r.canJoin ? ' disabled' : ''}>${esc(label)}</button><span class="room-list-note">${esc(note)}</span></div>
       </li>`;
     }).join('');
+    fitRooms();
+  }
+  // 首页一屏：公开房间至少要放下一间，放不下就逐级收起装饰（徽章、游行队伍、标语、缩小标志）
+  function fitRooms() {
+    const home = $('#home'), inner = $('.home-inner', home), list = $('#roomList');
+    if (home.hidden) return;
+    for (let level = 0; level <= 3; level++) {
+      home.dataset.tight = level;
+      paginate('rooms', list, () => $$('#roomList .room-list-item'), $('#roomPager'));
+      if (list.scrollHeight <= list.clientHeight + 1 && inner.scrollHeight <= inner.clientHeight + 1) break;
+    }
   }
 
   /* ---------- 首页 ---------- */
@@ -567,17 +654,10 @@
     return '';
   }
 
-  function buildBoard(trackKey) {
-    if (!trackKey) return;
-    const board = $('#board');
-    board.classList.toggle('tall', layout === 'tall');
-    if (builtTrack === `${trackKey}:${layout}`) return;
-    builtTrack = `${trackKey}:${layout}`;
-    const [W, H] = VB();
-    const svg = $('#trackSvg');
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  // 赛道 SVG：对局棋盘和地图图鉴共用同一套画法（wide = 电脑/横屏，tall = 手机竖屏）
+  function trackSvgMarkup(trackKey, lay) {
     const wild = trackKey === 'wild';
-    const G = geo();
+    const G = GEO[lay];
     const { bed, inf } = G;
     let s = `<defs><pattern id="chk" width="12.5" height="12.5" patternUnits="userSpaceOnUse"><rect width="12.5" height="12.5" fill="#fff"/><rect width="6.25" height="6.25" fill="${INK}"/><rect x="6.25" y="6.25" width="6.25" height="6.25" fill="${INK}"/></pattern></defs>`;
     s += `<rect x="${bed.x}" y="${bed.y}" width="${bed.w}" height="${bed.h}" rx="${bed.rx}" fill="${INK}"/>`;
@@ -596,14 +676,14 @@
       }
     }
     for (let p = 0; p < FIN; p++) {
-      const r = cellRect(p);
+      const r = G.rect(p);
       let fill = TRACK_COLS[(p - 1 + 4) % 4];
       if (p > 0 && p % 5 === 0) fill = '#F2553C';
       if (p === 0) fill = '#4D9DF7';
       s += `<g class="cell" data-p="${p}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="9" fill="${fill}" stroke="${INK}" stroke-width="2.5"/>`;
       s += `<rect x="${r.x + 4}" y="${r.y + 4}" width="${r.w - 8}" height="${Math.min(18, r.h * 0.28)}" rx="6" fill="#fff" opacity=".22"/>`;
       if (p === 0) {
-        s += `<text x="${r.x + r.w / 2}" y="${r.y + r.h / 2 + (layout === 'wide' ? 12 : 7)}" font-size="${layout === 'wide' ? 34 : 19}" font-weight="900" text-anchor="middle" fill="#F2553C" stroke="${INK}" stroke-width="5" paint-order="stroke" font-style="italic" letter-spacing="2">起点</text>`;
+        s += `<text x="${r.x + r.w / 2}" y="${r.y + r.h / 2 + (lay === 'wide' ? 12 : 7)}" font-size="${lay === 'wide' ? 34 : 19}" font-weight="900" text-anchor="middle" fill="#F2553C" stroke="${INK}" stroke-width="5" paint-order="stroke" font-style="italic" letter-spacing="2">起点</text>`;
       } else if (p % 5 === 0) {
         s += `<text x="${r.x + r.w / 2}" y="${r.y + r.h / 2 + 9}" font-size="25" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="4" paint-order="stroke">${p}</text>`;
       } else {
@@ -615,16 +695,32 @@
       s += '</g>';
     }
     // 终点：棋盘格 + 竖排「终点」
-    const f = cellRect(FIN);
+    const f = G.rect(FIN);
     s += `<g class="cell" data-p="${FIN}"><rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="8" fill="url(#chk)" stroke="${INK}" stroke-width="2.5"/>`;
-    if (layout === 'wide') s += `<rect x="${f.x + 9}" y="${f.y + 16}" width="${f.w - 18}" height="${f.h - 32}" rx="7" fill="${INK}"/><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 - 3}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">终</text><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 + 15}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">点</text>`;
+    if (lay === 'wide') s += `<rect x="${f.x + 9}" y="${f.y + 16}" width="${f.w - 18}" height="${f.h - 32}" rx="7" fill="${INK}"/><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 - 3}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">终</text><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 + 15}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">点</text>`;
     s += '</g>';
     // 领奖台：冲线的运动员会站上来
     const pd = G.pod;
     const pcx = pd.x + pd.w / 2, pcy = pd.y + pd.h / 2 + 10;
-    podium = { 1: [pcx, pcy - 34], 2: [pcx - 39, pcy - 16] };
     s += `<g transform="translate(${pcx} ${pcy})"><ellipse cx="0" cy="40" rx="66" ry="7" fill="${INK}" opacity=".12"/><rect x="-58" y="6" width="38" height="30" rx="4" fill="#A7B0BE" stroke="${INK}" stroke-width="2.5"/><rect x="-19" y="-10" width="38" height="46" rx="4" fill="#E9A91B" stroke="${INK}" stroke-width="2.5"/><rect x="20" y="16" width="38" height="20" rx="4" fill="#fff" stroke="${INK}" stroke-width="2.5"/><text x="0" y="18" font-size="20" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">1</text><text x="-39" y="29" font-size="17" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">2</text><text x="0" y="62" font-size="13" font-weight="900" text-anchor="middle" fill="${INK}" opacity=".55">领奖台</text></g>`;
-    svg.innerHTML = s;
+    return s;
+  }
+
+  function buildBoard(trackKey) {
+    if (!trackKey) return;
+    const board = $('#board');
+    board.classList.toggle('tall', layout === 'tall');
+    if (builtTrack === `${trackKey}:${layout}`) return;
+    builtTrack = `${trackKey}:${layout}`;
+    const [W, H] = VB();
+    const svg = $('#trackSvg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const wild = trackKey === 'wild';
+    const G = geo();
+    const pd = G.pod;
+    const pcx = pd.x + pd.w / 2, pcy = pd.y + pd.h / 2 + 10;
+    podium = { 1: [pcx, pcy - 34], 2: [pcx - 39, pcy - 16] };
+    svg.innerHTML = trackSvgMarkup(trackKey, layout);
     // 中央区域
     const c = G.center;
     Object.assign($('#center').style, { left: `${c.x / W * 100}%`, top: `${c.y / H * 100}%`, width: `${c.w / W * 100}%`, height: `${c.h / H * 100}%` });
@@ -801,7 +897,7 @@
     $('#races').innerHTML = SCHEDULE.map((t, i) => {
       const n = i + 1;
       const cls = [t === 'wild' ? 'wild' : '', vs.raceNo === n && vs.phase !== 'draft' ? 'cur' : '', vs.raceNo > n || (vs.raceNo === n && (vs.phase === 'between' || vs.phase === 'over')) ? 'done' : ''].join(' ');
-      return `<div class="race-pill ${cls}" title="${TRACKS[t].name}"><span class="no">${n}</span>${t === 'wild' ? '狂野' : '温和'}<span class="pts">金${GOLD[i]}·银${SILVER[i]}</span></div>`;
+      return `<div class="race-pill ${cls}" title="${TRACKS[t].name}"><span class="no">${n}</span><span class="tn">${t === 'wild' ? '狂野' : '温和'}</span><span class="pts">金${GOLD[i]}·银${SILVER[i]}</span></div>`;
     }).join('');
   }
   function renderTitle() {
@@ -881,7 +977,7 @@
     const owner = opts.owner != null ? `<span class="owner" style="--c:${PCOL[opts.owner % 6]}">${esc(vs.players[opts.owner].name)}</span>` : '';
     return `<button class="rcard ${opts.mini ? 'mini' : ''} ${opts.cls || ''}" data-id="${id}" style="--rc:${rcol(id)};--k:${opts.k || 0}" ${opts.disabled ? 'tabindex="-1"' : ''}>
       <div class="art">${art(id)}<span class="nm">${esc(r.name)}</span>${owner}</div>
-      <div class="txt"><span class="sk">${esc(r.skill)}</span><div class="tx">${esc(r.text)}</div>${r.note && !opts.mini ? `<div class="nt">${esc(r.note)}</div>` : ''}</div></button>`;
+      <div class="txt"><b class="nm2">${esc(r.name)}</b><span class="sk">${esc(r.skill)}</span><div class="tx">${esc(r.text)}</div>${r.note && !opts.mini ? `<div class="nt">${esc(r.note)}</div>` : ''}</div></button>`;
   }
 
   function renderDraft(deal) {
@@ -895,6 +991,11 @@
     renderDraftOrder();
     renderMyTeam();
     if (d && d.kind === 'draft') bindDraftPick(d);
+    fitDraft();
+  }
+  function fitDraft() {
+    if ($('#draft').hidden) return;
+    paginate('draft', $('#draftCards'), () => $$('#draftCards .rcard'), $('#draftPager'));
   }
   function bindDraftPick(d) {
     const mine = isParticipant() && d.seat === you && !playing && !queue.length && !submitted && connection === 'ready';
@@ -1582,12 +1683,20 @@
     const cards = mineOpts && !answered ? mineOpts.map((o, k) => rcard(o.v, { cls: canPick ? 'pickable deal' : 'dim', k })).join('') : '';
     showOverlay(`<div class="ov-box card"><h2>第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}</h2>
       <p class="sub">冠军 ${GOLD[idx]} 分 · 亚军 ${SILVER[idx]} 分 · ${sending ? '正在提交，等待服务器确认…' : connection !== 'ready' ? '断线中，重连同步后可重新选择' : canPick ? `派谁上场？${hint}` : answered ? '你的出牌已确认，等待其他人…' : '等待其他人出牌…'}</p>
-      <div class="ov-cards" id="pickCards">${cards}</div><div class="pick-status" id="pickStatus"></div></div>`, 'pick');
+      <div class="ov-cards" id="pickCards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div><div class="pick-status" id="pickStatus"></div></div>`, 'pick');
     overlayDecision = key;
     updatePickStatus(d);
+    fitOverlayCards(true);
     for (const el of $$('#pickCards .rcard')) {
       el.onclick = canPick ? () => { if (answer(d, el.dataset.id)) Sound.card(); } : null;
     }
+  }
+  // 出战 / 选择浮层里的卡牌放不下时分页
+  function fitOverlayCards(fresh) {
+    const box = $('#overlay .ov-cards');
+    if (!box || $('#overlay').hidden) return;
+    if (fresh && pagers.ov) pagers.ov.anchor = 0;
+    paginate('ov', box, () => $$('.rcard', box), $('#ovPager'));
   }
   function updatePickStatus(d) {
     const box = $('#pickStatus');
@@ -1599,8 +1708,9 @@
     if (overlayKind === 'choose' && overlayDecision === d.id) return;
     const cards = d.options.filter((o) => R[o.v]).map((o, k) => rcard(o.v, { cls: 'pickable deal', k })).join('');
     const extra = d.options.filter((o) => !R[o.v]).map((o) => `<button class="btn" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
-    showOverlay(`<div class="ov-box card"><h2>${esc(title)}</h2><p class="sub">${esc(sub)}</p><div class="ov-cards">${cards}</div><div class="ov-actions">${extra}</div></div>`, 'choose');
+    showOverlay(`<div class="ov-box card"><h2>${esc(title)}</h2><p class="sub">${esc(sub)}</p><div class="ov-cards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div><div class="ov-actions">${extra}</div></div>`, 'choose');
     overlayDecision = d.id;
+    fitOverlayCards(true);
     for (const el of $$('#overlay .rcard, #overlay [data-v]')) {
       el.onclick = () => { if (answer(d, el.dataset.id || el.dataset.v)) { Sound.card(); hideOverlay(); } };
     }
@@ -1852,21 +1962,24 @@
     if (kind === 'gallery') {
       title = '运动员图鉴 · 36 名';
       const save = vs; if (!vs) vs = { players: [] };
-      body = `<div class="gallery">${RACERS.map((r) => rcard(r.id)).join('')}</div>`;
+      body = `<div class="gallery" data-fit>${RACERS.map((r) => rcard(r.id)).join('')}</div>`;
       vs = save;
+    } else if (kind === 'tracks') {
+      title = '地图图鉴 · 2 条赛道';
+      body = '<div class="tguide" id="tguide"></div>';
     } else {
       title = '玩法说明';
-      body = `<div class="rules">
-        <h4>当前试玩版</h4><p>支持 <span class="kw">3-6 名选手</span>（含 AI）。两位朋友可以加 1 名 AI 开赛，单人可以直接挑战 AI。狂野赛道采用自定义布局；奖牌分值使用下方的递增设置。双人各操控两名运动员的变体尚未加入。</p>
-        <h4>目标</h4><p>一共比 <span class="kw">4 场</span>赛跑，每场前两名冲线的拿分：冠军拿金杯、亚军拿银牌，越往后的比赛分越高（金 ${GOLD.join('/')}，银 ${SILVER.join('/')}）。四场结束总分最高者获胜，并列就一起庆祝！</p>
-        <h4>组建队伍</h4><p>开局掷骰决定顺序，进行两轮<span class="kw">蛇形选秀</span>：翻开人数×2 张运动员卡，按 1→N 再 N→1 的顺序每人挑一张，两轮后每人 4 名运动员。</p>
-        <h4>比赛</h4><ul>
+      body = `<div class="rules" data-fit>
+        <section class="rule-sec"><h4>当前试玩版</h4><p>支持 <span class="kw">3-6 名选手</span>（含 AI）。两位朋友可以加 1 名 AI 开赛，单人可以直接挑战 AI。狂野赛道采用自定义布局；奖牌分值使用下方的递增设置。双人各操控两名运动员的变体尚未加入。</p></section>
+        <section class="rule-sec"><h4>目标</h4><p>一共比 <span class="kw">4 场</span>赛跑，每场前两名冲线的拿分：冠军拿金杯、亚军拿银牌，越往后的比赛分越高（金 ${GOLD.join('/')}，银 ${SILVER.join('/')}）。四场结束总分最高者获胜，并列就一起庆祝！</p></section>
+        <section class="rule-sec"><h4>组建队伍</h4><p>开局掷骰决定顺序，进行两轮<span class="kw">蛇形选秀</span>：翻开人数×2 张运动员卡，按 1→N 再 N→1 的顺序每人挑一张，两轮后每人 4 名运动员。</p></section>
+        <section class="rule-sec"><h4>比赛</h4><ul>
           <li>每场所有人<span class="kw">同时暗选</span>一名还没上过场的运动员，一起亮牌，放到起点。</li>
           <li>轮到你时掷骰，走对应格数，这叫<span class="kw">主移动</span>。很多技能只对主移动生效。</li>
           <li>有两名运动员冲过终点，比赛立刻结束。下一场由上一场最落后（或最先被淘汰）的人先手。</li>
           <li>赛道交替：温和一英里 → 狂野荒原 → 温和一英里 → 狂野荒原。</li>
-        </ul>
-        <h4>技能</h4><ul>
+        </ul></section>
+        <section class="rule-sec"><h4>技能</h4><ul>
           <li>写着「可以」的技能是可选的，其他技能都是强制生效。</li>
           <li>同时触发时的顺序：赛道格效果 → 当前玩家 → 其他玩家（顺时针）。</li>
           <li><span class="kw">超过</span>：移动开始时在对方后面、结束时在对方前面。停在同一格不算超过。</li>
@@ -1874,23 +1987,93 @@
           <li><span class="kw">摔倒</span>：跳过下一次主移动（不掷骰），但技能照样生效，也能被别的方式移动。</li>
           <li>运动员冲线或被淘汰后，技能失效。</li>
           <li>遇到无限循环（比如蹭蹭狗撞上巨婴），按顺序走完一遍就停止。</li>
-        </ul>
-        <h4>狂野荒原的特殊格</h4><ul>
+        </ul></section>
+        <section class="rule-sec"><h4>狂野荒原的特殊格</h4><ul>
           <li><span class="kw">箭头</span>：停上去就按数字前进/后退，算一次独立的移动。</li>
           <li><span class="kw">石头</span>：停上去就摔倒。</li>
           <li><span class="kw">星星</span>：停上去拿 1 分铜牌。</li>
-        </ul>
-        <h4>联机小贴士</h4><ul>
+        </ul></section>
+        <section class="rule-sec"><h4>联机小贴士</h4><ul>
           <li>把房间码或邀请链接发给朋友；人不够可以加 AI。</li>
           <li>掉线或超时会自动托管，回来点一下「托管」即可接管。</li>
           <li>空格键可以直接掷骰。</li>
-        </ul></div>`;
+        </ul></section></div>`;
     }
-    m.innerHTML = `<div class="modal-box card"><div class="modal-head"><h3>${title}</h3><button class="icon-btn" id="mClose"><span class="ico">${icon('close')}</span></button></div><div class="modal-body">${body}</div></div>`;
+    m.innerHTML = `<div class="modal-box card modal-${kind === 'gallery' || kind === 'tracks' ? kind : 'rules'}"><div class="modal-head"><h3>${title}</h3><div class="pager" id="mPager" hidden></div><button class="icon-btn" id="mClose" aria-label="关闭"><span class="ico">${icon('close')}</span></button></div><div class="modal-body">${body}</div></div>`;
     m.hidden = false;
-    $('#mClose').onclick = () => { m.hidden = true; };
-    m.onclick = (e) => { if (e.target === m) m.hidden = true; };
+    modalKind = kind;
+    const close = () => { m.hidden = true; modalKind = null; };
+    $('#mClose').onclick = close;
+    m.onclick = (e) => { if (e.target === m) close(); };
+    fitModal(true);
   }
+  let modalKind = null;
+  function fitModal(fresh) {
+    const m = $('#modal');
+    if (m.hidden || !modalKind) return;
+    if (fresh) for (const k of ['gallery', 'rules']) if (pagers[k]) pagers[k].anchor = 0;
+    if (modalKind === 'gallery') paginate('gallery', $('.gallery', m), () => $$('.gallery .rcard', m), $('#mPager'));
+    else if (modalKind === 'tracks') renderTrackGuide(fresh ? SCHEDULE[0] : tgKey);
+    else paginate('rules', $('.rules', m), () => $$('.rules .rule-sec', m), $('#mPager'));
+  }
+
+  /* ---------- 地图图鉴 ---------- */
+  // 特殊格说明对照 game/engine.js 的 afterStop：只看最后停在哪格（掷骰、技能移动、瞬移都算），路过不触发；
+  // 赛道格效果先于所有技能结算；箭头调用 move() 算一次独立移动，后退最多退回起点；石头 trip()；星星 giveChip 铜牌 1 分。
+  const TRACK_INTRO = {
+    mild: '平平无奇的一圈跑道，没有任何机关，快慢全看运动员技能怎么搞事。',
+    wild: '遍地箭头、石头和星星，落点决定命运，一步踩错就前功尽弃。',
+  };
+  let tgKey = 'mild';
+  function renderTrackGuide(key, dir = 0) {
+    const box = $('#tguide');
+    if (!box) return;
+    tgKey = key;
+    const t = TRACKS[key];
+    const lay = innerHeight > innerWidth * 1.05 && innerWidth < 900 ? 'tall' : 'wide';
+    const races = SCHEDULE.map((k, i) => (k === key ? `<li><b>第 ${i + 1} 场</b><span class="tg-medal g">金 ${GOLD[i]}</span><span class="tg-medal s">银 ${SILVER[i]}</span></li>` : '')).join('');
+    const at = (pred) => Object.entries(t.spaces).filter(([, sp]) => pred(sp)).map(([p, sp]) => ({ p: Number(p), sp }));
+    const fwd = at((sp) => sp.type === 'arrow' && sp.n > 0), back = at((sp) => sp.type === 'arrow' && sp.n < 0);
+    const rocks = at((sp) => sp.type === 'rock'), stars = at((sp) => sp.type === 'star');
+    const cells = (arr, fmt = (p) => `${p}`) => arr.map(({ p, sp }) => fmt(p, sp)).join('、');
+    const glyph = (type, n) => `<svg viewBox="-24 -24 48 48" aria-hidden="true">${spaceGlyph(type, n, 0, 0, 1)}</svg>`;
+    const item = (g, name, where, text) => `<li>${g}<div><b>${name}<em>${where}</em></b><p>${text}</p></div></li>`;
+    const legend = Object.keys(t.spaces).length ? `<ul class="tg-legend">
+        ${fwd.length ? item(glyph('arrow', 2), '前进箭头', `第 ${cells(fwd, (p, sp) => `${p} 格 +${sp.n}`)}`, '停在这格立刻再前进对应格数，算一次独立移动，落到别的特殊格接着结算。') : ''}
+        ${back.length ? item(glyph('arrow', -3), '后退箭头', `第 ${cells(back, (p, sp) => `${p} 格 −${Math.abs(sp.n)}`)}`, '停在这格立刻后退对应格数（最多退回起点），同样算一次独立移动。') : ''}
+        ${rocks.length ? item(glyph('rock', 0), '石头', `第 ${cells(rocks)} 格`, '停上去就摔倒：下回合跳过主移动不掷骰，技能照常生效。') : ''}
+        ${stars.length ? item(glyph('star', 0), '星星', `第 ${cells(stars)} 格`, '停上去立刻拿 1 分铜牌，每次停上都算。') : ''}
+      </ul><p class="tg-note">只看最后停在哪格：掷骰、技能移动、瞬移落到这里都触发，路过不算；赛道格效果先于所有技能结算。</p>`
+      : `<p class="tg-note tg-plain">没有特殊格。起点后 ${FIN - 1} 格赛道，第 ${FIN} 步冲线，比的就是技能和运气。</p>`;
+    const [W, H] = GEO[lay].vb;
+    box.innerHTML = `<div class="tg-tabs" role="tablist" aria-label="选择赛道">${Object.values(TRACKS).map((x) => `<button role="tab" data-tg="${x.key}" aria-selected="${x.key === key}" class="${x.key === key ? 'on' : ''}${x.key === 'wild' ? ' wild' : ''}">${icon(x.key === 'wild' ? 'rock' : 'flag')}${esc(x.name)}</button>`).join('')}</div>
+      <div class="tg-page tg-${lay}${dir ? (dir > 0 ? ' pg-in-next' : ' pg-in-prev') : ''}" data-fit>
+        <div class="tg-map"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(t.name)}赛道缩略图">${trackSvgMarkup(key, lay)}</svg></div>
+        <div class="tg-info">
+          <p class="tg-intro"><b style="--c:${key === 'wild' ? 'var(--red)' : 'var(--green)'}">${esc(t.name)}</b>${esc(TRACK_INTRO[key] || '')}</p>
+          <div class="tg-facts"><div class="tg-fact"><span>总格数</span><b>${FIN}</b><small>起点后 ${FIN - 1} 格，第 ${FIN} 步冲线</small></div><div class="tg-fact tg-races"><span>出场与奖牌</span><ul>${races}</ul></div></div>
+          ${legend}
+        </div>
+      </div>`;
+    fillIcons(box);
+    box.querySelector('.tg-tabs').onclick = (e) => {
+      const b = e.target.closest('[data-tg]');
+      if (!b || b.dataset.tg === tgKey) return;
+      const keys = Object.keys(TRACKS);
+      Sound.click();
+      renderTrackGuide(b.dataset.tg, keys.indexOf(b.dataset.tg) > keys.indexOf(tgKey) ? 1 : -1);
+    };
+    const page = $('.tg-page', box);
+    let sx = 0, sy = 0;
+    page.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; });
+    page.addEventListener('pointerup', (e) => {
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      const keys = Object.keys(TRACKS), i = keys.indexOf(tgKey) + (dx < 0 ? 1 : -1);
+      if (i >= 0 && i < keys.length) { Sound.click(); renderTrackGuide(keys[i], dx < 0 ? 1 : -1); }
+    });
+  }
+
 
   /* ================= 提示 & 彩纸 ================= */
   function toast(text, err) {
@@ -1974,7 +2157,7 @@
     initGameBar();
     initEmotes();
     for (const b of $$('[data-open]')) b.addEventListener('click', () => { Sound.click(); openModal(b.dataset.open); });
-    window.addEventListener('resize', () => { checkLayout(); renderStandings(); hideTip(); });
+    window.addEventListener('resize', () => { checkLayout(); renderStandings(); hideTip(); refitPagers(); fitRooms(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && queue.length > 1) fast = true; });
     showScreen(new URLSearchParams(location.search).get('room') ? 'lobby' : 'home');
     connect();

@@ -62,15 +62,17 @@
         <section class="room-directory card" aria-labelledby="roomDirectoryTitle" aria-describedby="roomDirectoryHint">
           <div class="room-directory-head">
             <h2 id="roomDirectoryTitle"><span class="ico" data-icon="users" aria-hidden="true"></span>公开房间</h2>
+            <div class="pager" id="roomPager" hidden></div>
             <button id="refreshRooms" class="btn small" data-network disabled><span class="ico" data-icon="swirl" aria-hidden="true"></span>刷新</button>
           </div>
           <p id="roomDirectoryHint" class="room-directory-hint">只展示当前有成员在线的房间，点一下加入或观看；也可用房间码邀请朋友。</p>
           <p id="roomListStatus" class="room-list-status" role="status" aria-live="polite">正在加载公开房间…</p>
-          <ul id="roomList" class="room-list" aria-label="公开房间列表" aria-busy="true"></ul>
+          <ul id="roomList" class="room-list" aria-label="公开房间列表" aria-busy="true" data-fit></ul>
         </section>
         <footer class="home-foot">
           <button class="link" data-open="rules"><span class="ico" data-icon="book"></span>玩法说明</button>
           <button class="link" data-open="gallery"><span class="ico" data-icon="users"></span>运动员图鉴</button>
+          <button class="link" data-open="tracks"><span class="ico" data-icon="map"></span>地图图鉴</button>
         </footer>
       </div>
     </section>
@@ -139,7 +141,8 @@
             <p id="draftSub">蛇形选秀：每人选 4 名运动员，四场比赛各派一名上场</p>
           </div>
           <div class="draft-order" id="draftOrder"></div>
-          <div class="draft-cards" id="draftCards"></div>
+          <div class="draft-cards" id="draftCards" data-fit></div>
+          <div class="pager" id="draftPager" hidden></div>
           <div class="my-team" id="myTeam"></div>
         </div>
       </main>

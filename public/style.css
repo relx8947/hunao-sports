@@ -806,3 +806,406 @@ input { font: inherit; color: inherit; }
   .mt-label { font-size: 11px; margin-right: 0; }
 }
 button:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+
+/* ================= 一屏布局 =================
+   电脑和手机都不允许页面滚动：每个界面固定为一屏高（100dvh），装饰元素按可用高度逐级收起，
+   放不下的集合（公开房间、选秀卡牌、图鉴、玩法说明）由 paginate() 分页，左右翻页。 */
+html, body { height: 100%; height: 100dvh; overscroll-behavior: none; }
+body { overflow: hidden; }
+.screen { height: 100vh; height: 100dvh; min-height: 0; }
+
+/* 分页控件 */
+.pager { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.pg-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 8px; border: 2px solid var(--ink); border-radius: 12px; background: var(--paper); box-shadow: var(--shadow-sm); transition: transform .15s var(--ease), background .15s, opacity .15s; }
+.pg-btn svg { width: 100%; height: 100%; }
+.pg-btn:hover:not(:disabled) { transform: translate(-1px, -1px); background: var(--yellow); }
+.pg-btn:active:not(:disabled) { transform: translate(1px, 1px); box-shadow: none; }
+.pg-btn:disabled { opacity: .3; cursor: default; }
+.pg-no { min-width: 44px; text-align: center; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--ink2); }
+.pg-in-next > :not([hidden]) { animation: pgNext .38s var(--ease) both; }
+.pg-in-prev > :not([hidden]) { animation: pgPrev .38s var(--ease) both; }
+@keyframes pgNext { from { opacity: 0; transform: translateX(28px); } }
+@keyframes pgPrev { from { opacity: 0; transform: translateX(-28px); } }
+
+/* ---------- 首页 ---------- */
+#home { align-items: stretch; padding-top: calc(clamp(10px, 2.6dvh, 28px) + env(safe-area-inset-top)); padding-bottom: calc(clamp(10px, 2.6dvh, 28px) + env(safe-area-inset-bottom)); }
+.home-inner { height: 100%; min-height: 0; justify-content: center; gap: clamp(8px, 1.7dvh, 18px); margin: 0 auto; }
+.home-inner > * { flex-shrink: 0; }
+.logo-badge { margin-bottom: clamp(6px, 1.3dvh, 14px); }
+.logo-text { font-size: clamp(40px, min(13vw, 10dvh), 104px); }
+.tagline { margin-top: clamp(6px, 1.4dvh, 16px); text-wrap: balance; }
+.parade { height: clamp(56px, 9dvh, 86px); }
+.parade-track .pr { width: clamp(50px, 8dvh, 74px); height: clamp(50px, 8dvh, 74px); }
+.home-card { padding: clamp(14px, 2.2dvh, 22px); gap: clamp(10px, 1.6dvh, 16px); }
+.watch-entry { padding-top: clamp(10px, 1.6dvh, 14px); }
+.room-directory { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; padding: clamp(12px, 2dvh, 20px); }
+.room-directory-head { flex: none; }
+.room-directory-head h2 { flex: 1; min-width: 0; white-space: nowrap; }
+.room-list { flex: 0 1 auto; min-height: 0; overflow: hidden; padding: 2px 4px 4px 0; }
+.room-list-status { flex: none; }
+.home-foot { flex-wrap: wrap; justify-content: center; gap: 4px 10px; }
+.home-inner > .icp-beian { align-self: center; }
+@media (max-height: 920px) { .room-directory-hint { display: none; } }
+@media (max-height: 760px) { #watchHint { display: none; } }
+@media (max-height: 720px) and (orientation: portrait) { .parade { display: none; } }
+@media (max-height: 620px) and (orientation: portrait) { .logo-badge { display: none; } }
+@media (max-height: 560px) and (orientation: portrait) { .tagline { display: none; } }
+@media (max-width: 560px) {
+  #home { padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right)); }
+  .home-card { padding: 14px; }
+  .quick-row, .watch-row, .join-row { flex-wrap: nowrap; gap: 8px; }
+  .quick-row .btn.big, .watch-row .watch-btn { flex: 1 1 auto; min-width: 0; padding: 10px 12px; font-size: 15px; }
+  .home-card .seg-label { display: none; }
+  .home-card .seg button { width: 36px; min-width: 36px; }
+  .join-row > .btn { flex: 0 0 auto; padding: 10px 12px; }
+  .code-join { flex: 1 1 auto; min-width: 0; }
+  .code-join input { letter-spacing: .18em; }
+  .room-list-item { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; padding: 9px 10px; }
+  .room-list-icon { width: 30px; height: 30px; padding: 5px; }
+  .room-list-action { grid-column: auto; flex-direction: column; align-items: stretch; padding-top: 0; border-top: 0; gap: 2px; }
+  .room-list-action .btn { min-width: 64px; }
+  .room-list-note, .room-list-meta + .room-list-meta { display: none; }
+  .room-list-state, .room-list-meta { margin-top: 2px; }
+  .home-foot .link { padding: 6px 4px; font-size: 13px; }
+}
+@media (max-width: 360px) { .home-card .seg button { width: 34px; min-width: 34px; } }
+/* 横屏 / 电脑：左边标志 + 公开房间，右边开局卡片 */
+@media (min-aspect-ratio: 5/4) and (min-width: 640px) {
+  .home-inner {
+    width: min(1180px, 100%); display: grid; align-content: center;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    column-gap: clamp(20px, 4vw, 60px); row-gap: clamp(8px, 1.8dvh, 18px);
+  }
+  .hall-back, .logo, .parade, .room-directory, .home-foot, .home-inner > .icp-beian { grid-column: 1; }
+  .home-card { grid-column: 2; grid-row: 1 / -1; align-self: center; }
+  .room-directory { align-self: start; max-height: 100%; }
+  .home-foot { align-self: end; }
+}
+@media (min-aspect-ratio: 5/4) and (max-height: 620px) {
+  .parade, .logo-badge, .tagline { display: none; }
+  .logo-text { font-size: clamp(36px, 11dvh, 64px); }
+  .home-card { gap: 8px; padding: 12px 14px; }
+  .home-card .field { flex-direction: row; align-items: center; gap: 10px; }
+  .home-card .field input { flex: 1; min-width: 0; height: 44px; }
+  .home-card .btn.big { padding: 8px 14px; font-size: 15px; }
+  .home-card .seg button { min-height: 44px; }
+  .watch-entry { padding-top: 8px; }
+  #watchHint { display: none; }
+  .room-directory { padding: 10px 12px; }
+  .room-list { margin-top: 6px; }
+  .room-list-status { margin-top: 4px; }
+}
+
+/* ---------- 房间 ---------- */
+#lobby { align-items: center; padding-top: calc(clamp(10px, 2.4dvh, 28px) + env(safe-area-inset-top)); padding-bottom: calc(clamp(10px, 2.4dvh, 28px) + env(safe-area-inset-bottom)); }
+.lobby-inner { max-height: 100%; gap: clamp(8px, 2dvh, 22px); }
+.room-code { font-size: clamp(34px, 7dvh, 64px); }
+.seats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(8px, 1.4dvh, 14px); }
+.seat { padding: clamp(8px, 1.4dvh, 16px) 8px clamp(8px, 1.2dvh, 14px); }
+.seat .ava { width: clamp(40px, 7dvh, 64px); height: clamp(40px, 7dvh, 64px); margin-bottom: 6px; font-size: clamp(18px, 3dvh, 26px); }
+.seat.empty { min-height: clamp(76px, 15dvh, 142px); }
+@media (max-width: 1000px) { .seat .ava { margin-top: 4px; } .seat .kick { width: 36px; height: 36px; padding: 7px; } }
+@media (max-width: 520px) { .seats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .seat .nm { font-size: 13px; } .seat .tag { font-size: 11px; } }
+@media (max-height: 700px) { .lobby-tip { display: none; } .invite-link span { display: none; } }
+@media (min-aspect-ratio: 5/4) and (max-height: 560px) {
+  .lobby-inner { width: min(900px, 100%); display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); grid-template-rows: auto auto 1fr; align-items: center; column-gap: 20px; row-gap: 8px; }
+  .lobby-inner .back { grid-column: 1; grid-row: 1; }
+  .room-head { grid-column: 1; grid-row: 2; gap: 4px; }
+  .lobby-actions { grid-column: 1; grid-row: 3; align-self: start; }
+  .lobby-actions .btn.big { padding: 8px 14px; font-size: 15px; }
+  .seats { grid-column: 2; grid-row: 1 / -1; }
+  .seat.empty { min-height: 72px; }
+  .seat .ava { width: 36px; height: 36px; }
+}
+
+/* ---------- 对局：手机竖屏把顶部压成两行，赛道拿到更多高度 ---------- */
+@media (max-width: 1000px) and (orientation: portrait) {
+  .topbar { flex-wrap: wrap; gap: 4px 6px; padding-bottom: 4px; }
+  .races { gap: 4px; }
+  .race-pill { padding: 3px 5px; gap: 4px; }
+  .top-actions { gap: 4px; }
+  .icon-btn { height: 40px; min-width: 40px; padding: 0 6px; }
+  .top-title { font-size: 14px; line-height: 1.3; }
+  .side { gap: 4px; }
+  .players { overflow: visible; padding: 2px 3px 4px 1px; gap: 6px; }
+  .prow { flex: 1 1 0; min-width: 0; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 5px; padding: 4px 7px; }
+  .prow .pav { width: 30px; height: 30px; }
+  .prow .pn b { font-size: 12.5px; }
+  .prow .pn b .you, .prow .pn b .auto { font-size: 9px; padding: 0 4px; }
+  .prow .sc b { font-size: 16px; }
+  .prow .think { right: -2px; top: -7px; font-size: 10px; padding: 0 6px; }
+  .prow.cur { transform: none; }
+  .emotes { flex-wrap: nowrap; overflow: visible; gap: 4px; padding: 0 1px 2px; }
+  .emotes button { flex: 1 1 0; min-width: 0; padding: 3px 2px; font-size: 11.5px; white-space: nowrap; }
+  .dock { padding-top: 6px; }
+  .prompt { flex-wrap: wrap; gap: 6px 10px; padding: 8px 10px; }
+  .prompt .p-ava { width: 36px; height: 36px; }
+  .prompt .p-txt { flex: 1 1 150px; }
+  .prompt .p-txt b { font-size: 14px; }
+  .prompt .p-txt span { font-size: 12px; }
+  .prompt .p-opts { width: auto; flex: 1 1 auto; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+  .prompt .p-opts .btn.roll-btn { padding: 10px 14px; }
+  .draft { gap: 6px; padding: 4px 2px 0; }
+  .draft-head h2 { font-size: 17px; }
+  .draft-head p { margin-top: 2px; font-size: 11.5px; text-wrap: balance; }
+}
+@media (max-width: 480px) and (orientation: portrait) {
+  .race-pill .tn { display: none; }
+  .race-pill.cur .tn { display: inline; }
+}
+@media (max-width: 1000px) and (orientation: portrait) and (max-height: 700px) {
+  .prompt .p-ava { display: none; }
+  .prompt.mine .p-txt { padding-top: 8px; }
+  .draft-head p { display: none; }
+}
+
+/* ---------- 选秀：卡牌分页，不滚动 ---------- */
+.draft { overflow: hidden; justify-content: center; }
+.draft > :first-child, .draft > :last-child { margin: 0; }
+.draft-head, .draft-order, .my-team, #draftPager { flex: none; }
+.draft-cards { flex: 0 1 auto; min-height: 0; overflow: hidden; align-content: flex-start; padding: 6px 6px 8px; }
+.draft .my-team { position: relative; }
+@media (max-width: 1000px) { .rcard { --w: 136px; } .rcard .tx { font-size: 12px; } }
+@media (max-width: 360px) { .rcard { --w: 128px; } }
+
+/* ---------- 浮层：卡牌与结算在一屏内 ---------- */
+.ov-box { display: flex; flex-direction: column; align-items: stretch; }
+.ov-box > * { flex-shrink: 0; }
+.ov-cards { min-height: 0; }
+@media (max-height: 760px) {
+  .ov-box { padding: 16px 14px; }
+  .ov-box h2 { font-size: clamp(20px, 4.4dvh, 30px); }
+  .ov-box .sub { margin-top: 4px; font-size: 13px; }
+  .ov-cards { margin-top: 10px; gap: 8px; }
+  .ov-actions { margin-top: 12px; gap: 8px; }
+  .podium { margin-top: 10px; }
+  .pod .who { width: 56px; height: 56px; }
+  .pod.p1 .blk { height: 70px; font-size: 30px; }
+  .pod.p2 .blk { height: 52px; font-size: 26px; }
+  .pod.p3 .blk { height: 40px; }
+  .standings { margin-top: 10px; gap: 4px; }
+  .st-row { padding: 4px 10px; }
+  .st-row .rk { width: 24px; height: 24px; }
+  .reveal-grid { margin-top: 10px; }
+  .pick-status { margin-top: 8px; }
+}
+@media (max-height: 760px) and (max-width: 1000px) {
+  .ov-cards .rcard { --w: 124px; }
+  .ov-cards .rcard .art { height: calc(var(--w) * .5); }
+  .ov-cards .rcard .nt { display: none; }
+  .flip { width: 112px; height: 168px; }
+  .flip .rcard { --w: 112px; }
+}
+@media (max-height: 460px) {
+  .podium { display: none; }
+  .ov-cards .rcard { --w: 150px; }
+  .ov-cards .rcard .art { display: none; }
+  .ov-cards .rcard .txt { padding-top: 30px; }
+  .ov-cards .rcard .nm { top: 4px; }
+  .standings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+}
+
+/* ---------- 弹窗：图鉴 / 玩法说明分页 ---------- */
+.modal-head { flex: none; padding: 12px 16px; }
+.modal-head h3 { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modal-body { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 14px 16px 16px; }
+.gallery, .rules { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+.gallery { padding: 2px 6px 8px 2px; grid-template-columns: repeat(auto-fill, minmax(var(--gw, 160px), 1fr)); }
+.rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 4px 22px; align-content: start; }
+.rule-sec h4, .rules .rule-sec h4:first-child { margin: 4px 0; }
+.rule-sec p, .rule-sec ul { margin: 0 0 6px; }
+.rules p, .rules li { line-height: 1.6; }
+@media (max-width: 1000px) {
+  .modal { padding: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left)); }
+  .modal-head { padding: 8px 10px 8px 14px; gap: 6px; }
+  .modal-head h3 { font-size: 16px; }
+  .modal-body { padding: 10px; }
+  .gallery { --gw: 132px; gap: 8px; }
+  .gallery .rcard { --w: 132px; }
+  .rules p, .rules li { font-size: 13px; line-height: 1.55; }
+  .pg-no { min-width: 36px; }
+}
+
+/* ---------- 地图图鉴 ---------- */
+.modal-tracks { width: min(1060px, 100%); height: 100%; }
+.modal-tracks .modal-body { flex: 1 1 auto; }
+.tguide { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.tg-tabs { flex: none; display: flex; gap: 8px; }
+.tg-tabs button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 6px 12px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--paper); font-weight: 900; font-size: 15px; box-shadow: var(--shadow-sm); transition: transform .15s var(--ease), background .2s, color .2s; }
+.tg-tabs button svg { width: 20px; height: 20px; }
+.tg-tabs button.on { background: var(--green); color: #fff; transform: translateY(-1px); }
+.tg-tabs button.wild.on { background: var(--red); }
+.tg-tabs button:not(.on):hover { background: var(--yellow); }
+.tg-page { flex: 1; min-height: 0; display: grid; gap: 14px; overflow: hidden; }
+.tg-page.pg-in-next { animation: pgNext .4s var(--ease) both; }
+.tg-page.pg-in-prev { animation: pgPrev .4s var(--ease) both; }
+.tg-page.tg-wide { grid-template-rows: minmax(0, 1fr) auto; }
+.tg-page.tg-tall { grid-template-rows: minmax(0, 1fr) auto; }
+.tg-map { min-height: 0; min-width: 0; height: 100%; display: flex; align-items: center; justify-content: center; }
+.tg-map svg { width: 100%; height: 100%; display: block; filter: drop-shadow(3px 4px 0 rgba(35, 31, 51, .25)); }
+.tg-info { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.tg-wide .tg-info { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); column-gap: 16px; }
+.tg-wide .tg-intro, .tg-wide .tg-facts { grid-column: 1; }
+.tg-wide .tg-legend, .tg-wide .tg-note, .tg-wide .tg-plain { grid-column: 2; }
+.tg-wide .tg-legend { grid-row: 1 / span 2; }
+.tg-wide .tg-plain { grid-row: 1 / span 2; align-self: center; }
+.tg-intro { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.5; color: var(--ink2); }
+.tg-intro b { display: block; font-size: 22px; font-weight: 900; color: var(--c); -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke fill; text-shadow: 2px 2px 0 var(--ink); letter-spacing: .04em; margin-bottom: 2px; }
+.tg-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.tg-fact { padding: 6px 10px; border: 2px solid var(--ink); border-radius: 12px; background: var(--bg); box-shadow: var(--shadow-sm); }
+.tg-fact > span { display: block; font-size: 11px; font-weight: 900; color: var(--ink2); }
+.tg-fact > b { font-size: 26px; font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tg-fact > small { display: block; font-size: 11px; font-weight: 700; color: var(--ink2); }
+.tg-races ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.tg-races li { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.tg-races li b { margin-right: auto; }
+.tg-medal { padding: 0 7px; border: 1.5px solid var(--ink); border-radius: 99px; font-size: 12px; font-weight: 900; color: #fff; }
+.tg-medal.g { background: var(--gold); }
+.tg-medal.s { background: var(--silver); }
+.tg-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tg-legend li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: center; padding: 5px 8px; border: 2px solid var(--ink); border-radius: 12px; background: var(--paper); animation: rise .4s var(--ease) both; }
+.tg-legend li:nth-child(2) { animation-delay: .05s; }
+.tg-legend li:nth-child(3) { animation-delay: .1s; }
+.tg-legend li:nth-child(4) { animation-delay: .15s; }
+.tg-legend svg { width: 34px; height: 34px; }
+.tg-legend b { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 14px; font-weight: 900; }
+.tg-legend em { font-style: normal; font-size: 11.5px; font-weight: 800; color: var(--ink2); }
+.tg-legend p { margin: 1px 0 0; font-size: 12px; line-height: 1.45; font-weight: 700; }
+.tg-note { margin: 0; font-size: 12px; font-weight: 700; line-height: 1.5; color: var(--ink2); }
+.tg-plain { padding: 10px 12px; border: 2px dashed var(--line); border-radius: 12px; font-size: 13px; }
+@media (max-width: 1000px) {
+  .tguide { gap: 8px; }
+  .tg-tabs button { font-size: 14px; }
+  .tg-page { gap: 8px; }
+  .tg-intro { font-size: 12px; }
+  .tg-intro b { font-size: 18px; }
+  .tg-fact { padding: 4px 8px; }
+  .tg-fact > b { font-size: 20px; }
+  .tg-races li { font-size: 12px; }
+  .tg-legend li { grid-template-columns: 26px minmax(0, 1fr); gap: 6px; padding: 4px 6px; }
+  .tg-legend svg { width: 26px; height: 26px; }
+  .tg-legend b { font-size: 12.5px; }
+  .tg-legend p { font-size: 11px; line-height: 1.4; }
+  .tg-note { font-size: 11px; }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .tg-page.tg-wide { grid-template-rows: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+  .tg-wide .tg-info { grid-template-columns: minmax(0, 1fr); }
+  .tg-wide .tg-intro, .tg-wide .tg-facts, .tg-wide .tg-legend, .tg-wide .tg-note, .tg-wide .tg-plain { grid-column: 1; grid-row: auto; }
+  .tg-legend p, .tg-intro { display: none; }
+}
+
+/* 出战 / 选择浮层：卡牌区可收缩，放不下时分页 */
+.ov-box > .ov-cards { flex-shrink: 1; overflow: hidden; padding: 4px 6px 8px 2px; align-content: flex-start; }
+.ov-pager { align-self: center; margin-top: 8px; }
+
+/* 手机竖屏：赛程和按钮压成一行（标题单独一行） */
+@media (max-width: 480px) and (orientation: portrait) {
+  .race-pill.cur .tn { display: none; }
+  .icon-btn { min-width: 36px; padding: 0 4px; gap: 2px; }
+  .top-actions { gap: 3px; }
+}
+@media (max-width: 380px) and (orientation: portrait) { #speedLabel { display: none; } }
+
+/* 矮屏结算：领奖台收紧，按钮一行 */
+@media (max-height: 620px) {
+  .pod .rn { display: none; }
+  .pod .who { width: 44px; height: 44px; }
+  .pod .nm { margin-top: 4px; font-size: 13px; }
+  .pod .blk { margin-top: 4px; }
+  .pod.p1 .blk { height: 54px; font-size: 24px; }
+  .pod.p2 .blk { height: 40px; font-size: 20px; }
+  .ov-actions .btn.big { padding: 10px 16px; font-size: 15px; }
+  .st-row { padding: 3px 10px; }
+  .st-row .tot { font-size: 17px; }
+}
+
+/* 分页容器里的格子不能被压扁（overflow:hidden 的卡牌最小高度会被当成 0），溢出才能被量出来 */
+.gallery, .rules, .room-list { grid-auto-rows: max-content; }
+.tg-medal.s { color: var(--ink); }
+/* 矮竖屏首页：昵称标签放到输入框左边，公开房间收紧 */
+@media (max-height: 760px) and (orientation: portrait) {
+  .home-card .field { flex-direction: row; align-items: center; gap: 10px; }
+  .home-card .field input { flex: 1; min-width: 0; height: 44px; }
+  .room-directory { padding: 10px 12px; }
+  .room-directory-head h2 { font-size: 17px; }
+  .room-list-status { margin-top: 6px; }
+  .room-list { margin-top: 8px; gap: 8px; }
+}
+@media (max-height: 860px) and (max-width: 420px) { .parade { display: none; } }
+@media (max-width: 400px) { .tagline { font-size: 14px; } }
+
+/* ---------- 手机竖屏：卡牌改成横排（左图右字），整行宽、字更大，一页能放更多张 ---------- */
+.rcard .nm2 { display: none; }
+@media (max-width: 1000px) and (orientation: portrait) {
+  .draft-cards, .ov-box > .ov-cards, .gallery { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: 8px; width: 100%; max-width: 560px; margin-left: auto; margin-right: auto; }
+  .draft-cards .rcard, .ov-cards .rcard, .gallery .rcard { --w: 100%; width: 100%; display: grid; grid-template-columns: 76px minmax(0, 1fr); flex: none; }
+  .draft-cards .rcard .art, .ov-cards .rcard .art, .gallery .rcard .art { height: auto; min-height: 76px; border-bottom: 0; border-right: 2.5px solid var(--ink); align-items: center; }
+  .draft-cards .rcard .art svg, .ov-cards .rcard .art svg, .gallery .rcard .art svg { width: 92%; height: auto; }
+  .draft-cards .rcard .art .nm, .ov-cards .rcard .art .nm, .gallery .rcard .art .nm { display: none; }
+  .draft-cards .rcard .nm2, .ov-cards .rcard .nm2, .gallery .rcard .nm2 { display: inline; margin-right: 6px; font-size: 15px; font-weight: 900; vertical-align: middle; }
+  .draft-cards .rcard .txt, .ov-cards .rcard .txt, .gallery .rcard .txt { min-height: 0; padding: 7px 10px 8px; }
+  .draft-cards .rcard .sk, .ov-cards .rcard .sk, .gallery .rcard .sk { vertical-align: middle; margin-bottom: 3px; }
+  .draft-cards .rcard .tx, .ov-cards .rcard .tx, .gallery .rcard .tx { font-size: 12.5px; line-height: 1.45; }
+  .draft-cards .rcard .nt { font-size: 11px; margin-top: 2px; }
+  .rcard.pickable:hover { transform: translateY(-2px); box-shadow: 3px 4px 0 var(--ink); }
+  .ov-cards .rcard .owner, .draft-cards .rcard .owner { top: 6px; right: 6px; }
+  .prow .pn b { display: block; }
+  .prow .pn b .you, .prow .pn b .auto { display: inline-block; margin-left: 3px; vertical-align: 1px; }
+  .gallery { padding: 2px 4px 6px 2px; }
+}
+
+/* 首页逐级收紧（fitRooms 按需设置 data-tight） */
+#home[data-tight="1"] .parade, #home[data-tight="1"] .logo-badge,
+#home[data-tight="2"] .parade, #home[data-tight="2"] .logo-badge, #home[data-tight="2"] .tagline,
+#home[data-tight="3"] .parade, #home[data-tight="3"] .logo-badge, #home[data-tight="3"] .tagline { display: none; }
+#home[data-tight="3"] .logo-text { font-size: clamp(30px, 7dvh, 56px); }
+#home[data-tight="3"] .home-inner { gap: 6px; }
+#home[data-tight="3"] .home-card { gap: 8px; padding: 10px 12px; }
+#home[data-tight="3"] .watch-entry { padding-top: 8px; }
+#home[data-tight="3"] .home-foot .link { min-height: 36px; padding-top: 2px; padding-bottom: 2px; }
+
+/* 矮横屏：卡牌去掉插画，只留名字和技能，一页能放下 */
+@media (orientation: landscape) and (max-height: 560px) {
+  .draft-cards .rcard, .ov-cards .rcard { --w: 176px; }
+  .draft-cards .rcard .art, .ov-cards .rcard .art { display: none; }
+  .draft-cards .rcard .nm2, .ov-cards .rcard .nm2 { display: inline; margin-right: 6px; font-size: 14px; font-weight: 900; vertical-align: middle; }
+  .draft-cards .rcard .txt, .ov-cards .rcard .txt { padding: 6px 8px 7px; }
+  .draft-cards .rcard .nt, .ov-cards .rcard .nt { display: none; }
+  .draft-cards { gap: 6px; padding-top: 2px; }
+  .draft-order { padding-bottom: 2px; }
+}
+@media (max-width: 1000px) and (max-height: 700px) {
+  .mt-slot { width: 40px; height: 40px; }
+  .my-team { padding: 4px 8px; }
+  .draft-order { padding: 2px 6px 4px; }
+}
+
+/* 矮横屏首页：开局按钮和人数选择并排，右栏收窄，左栏留给公开房间 */
+@media (min-aspect-ratio: 5/4) and (max-height: 620px) {
+  .home-inner { grid-template-columns: minmax(0, 1fr) minmax(0, min(440px, 62vw)); }
+  .quick-row, .watch-row, .join-row { flex-wrap: nowrap; gap: 8px; }
+  .quick-row .btn.big, .watch-row .watch-btn { flex: 1 1 auto; min-width: 0; padding: 8px 10px; font-size: 15px; }
+  .home-card .seg button { width: 40px; min-width: 40px; }
+  .join-row > .btn { flex: 0 0 auto; padding: 8px 12px; }
+  .code-join { flex: 1 1 auto; min-width: 0; }
+  .room-directory-head h2 { font-size: 16px; white-space: nowrap; }
+  .room-list-item { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 8px; padding: 8px 9px; }
+  .room-list-icon { width: 28px; height: 28px; padding: 5px; }
+  .room-list-action { grid-column: auto; flex-direction: column; align-items: stretch; padding-top: 0; border-top: 0; gap: 2px; max-width: none; }
+  .room-list-action .btn { min-width: 60px; }
+  .room-list-note, .room-list-meta + .room-list-meta { display: none; }
+  .room-list-state, .room-list-meta { margin-top: 2px; }
+}
+
+/* 矮横屏选秀：卡牌加宽，技能说明两行内放下 */
+@media (orientation: landscape) and (max-height: 560px) {
+  .draft-cards .rcard, .ov-cards .rcard { --w: min(210px, 31vw); }
+  .draft-cards .rcard .tx, .ov-cards .rcard .tx { font-size: 11.5px; line-height: 1.4; }
+}
+
+/* 触屏没有真正的悬停，点过的卡牌不要一直歪着 */
+@media (hover: none) {
+  .rcard.pickable:hover { transform: none; }
+}
