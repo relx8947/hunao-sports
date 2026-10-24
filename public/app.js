@@ -1391,7 +1391,7 @@
         const ms = banner(`第 ${e.race} 场 · ${TRACKS[e.track].name}`, `冠军 ${e.gold} 分 · 亚军 ${e.silver} 分`, e.track === 'wild');
         const ct = $('#centerTrack');
         ct.classList.remove('ct-in'); void ct.offsetWidth;
-        ct.style.setProperty('--ctd', `${fast || reducedMotion.matches ? 0 : Math.round(ms * 0.86)}ms`);
+        ct.style.setProperty('--ctd', `${fast || reducedMotion.matches ? 0 : Math.round(ms * 0.92)}ms`);
         ct.classList.add('ct-in');
         Sound.reveal();
         await pause(1800);
@@ -1469,7 +1469,8 @@
         const back = e.to < e.from;
         // 主移动：先逐格预亮路径、落点放幽灵棋子，再开始跳
         const preview = e.kind === 'main' ? previewPath(r, e.path) : null;
-        if (preview) await pause(Timing.PATH_PREVIEW);
+        el.classList.toggle('quick', !!e.ai);
+        if (preview) await pause(Timing.previewMs(e));
         let i = 0;
         try {
           for (const p of e.path) {
@@ -1485,7 +1486,7 @@
         r.pos = e.to;
         if (e.kind === 'arrow') pulseCell(e.to);
         layoutTokens();
-        await pause(e.ai ? 110 : 140);
+        await pause(e.ai ? 90 : 140);
         break;
       }
       case 'warp': {

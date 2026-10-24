@@ -1367,3 +1367,6 @@ body { overflow: hidden; }
   .token.cur::before { animation: none; }
   .sk-arcs { display: none; }
 }
+/* AI 回合跳格更快：跳跃动画与位移同步缩短 */
+.token.quick { transition-duration: .12s, .12s, .3s, .3s, .28s; }
+.token.quick .hop.go { animation-duration: .12s; }

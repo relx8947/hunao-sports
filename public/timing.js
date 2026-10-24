@@ -5,20 +5,22 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   const STEP = 170;
   // AI 座位回合内（事件带 ai 标记）的跳格更快，但仍能看清每一步
-  const AI_STEP = 130;
+  const AI_STEP = 120;
   // 结算类停留：给人读分数的时间，不随房间倍速缩短（服务端排程与前端播放都单独累加）
   const FIXED = { raceEnd: 4500, gameOver: 2500 };
   // 掷骰前后与技能提示卡的分段（前端播放用，总和与 eventMs 对齐）
-  const ROLL = { human: { spin: 560, land: 420 }, ai: { spin: 380, land: 300 } };
+  const ROLL = { human: { spin: 560, land: 420 }, ai: { spin: 340, land: 280 } };
   const PATH_PREVIEW = 180; // 主移动先预亮路径与落点，再开始跳格
+  const AI_PATH_PREVIEW = 140;
+  function previewMs(e) { return e && e.ai ? AI_PATH_PREVIEW : PATH_PREVIEW; }
   function stepMs(e) { return e && e.ai ? AI_STEP : STEP; }
   function eventMs(e) {
     const ai = !!e.ai;
     switch (e.t) {
-      case 'move': return (ai ? 120 : 160) + stepMs(e) * Math.max(1, (e.path || []).length) + (e.kind === 'main' ? PATH_PREVIEW : 0);
+      case 'move': return (ai ? 100 : 160) + stepMs(e) * Math.max(1, (e.path || []).length) + (e.kind === 'main' ? previewMs(e) : 0);
       case 'warp': return 560;
       case 'swap': return 760;
-      case 'roll': return ai ? 700 : 1000;
+      case 'roll': return ai ? 640 : 1000;
       case 'rollOff': return 1300;
       case 'calc': return ai ? 600 : 900;
       case 'power': return ai ? 560 : 680;
@@ -55,5 +57,5 @@
     for (const e of events) { scaled += eventMs(e); fixed += fixedMs(e); }
     return scaled / speed + fixed;
   }
-  return { eventMs, fixedMs, batchMs, stepMs, STEP, AI_STEP, FIXED, ROLL, PATH_PREVIEW };
+  return { eventMs, fixedMs, batchMs, stepMs, previewMs, STEP, AI_STEP, FIXED, ROLL, PATH_PREVIEW };
 });
