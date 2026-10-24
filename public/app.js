@@ -1156,7 +1156,7 @@
     const left = FIN - r.pos;
     const pos = r.tripped
       ? '<span class="tc-pos bad">摔倒中 · 本回合爬起来，不掷骰</span>'
-      : `<span class="tc-pos">第 <b>${r.pos}</b> 格 · 离终点 <b>${left}</b> 格</span>`;
+      : `<span class="tc-pos" title="在第 ${r.pos} 格，离终点还差 ${left} 格">第 <b>${r.pos}</b> 格 · 差 <b>${left}</b> 格</span>`;
     // 行动顺序：当前行动者在最前，最多显示 4 位，你的选手标「你」
     const order = turnOrder();
     const q = order.slice(0, 4).map((x, k) => `<i class="tq ${k === 0 ? 'now' : ''} ${x.seat === you && isParticipant() ? 'me' : ''}" style="--c:${PCOL[x.seat % 6]}" title="${k === 0 ? '正在行动' : `第 ${k} 位`}：${esc(pname(vs.players[x.seat]))}的${esc(R[x.rid].name)}">${art(x.rid)}${x.seat === you && isParticipant() ? '<em>你</em>' : ''}</i>`).join('<span class="tq-arr" aria-hidden="true"></span>');
