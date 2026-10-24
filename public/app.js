@@ -786,7 +786,7 @@
           if (instant) el.style.transition = 'none';
           el.style.left = `${x / W * 100}%`;
           el.style.top = `${y / H * 100}%`;
-          el.classList.remove('tripped', 'cur');
+          el.classList.remove('tripped', 'cur', 'crowd');
           el.classList.add('done');
           let pl = $('.place', el);
           if (!pl) { pl = document.createElement('div'); el.appendChild(pl); }
@@ -803,17 +803,21 @@
       const cx = rc.x + rc.w / 2, cy = rc.y + rc.h / 2;
       list.sort((a, b) => (a.finished || 9) - (b.finished || 9) || a.seat - b.seat);
       const n = list.length;
+      // 挤在一格的人多了就整体缩小棋子；只留当前行动者的名字签，其余靠悬停查看（WP-A）
+      const crowd = layout === 'tall' ? n >= 3 : (p === 0 ? n >= 4 : n >= 3);
       list.forEach((r, k) => {
         let dx, dy;
         if (p === 0 && layout === 'wide') {
-          // 起点格够宽：3 人以内排成一行，名字全露出来；人多就分前后两排
-          const rows = n > 3 ? 2 : 1, per = Math.ceil(n / rows);
+          // 起点格够宽：4 人以内排成一行（4 人时缩小），名字全露出来；更多人分前后两排并错开半格
+          const rows = n > 4 ? 2 : 1, per = Math.ceil(n / rows);
           const row = Math.floor(k / per), cnt = row ? n - per : per;
-          dx = (k % per - (cnt - 1) / 2) * 57;
-          dy = rows > 1 ? (row ? 15 : -15) : 0;
+          const gap = rows > 1 ? 52 : n > 3 ? 42 : 57;
+          dx = (k % per - (cnt - 1) / 2) * gap + (rows > 1 ? (row ? gap / 4 : -gap / 4) : 0);
+          dy = rows > 1 ? (row ? 17 : -17) : 0;
         } else {
           const sl = (SLOTS[Math.min(n, 6)] || SLOTS[6])[k % 6];
-          [dx, dy] = layout === 'wide' ? sl : [sl[1], sl[0]];
+          const f = crowd && layout === 'tall' ? 1.1 : 1;
+          [dx, dy] = layout === 'wide' ? sl : [sl[1] * f, sl[0] * f];
         }
         const el = tokenEl(r);
         if (instant) el.style.transition = 'none';
@@ -823,12 +827,14 @@
         el.classList.toggle('out', !!r.out);
         el.classList.toggle('done', !!r.finished);
         el.classList.toggle('cur', vs.curSeat === r.seat && vs.phase === 'race' && !r.finished && !r.out);
+        el.classList.toggle('crowd', crowd);
         let pl = $('.place', el);
         if (r.finished && !pl) { pl = document.createElement('div'); el.appendChild(pl); }
         if (pl) { if (r.finished) { pl.className = `place p${r.finished}`; pl.textContent = r.finished; } else pl.remove(); }
-        const z = el.classList.contains('cur') ? 6 : 2 + k;
+        const cur = el.classList.contains('cur');
+        const z = cur ? 9 : 2 + k;
         el.style.zIndex = z;
-        if (!r.out) placed.push({ el, x: cx + dx, y: cy + dy, z });
+        if (!r.out) placed.push({ el, x: cx + dx, y: cy + dy, z, hide: crowd && layout === 'tall' && !cur });
         if (instant) { void el.offsetWidth; el.style.transition = ''; }
       });
     }
@@ -847,6 +853,7 @@
     const changes = [];
     for (const t of measured) {
       if (t.hw == null) continue;
+      if (t.hide) { changes.push({ el: t.el, hit: true }); bodies.push({ x: t.x, y: t.y, r: s * 0.4 }); continue; }
       // 名字签贴在棋子底下：bottom -16%、高 16
       const bottom = t.y + s * 0.66;
       const box = { l: t.x - t.hw, r: t.x + t.hw, t: bottom - 16, b: bottom };
@@ -1190,8 +1197,10 @@
     clearTimeout(comTimer);
     if (text) comTimer = setTimeout(() => { c.innerHTML = ''; }, 3200);
   }
-  function setDice(html) {
-    $('#diceZone').innerHTML = html || '';
+  function setDice(html, label) {
+    const z = $('#diceZone');
+    z.innerHTML = html || '';
+    if (label) z.setAttribute('aria-label', label); else z.removeAttribute('aria-label');
     $('#center').classList.toggle('busy', !!html);
   }
 
@@ -1238,17 +1247,42 @@
       pendingWaits.add(w);
     });
   }
+  // 结算停留（Timing.FIXED）：给人读分数，不随倍速缩短，减少动态效果时也照样停；只有积压快进时跳过。
+  // skipHold() 供结果浮层的「继续」按钮提前结束停留。
+  let holdRelease = null;
+  function hold(ms, epoch) {
+    if (epoch !== animationEpoch) return Promise.reject(CANCELLED);
+    if (fast) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const w = { reject, timer: null };
+      const done = () => {
+        clearTimeout(w.timer); pendingWaits.delete(w);
+        if (holdRelease === done) holdRelease = null;
+        epoch === animationEpoch ? resolve() : reject(CANCELLED);
+      };
+      w.timer = setTimeout(done, ms);
+      holdRelease = done;
+      pendingWaits.add(w);
+    });
+  }
+  function skipHold() { if (holdRelease) holdRelease(); }
   async function pump() {
     if (playing) return;
     const epoch = animationEpoch;
     playing = true;
     clearPromptLive();
+    let skipped = 0, before = null;
     try {
       while (queue.length && epoch === animationEpoch) {
         const b = queue.shift();
         fast = document.hidden || queue.length > 3;
-        for (const e of b.events) {
+        if (fast && !before) before = tokenSpots();
+        const evs = causalOrder(b.events);
+        for (let i = 0; i < evs.length; i++) {
+          const e = evs[i];
           if (epoch !== animationEpoch) return;
+          if (fast && MOTION_EVENTS.has(e.t)) skipped++;
+          playAhead = { list: evs, i };
           try { await playEvent(e, epoch); } catch (err) {
             if (err === CANCELLED || epoch !== animationEpoch) return;
             console.error('播放事件出错', e, err);
@@ -1266,8 +1300,9 @@
     } finally {
       // 旧 pump 的 finally 也不能解锁新一局、重建旧提示。
       if (epoch === animationEpoch) {
-        fast = false; playing = false;
+        fast = false; playing = false; playAhead = null;
         renderPlayers(); renderPrompt(); syncFinalActions();
+        if (skipped >= 4) syncHint(before, skipped);
       }
     }
   }
@@ -1318,13 +1353,23 @@
           const o = document.createElement('span');
           o.className = 'owner'; o.style.setProperty('--c', PCOL[e.seat % 6]); o.textContent = vs.players[e.seat].name;
           $('.art', el).appendChild(o);
-          el.classList.add('gone');
         }
         Sound.card();
         renderPlayers();
-        await pause(480);
+        // 被选走的卡先被「拎起」，再飞向该玩家的队伍栏/玩家卡；找不到落点就原地淡出
+        const target = el && !el.hidden && !fast && !reducedMotion.matches ? flyTarget(e.seat, vs.players[e.seat].hand.length - 1) : null;
+        if (target) {
+          el.classList.add('lift');
+          el.style.setProperty('--c', PCOL[e.seat % 6]);
+          await pause(160);
+          flyCard(el, target);
+          await pause(440);
+        } else {
+          if (el) el.classList.add('gone');
+          await pause(560);
+        }
         vs.faceUp = vs.faceUp.filter((id) => id !== e.rid);
-        if (el) el.remove();
+        if (el) removeDraftCard(el);
         break;
       }
       case 'firstPlayer':
@@ -1342,9 +1387,14 @@
         setDice('');
         renderAll();
         addFeed(`第 ${e.race} 场 · ${TRACKS[e.track].name}（金 ${e.gold} / 银 ${e.silver}）`, 'race');
-        banner(`第 ${e.race} 场 · ${TRACKS[e.track].name}`, `冠军 ${e.gold} 分 · 亚军 ${e.silver} 分`, e.track === 'wild');
+        // 横幅完全退场后赛道名才淡入，避免两层标题叠在一起
+        const ms = banner(`第 ${e.race} 场 · ${TRACKS[e.track].name}`, `冠军 ${e.gold} 分 · 亚军 ${e.silver} 分`, e.track === 'wild');
+        const ct = $('#centerTrack');
+        ct.classList.remove('ct-in'); void ct.offsetWidth;
+        ct.style.setProperty('--ctd', `${fast || reducedMotion.matches ? 0 : Math.round(ms * 0.86)}ms`);
+        ct.classList.add('ct-in');
         Sound.reveal();
-        await pause(1500);
+        await pause(1800);
         break;
       }
       case 'picked': {
@@ -1377,34 +1427,39 @@
         renderTurnCard();
         { const r = vr(e.rid); if (r) addFeed(`${vs.players[e.seat].name} · ${R[r.rid].name} 的回合`, 'turn', e.seat); }
         Sound.turn();
-        await pause(330);
+        spotlight(e.rid);
+        await pause(e.ai ? 200 : 330);
         break;
       }
       case 'recover': {
         const r = vr(e.rid); if (r) r.tripped = false;
         layoutTokens();
         floater(e.rid, '爬起来了', '');
-        await pause(420);
+        await pause(e.ai ? 340 : 420);
         break;
       }
       case 'roll': {
         const r = vr(e.rid);
         const cap = `${r ? esc(vs.players[r.seat].name) : ''}${e.reroll ? ' 重掷' : ''}`;
-        setDice(`<div class="die rolling">${die(1 + Math.floor(Math.random() * 6))}</div>`);
+        const T = Timing.ROLL[e.ai ? 'ai' : 'human'];
+        setDice(`<div class="die rolling">${die(1 + Math.floor(Math.random() * 6))}</div>`, '掷骰中');
         Sound.dice();
         const spin = setInterval(() => { if (epoch !== animationEpoch) return; const d = $('#diceZone .die.rolling'); if (d) d.innerHTML = die(1 + Math.floor(Math.random() * 6)); }, 90);
         animationIntervals.add(spin);
-        await pause(560);
+        await pause(T.spin);
         clearInterval(spin); animationIntervals.delete(spin);
-        setDice(`<div class="die land">${die(e.value)}<div class="die-cap">${cap}</div></div>`);
+        setDice(`<div class="die land" style="--c:${r ? PCOL[r.seat % 6] : INK}">${die(e.value)}<div class="die-cap">${cap}</div></div>`, `掷出 ${e.value} 点`);
         Sound.diceLand(e.value);
-        await pause(420);
+        await pause(T.land);
         break;
       }
       case 'calc': {
         const mods = e.mods.map((m) => `<span class="m ${m.v < 0 ? 'neg' : 'pos'}">${esc(m.label)} ${m.v > 0 ? '+' : ''}${m.v}</span>`).join('');
-        setDice(`<div class="calc"><div class="die" style="width:calc(56*var(--u));height:calc(56*var(--u))">${e.base <= 6 ? die(e.base) : ''}</div>${e.base > 6 ? `<b>${e.base}</b>` : ''}${mods}<span>=</span><span class="eq">${e.total}</span></div>`);
-        await pause(850);
+        setDice(`<div class="calc"><div class="die" style="width:calc(56*var(--u));height:calc(56*var(--u))">${e.base <= 6 ? die(e.base) : ''}</div>${e.base > 6 ? `<b>${e.base}</b>` : ''}${mods}<span>=</span><span class="eq">${e.total}</span></div>`, `主移动 ${e.total} 格`);
+        await pause(e.ai ? 320 : 500);
+        // 结果小标签从骰子区飞到要走的棋子身上
+        flyChip($('#diceZone .calc .eq'), e.rid, e.total);
+        await pause(e.ai ? 240 : 350);
         break;
       }
       case 'move': {
@@ -1412,25 +1467,31 @@
         if (!r) break;
         const el = tokenEl(r);
         const back = e.to < e.from;
+        // 主移动：先逐格预亮路径、落点放幽灵棋子，再开始跳
+        const preview = e.kind === 'main' ? previewPath(r, e.path) : null;
+        if (preview) await pause(Timing.PATH_PREVIEW);
         let i = 0;
-        for (const p of e.path) {
-          r.pos = p === FIN ? FIN : p;
-          layoutTokens();
-          const hop = $('.hop', el);
-          hop.classList.remove('go'); void hop.offsetWidth; hop.classList.add('go');
-          if (back) Sound.back(); else Sound.hop(i);
-          i++;
-          await pause(Timing.STEP);
-        }
+        try {
+          for (const p of e.path) {
+            r.pos = p === FIN ? FIN : p;
+            layoutTokens();
+            const hop = $('.hop', el);
+            hop.classList.remove('go'); void hop.offsetWidth; hop.classList.add('go');
+            if (back) Sound.back(); else Sound.hop(i);
+            i++;
+            await pause(Timing.stepMs(e));
+          }
+        } finally { if (preview) preview(); }
         r.pos = e.to;
         if (e.kind === 'arrow') pulseCell(e.to);
         layoutTokens();
-        await pause(140);
+        await pause(e.ai ? 110 : 140);
         break;
       }
       case 'warp': {
         const r = vr(e.rid); if (!r) break;
         const el = tokenEl(r);
+        trail(el, cellCenter(e.to), 'warp');
         el.classList.add('warp-out');
         Sound.warp();
         await pause(250);
@@ -1444,6 +1505,7 @@
       case 'swap': {
         const a = vr(e.a), b = vr(e.b); if (!a || !b) break;
         const ea = tokenEl(a), eb = tokenEl(b);
+        trail(ea, cellCenter(e.pa), 'swap'); trail(eb, cellCenter(e.pb), 'swap', true);
         ea.classList.add('warp-out'); eb.classList.add('warp-out');
         Sound.warp();
         commentary(e.text);
@@ -1455,17 +1517,17 @@
         break;
       }
       case 'power': {
-        const r = vr(e.rid);
-        const key = e.key;
-        floater(e.rid, `${R[key] ? R[key].skill : key}！`, '', r ? '#FFF3C4' : undefined);
+        // 技能提示卡：发动者亮圈 + 卡片（头像 / 技能名 / 一句话），连线指向受影响的人
+        skillCallout(e.rid, e.key, powerTargets(e));
         Sound.power();
-        await pause(260);
+        await pause(e.ai ? 520 : 640);
         break;
       }
       case 'trip': {
         const r = vr(e.rid); if (r) r.tripped = true;
         layoutTokens();
         renderTurnCard();
+        knock(e.rid);
         floater(e.rid, '摔倒！', 'bad');
         Sound.trip();
         await pause(500);
@@ -1564,10 +1626,11 @@
         break;
       case 'raceEnd': {
         vs.phase = 'between';
-        await pause(500);
+        await pause(560);
         showResultsOverlay(e);
         Sound.fanfare();
-        await pause(3000);
+        // 结果至少停 Timing.FIXED.raceEnd，不随倍速缩短；服务端排程同样单独累加
+        await hold(Timing.FIXED.raceEnd, epoch);
         break;
       }
       case 'gameOver':
@@ -1575,18 +1638,23 @@
         showFinalOverlay(e);
         Sound.fanfare();
         confetti(260);
-        await pause(1500);
+        await pause(560);
+        await hold(Timing.FIXED.gameOver, epoch);
         break;
       default: break;
     }
   }
 
+  // 返回横幅的总时长（ms），调用方据此安排后续淡入
   function banner(title, sub, wild) {
+    for (const old of $$('.banner')) old.remove();
+    const ms = Math.round(1600 / Math.min(speed, 1.5));
     const b = document.createElement('div');
     b.className = `banner ${wild ? 'wild' : ''}`;
-    b.innerHTML = `<div><b>${esc(title)}</b><span>${esc(sub)}</span></div>`;
+    b.innerHTML = `<div style="animation-duration:${ms}ms"><b>${esc(title)}</b><span>${esc(sub)}</span></div>`;
     document.body.appendChild(b);
-    animationLater(() => b.remove(), 1700 / Math.min(speed, 1.5));
+    animationLater(() => b.remove(), ms + 80);
+    return ms;
   }
 
   function flyCoin(rid, seat, kind, v) {
@@ -1609,6 +1677,292 @@
       c.style.transform = 'scale(.6) rotate(360deg)';
     }));
     setTimeout(() => c.remove(), 760);
+  }
+
+  /* ---------- WP-A：因果、跟随与快进提示 ---------- */
+  let playAhead = null; // 当前批次（已按因果重排）与播放下标，供技能卡推断受影响者
+  const MOTION_EVENTS = new Set(['move', 'warp', 'swap', 'trip', 'out', 'finish', 'power', 'roll', 'chip']);
+  // 引擎先结算效果再报技能；播放时把技能提到它自己的效果前面，让「谁发动 → 影响了谁」按因果顺序出现
+  const POWER_EFFECTS = {
+    banana: ['trip'], babayaga: ['trip'], mouth: ['out'], flipflop: ['swap'], hypnotist: ['warp'], thirdwheel: ['warp'],
+    hugebaby: ['warp', 'info'], stickler: ['blocked'], sisyphus: ['chip', 'warp', 'info'], loser: ['chip'],
+    centaur: ['info', 'move'], cheerleader: ['info', 'move'], partyanimal: ['info', 'move'], heckler: ['info', 'move'],
+    romantic: ['info', 'move'], inchworm: ['info', 'move'], lackey: ['info', 'move'], dicemonger: ['info', 'move'],
+    scoocher: ['info', 'move'], suckerfish: ['move'], legs: ['info'], hare: ['info'], skipper: ['info'], genius: ['info'],
+  };
+  const MOVES_OTHERS = new Set(['centaur', 'cheerleader', 'partyanimal']);
+  function causalOrder(events) {
+    if (!events.some((e) => e.t === 'power')) return events;
+    const out = events.slice();
+    for (let i = 0; i < out.length; i++) {
+      const e = out[i];
+      if (e.t !== 'power') continue;
+      const kinds = POWER_EFFECTS[e.key];
+      if (!kinds) continue;
+      const src = e.rid, tg = new Set(e.targets || []);
+      const srcRacer = vs && vs.racers ? vr(src) : null;
+      const related = (x) => {
+        if (!kinds.includes(x.t)) return false;
+        if (x.t === 'info') return x.rid === src;
+        if (x.t === 'swap') return x.a === src || x.b === src;
+        if (x.t === 'chip') return !!srcRacer && x.seat === srcRacer.seat;
+        if (x.t === 'move') return x.kind !== 'main' && (x.rid === src || (MOVES_OTHERS.has(e.key) && (tg.has(x.rid) || e.key === 'partyanimal')));
+        return x.rid === src || tg.has(x.rid);
+      };
+      let j = i;
+      while (j > 0 && related(out[j - 1])) j--;
+      if (j < i) { out.splice(i, 1); out.splice(j, 0, e); }
+    }
+    return out;
+  }
+  // 受影响者：优先用服务端给的 targets，否则在本批次里往后看到下一个回合/技能为止
+  function powerTargets(e) {
+    if (e.targets && e.targets.length) return e.targets.filter((x) => x !== e.rid);
+    const got = [];
+    if (!playAhead) return got;
+    const { list, i } = playAhead;
+    for (let k = i + 1; k < list.length && got.length < 3; k++) {
+      const x = list[k];
+      if (['power', 'turn', 'roll', 'calc', 'raceEnd', 'finish'].includes(x.t) || (x.t === 'move' && x.kind === 'main')) break;
+      const ids = x.t === 'swap' ? [x.a, x.b] : ['trip', 'out', 'warp', 'move', 'blocked'].includes(x.t) ? [x.rid] : [];
+      for (const id of ids) if (id && id !== e.rid && !got.includes(id)) got.push(id);
+    }
+    return got;
+  }
+  const tokenOf = (rid) => rid && $(`#tokens .token[data-rid="${rid}"]`);
+  // 棋子在棋盘坐标系（viewBox 单位）里的位置
+  function tokenPt(el) {
+    const [W, H] = VB();
+    return { x: parseFloat(el.style.left) / 100 * W, y: parseFloat(el.style.top) / 100 * H };
+  }
+  function cellCenter(p) { const c = cellRect(p >= FIN ? FIN : Math.max(0, p)); return { x: c.x + c.w / 2, y: c.y + c.h / 2 }; }
+  function restartClass(el, cls, ms) {
+    if (!el) return;
+    el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    animationLater(() => el.classList.remove(cls), ms);
+  }
+  function spotlight(rid) { if (!fast) restartClass(tokenOf(rid), 'spot', 900); }
+  function knock(rid) { if (!fast) restartClass(tokenOf(rid), 'sk-hit', 560); }
+  // 挂在 #floaters 上的 SVG 弧线层（坐标与赛道 viewBox 一致）
+  function arcLayer() {
+    let svg = $('#floaters .sk-arcs');
+    const [W, H] = VB();
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'sk-arcs');
+      svg.setAttribute('aria-hidden', 'true');
+      $('#floaters').appendChild(svg);
+    }
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    return svg;
+  }
+  function arcPath(a, b, bend) {
+    const [W, H] = VB();
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+    // 弧线朝棋盘中心鼓起，避免压在赛道外沿；bend 为负时反向（换位的第二条线）
+    let nx = -dy / len, ny = dx / len;
+    if ((W / 2 - mx) * nx + (H / 2 - my) * ny < 0) { nx = -nx; ny = -ny; }
+    const k = Math.min(len * bend, 120);
+    return `M${a.x.toFixed(1)} ${a.y.toFixed(1)} Q${(mx + nx * k).toFixed(1)} ${(my + ny * k).toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+  }
+  function drawArc(a, b, cls, life, color) {
+    if (fast || reducedMotion.matches || Math.hypot(b.x - a.x, b.y - a.y) < 8) return;
+    const svg = arcLayer();
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', `sk-arc ${cls}`);
+    if (color) g.style.setProperty('--ac', color);
+    const d = arcPath(a, b, cls === 'swap2' ? 0.2 : cls === 'swap' ? -0.2 : 0.28);
+    g.innerHTML = `<path class="under" d="${d}" pathLength="1"/><path class="over" d="${d}" pathLength="1"/><circle class="hit" cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="18"/>`;
+    svg.appendChild(g);
+    animationLater(() => g.classList.add('out'), life);
+    animationLater(() => g.remove(), life + 320);
+  }
+  function trail(el, to, kind, second) {
+    if (!el || !el.style.left) return;
+    drawArc(tokenPt(el), to, second ? 'swap2' : kind, 620 / Math.min(speed, 1.5), el.style.getPropertyValue('--c'));
+  }
+  // 技能提示卡
+  function skillCallout(rid, key, targets = []) {
+    const info = R[key];
+    if (!info || fast) return;
+    const el = tokenOf(rid);
+    const r = vr(rid);
+    const [W, H] = VB();
+    const fl = $('#floaters');
+    for (const old of $$('.skc', fl)) { old.classList.add('out'); setTimeout(() => old.remove(), 220); }
+    const owner = r && vs.players[r.seat] ? vs.players[r.seat].name.replace(/（AI）$/, '') : '';
+    const col = r ? PCOL[r.seat % 6] : INK;
+    const who = R[rid] ? R[rid].name : '';
+    const card = document.createElement('div');
+    card.className = 'skc';
+    card.style.setProperty('--c', col);
+    card.innerHTML = `<div class="skc-av">${art(rid)}</div><div class="skc-tx"><b>${esc(info.skill)}</b><span>${esc(owner ? `${owner} · ${who}` : who)}${key !== rid ? `（借用${esc(info.name)}）` : ''}</span><i>${esc(info.text)}</i></div>`;
+    // 卡片放在发动者上方（靠上的棋子放下方），左右夹在棋盘内
+    const cw = layout === 'tall' ? 280 : 330;
+    const pt = el && el.style.left ? tokenPt(el) : { x: W / 2, y: H / 2 };
+    const below = pt.y < H * 0.3;
+    const left = Math.max(6, Math.min(W - cw - 6, pt.x - cw / 2));
+    const off = layout === 'tall' ? 30 : 34;
+    card.style.left = `${left / W * 100}%`;
+    card.style.top = `${(below ? pt.y + off : pt.y - off) / H * 100}%`;
+    card.style.setProperty('--ax', Math.max(16, Math.min(cw - 16, pt.x - left)));
+    card.classList.add(below ? 'below' : 'above', layout === 'tall' ? 'tall' : 'wide');
+    fl.appendChild(card);
+    const life = reducedMotion.matches ? 1200 : Math.max(1000, 1700 / speed);
+    animationLater(() => card.classList.add('out'), life);
+    animationLater(() => card.remove(), life + 260);
+    if (el) restartClass(el, 'sk-cast', 1000);
+    const tnames = [];
+    for (const t of targets) {
+      const tel = tokenOf(t);
+      if (vr(t) && R[t]) tnames.push(R[t].name);
+      if (!tel || !el || t === rid) continue;
+      drawArc(tokenPt(el), tokenPt(tel), 'power', Math.max(700, 1100 / speed), col);
+      animationLater(() => restartClass(tel, 'sk-hit', 560), reducedMotion.matches ? 0 : 380 / Math.min(speed, 1.5));
+    }
+    commentary(`${who} 发动「${info.skill}」${tnames.length ? `：${tnames.join('、')}` : ''}`);
+  }
+  // 主移动预览：路径逐格亮起，落点放一个幽灵棋子；返回清理函数
+  function previewPath(r, path) {
+    if (fast || reducedMotion.matches || !path || !path.length) return null;
+    const cells = [];
+    path.forEach((p, k) => {
+      const c = $(`#trackSvg .cell[data-p="${p}"]`);
+      if (!c) return;
+      c.style.setProperty('--d', `${Math.min(k * 40, 320)}ms`);
+      c.classList.remove('path-lit'); void c.getBoundingClientRect(); c.classList.add('path-lit');
+      cells.push(c);
+    });
+    const [W, H] = VB();
+    const end = cellCenter(path[path.length - 1]);
+    const g = document.createElement('div');
+    g.className = 'ghost-token';
+    g.style.setProperty('--c', PCOL[r.seat % 6]);
+    g.style.left = `${end.x / W * 100}%`;
+    g.style.top = `${end.y / H * 100}%`;
+    g.innerHTML = `<div class="gb">${art(r.rid)}</div>`;
+    $('#floaters').appendChild(g);
+    let done = false;
+    const clean = () => {
+      if (done) return;
+      done = true;
+      for (const c of cells) c.classList.remove('path-lit');
+      g.classList.add('out');
+      setTimeout(() => g.remove(), 240);
+    };
+    animationLater(clean, 6000);
+    return clean;
+  }
+  // 骰子区的结果标签飞到棋子身上（和金币同一种弧线手感，WAAPI 驱动）
+  function flyChip(src, rid, v) {
+    const to = tokenOf(rid);
+    if (!src || !to || fast || reducedMotion.matches) return;
+    const a = src.getBoundingClientRect(), b = to.getBoundingClientRect();
+    const c = document.createElement('div');
+    c.className = 'fly-chip';
+    c.textContent = v;
+    c.style.left = `${a.left + a.width / 2}px`;
+    c.style.top = `${a.top + a.height / 2}px`;
+    document.body.appendChild(c);
+    const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height * 0.1 - (a.top + a.height / 2);
+    const dur = 380 / Math.min(speed, 1.5);
+    const anim = c.animate([
+      { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5 - 36}px)) scale(.9)`, opacity: 1, offset: 0.55 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.55)`, opacity: 0.2 },
+    ], { duration: dur, easing: 'cubic-bezier(.45, 0, .35, 1)', fill: 'forwards' });
+    anim.onfinish = () => { c.remove(); restartClass(to, 'chip-land', 420); };
+    setTimeout(() => c.remove(), dur + 200);
+  }
+  // 选秀飞卡：落点由 WP-B 的 data-fly-target / data-slot 提供，读不到就退回玩家卡；都没有返回 null
+  function flyTarget(seat, slot) {
+    const ok = (n) => {
+      if (!n) return null;
+      const b = n.getBoundingClientRect();
+      return b.width > 0 && b.height > 0 && b.bottom > 0 && b.right > 0 && b.top < innerHeight && b.left < innerWidth ? n : null;
+    };
+    const mine = seat === you;
+    return ok($(`[data-fly-target="seat-${seat}"]`))
+      || (mine && (ok($(`#myTeam [data-slot="${slot}"]`)) || ok($$('#myTeam .mt-slot')[slot])))
+      || ok($(`#players .prow[data-seat="${seat}"]`))
+      || null;
+  }
+  function flyCard(el, target) {
+    const a = el.getBoundingClientRect(), b = target.getBoundingClientRect();
+    const c = el.cloneNode(true);
+    c.classList.remove('pickable', 'deal', 'lift', 'gone');
+    c.classList.add('fly-card');
+    c.removeAttribute('id');
+    Object.assign(c.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, height: `${a.height}px`, visibility: 'visible' });
+    c.style.setProperty('--w', `${a.width}px`);
+    document.body.appendChild(c);
+    el.style.visibility = 'hidden';
+    const s = Math.max(0.18, Math.min(b.width / a.width, b.height / a.height, 1));
+    const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+    const dur = 440 / Math.min(speed, 1.5);
+    const anim = c.animate([
+      { transform: 'translate(0, 0) scale(1.04) rotate(-2deg)', opacity: 1 },
+      { transform: `translate(${dx * 0.45}px, ${dy * 0.45 - 30}px) scale(${(1 + s) / 2}) rotate(-8deg)`, opacity: 1, offset: 0.5 },
+      { transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(0deg)`, opacity: 0.35 },
+    ], { duration: dur, easing: 'cubic-bezier(.5, 0, .3, 1)', fill: 'forwards' });
+    anim.onfinish = () => { c.remove(); restartClass(target, 'fly-land', 520); };
+    setTimeout(() => c.remove(), dur + 250);
+  }
+  // 移走选秀卡，其余卡用 FLIP 平滑补位（分页可能重排，先量旧位置）
+  function removeDraftCard(el) {
+    const box = $('#draftCards');
+    const smooth = !fast && !reducedMotion.matches && box && box.contains(el);
+    const first = smooth ? new Map($$('#draftCards .rcard').filter((c) => c !== el && !c.hidden).map((c) => [c, c.getBoundingClientRect()])) : null;
+    el.remove();
+    if (!smooth) return;
+    fitDraft();
+    for (const c of $$('#draftCards .rcard')) {
+      if (c.hidden) continue;
+      const f = first.get(c);
+      const l = c.getBoundingClientRect();
+      if (!f) { c.animate([{ opacity: 0, transform: 'scale(.9)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' }); continue; }
+      const dx = f.left - l.left, dy = f.top - l.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      c.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.3, .7, .4, 1)' });
+    }
+  }
+  // 快进（积压或后台）跳过了动画：结束后提示一次，并让位置变了的棋子闪一下
+  function tokenSpots() {
+    const m = new Map();
+    if (vs && vs.racers) for (const r of vs.racers) m.set(r.rid, `${r.pos}|${r.finished}|${r.out}`);
+    return m;
+  }
+  let syncPending = false;
+  function syncHint(before, n) {
+    if (document.hidden) {
+      if (syncPending) return;
+      syncPending = true;
+      const epoch = animationEpoch;
+      document.addEventListener('visibilitychange', function once() {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', once);
+        syncPending = false;
+        if (epoch === animationEpoch && !playing) syncHint(before, n);
+      });
+      return;
+    }
+    if (!vs || $('#game').hidden) return;
+    const fl = $('#floaters');
+    for (const old of $$('.sync-hint', fl)) old.remove();
+    const h = document.createElement('div');
+    h.className = 'sync-hint';
+    h.setAttribute('role', 'status');
+    h.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l6 6-6 6M12 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>已快进 ${n} 步，同步到最新局面</span>`;
+    fl.appendChild(h);
+    animationLater(() => h.classList.add('out'), 2200);
+    animationLater(() => h.remove(), 2600);
+    if (before && vs.racers) {
+      for (const r of vs.racers) {
+        if (before.get(r.rid) === `${r.pos}|${r.finished}|${r.out}`) continue;
+        restartClass(tokenOf(r.rid), 'sync-flash', 1300);
+      }
+    }
   }
 
   /* ================= 浮层 ================= */

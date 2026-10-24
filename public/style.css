@@ -1234,3 +1234,136 @@ body { overflow: hidden; }
   .logo-text { font-size: clamp(28px, min(11dvh, 5.4vw), 64px); }
 }
 .room-directory-head h2 .ico { flex: none; }
+
+/* === WP-A 事件动画与因果 === */
+/* 棋子：当前行动者放大置顶 + 头顶跳动箭头；同格人多时整体缩小，只留当前行动者的名字签 */
+.token { transition: left .17s cubic-bezier(.3, .7, .4, 1), top .17s cubic-bezier(.3, .7, .4, 1), opacity .3s, transform .3s var(--ease), scale .28s var(--ease); }
+.token.crowd { scale: .8; }
+.board.tall .token.crowd { scale: .74; }
+.token.cur { scale: 1.12; }
+.token.crowd.cur { scale: .98; }
+.board.tall .token.cur { scale: 1.15; }
+.board.tall .token.crowd.cur { scale: 1; }
+.token.cur::before {
+  content: ""; position: absolute; left: 50%; top: -30%; width: 26%; height: 26%;
+  margin-left: -13%; background: var(--c); border: calc(2.5 * var(--u)) solid var(--ink); border-top: 0; border-left: 0;
+  border-radius: 0 0 calc(4 * var(--u)) 0; rotate: 45deg; z-index: 2;
+  animation: curBob .9s ease-in-out infinite;
+}
+@keyframes curBob { 50% { translate: 0 -32%; } }
+.token.cur .seat-dot { opacity: 1; z-index: 3; }
+.token.spot .body { animation: spotRing .8s ease-out; }
+@keyframes spotRing {
+  0% { box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 0 0 0 rgba(255, 197, 61, .95); }
+  100% { box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 0 0 calc(24 * var(--u)) rgba(255, 197, 61, 0); }
+}
+.token.sk-cast .body { animation: castRing 1s ease-out; }
+@keyframes castRing {
+  0%, 100% { box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 0 0 0 color-mix(in srgb, var(--c) 80%, transparent); }
+  30% { box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 0 0 calc(10 * var(--u)) color-mix(in srgb, var(--c) 75%, transparent), 0 0 calc(18 * var(--u)) calc(10 * var(--u)) rgba(255, 228, 120, .8); }
+}
+.token.sk-hit { animation: hitShake .5s ease-out; }
+.token.sk-hit .body { animation: hitFlash .5s ease-out; }
+@keyframes hitShake { 15%, 55% { translate: -8% 0; } 35%, 75% { translate: 8% 0; } }
+@keyframes hitFlash { 0%, 100% { filter: none; } 25% { filter: brightness(1.25) drop-shadow(0 0 calc(6 * var(--u)) #F2553C); } }
+.token.chip-land .hop { animation: chipLand .4s var(--ease); }
+@keyframes chipLand { 40% { scale: 1.16; } }
+.token.sync-flash .body { animation: syncFlash .6s ease-in-out 2; }
+@keyframes syncFlash { 50% { box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 0 0 calc(9 * var(--u)) rgba(77, 157, 247, .75); } }
+
+/* 主移动路径预亮 + 落点幽灵棋子 */
+.cell.path-lit { animation: pathLit .7s ease-out var(--d, 0ms) both; }
+@keyframes pathLit {
+  0% { filter: brightness(1); transform: scale(1); }
+  35% { filter: brightness(1.35) drop-shadow(0 0 5px #fff); transform: scale(1.07); }
+  100% { filter: brightness(1.14); transform: scale(1); }
+}
+.ghost-token {
+  position: absolute; width: calc(58 * var(--u)); height: calc(58 * var(--u)); margin: calc(-29 * var(--u)) 0 0 calc(-29 * var(--u));
+  border-radius: 50%; border: calc(3 * var(--u)) dashed var(--c); background: rgba(255, 255, 255, .6);
+  box-shadow: 0 0 0 calc(2 * var(--u)) rgba(35, 31, 51, .55); z-index: 1; pointer-events: none;
+  animation: ghostIn .26s var(--ease) both, ghostPulse 1s ease-in-out .26s infinite;
+}
+.board.tall .ghost-token { width: calc(50 * var(--u)); height: calc(50 * var(--u)); margin: calc(-25 * var(--u)) 0 0 calc(-25 * var(--u)); }
+.ghost-token .gb { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; opacity: .42; }
+.ghost-token .gb svg { width: 118%; height: 118%; margin: -9% 0 0 -9%; }
+.ghost-token.out { opacity: 0; transition: opacity .2s; animation: none; }
+@keyframes ghostIn { from { opacity: 0; scale: .5; } }
+@keyframes ghostPulse { 50% { scale: 1.08; } }
+
+/* 技能提示卡：挂在发动者旁边，带指向发动者的小尖角 */
+.skc {
+  --cw: 330;
+  position: absolute; width: calc(var(--cw) * var(--u)); z-index: 22; pointer-events: none;
+  display: grid; grid-template-columns: calc(48 * var(--u)) 1fr; gap: calc(9 * var(--u)); align-items: center;
+  padding: calc(8 * var(--u)) calc(11 * var(--u)) calc(8 * var(--u)) calc(8 * var(--u));
+  background: var(--paper); border: calc(2.5 * var(--u)) solid var(--ink); border-radius: calc(14 * var(--u));
+  box-shadow: calc(4 * var(--u)) calc(4 * var(--u)) 0 var(--ink), inset 0 calc(5 * var(--u)) 0 var(--c);
+  transform-origin: calc(var(--ax) * var(--u)) 100%;
+  animation: skcIn .3s var(--ease) both;
+}
+.skc.tall { --cw: 280; grid-template-columns: calc(52 * var(--u)) 1fr; }
+.skc.above { transform: translateY(-100%); }
+.skc.below { transform-origin: calc(var(--ax) * var(--u)) 0; }
+.skc::after {
+  content: ""; position: absolute; left: calc(var(--ax) * var(--u) - 8 * var(--u)); width: calc(14 * var(--u)); height: calc(14 * var(--u));
+  background: var(--paper); border: calc(2.5 * var(--u)) solid var(--ink); rotate: 45deg;
+}
+.skc.above::after { bottom: calc(-9 * var(--u)); border-top: 0; border-left: 0; }
+.skc.below::after { top: calc(-9 * var(--u)); border-bottom: 0; border-right: 0; background: var(--c); }
+.skc-av { width: 100%; aspect-ratio: 1; border-radius: 50%; overflow: hidden; background: var(--paper); border: calc(3 * var(--u)) solid var(--c); box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink); }
+.skc-av svg { width: 118%; height: 118%; margin: -9% 0 0 -9%; display: block; }
+.skc-tx { min-width: 0; display: flex; flex-direction: column; gap: calc(2 * var(--u)); line-height: 1.25; }
+.skc-tx b { font-size: calc(20 * var(--u)); font-weight: 900; color: var(--ink); letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skc-tx span { font-size: calc(12.5 * var(--u)); font-weight: 900; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; filter: brightness(.82); }
+.skc-tx i { font-style: normal; font-size: calc(13 * var(--u)); font-weight: 700; color: var(--ink2, #4A4560); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.skc.tall .skc-tx b { font-size: calc(21 * var(--u)); }
+.skc.tall .skc-tx span { font-size: calc(14 * var(--u)); }
+.skc.tall .skc-tx i { font-size: calc(14.5 * var(--u)); }
+.skc.out { opacity: 0; transition: opacity .22s; }
+@keyframes skcIn { from { opacity: 0; scale: .7; } 70% { scale: 1.04; } }
+
+/* 发动者 → 受影响者的弧线；瞬移/换位的轨迹同一套画法 */
+.sk-arcs { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 19; }
+.sk-arc path { fill: none; stroke-linecap: round; stroke-dasharray: 1 1; stroke-dashoffset: 1; animation: arcDraw .42s cubic-bezier(.4, 0, .2, 1) forwards; }
+.sk-arc .under { stroke: var(--ink); stroke-width: 10; }
+.sk-arc .over { stroke: var(--ac, var(--yellow)); stroke-width: 5.5; }
+.sk-arc .hit { fill: none; stroke: var(--ac, var(--yellow)); stroke-width: 5; transform-box: fill-box; transform-origin: center; opacity: 0; animation: arcHit .5s ease-out .36s; }
+.sk-arc.warp .under, .sk-arc.swap .under, .sk-arc.swap2 .under { stroke-width: 7; opacity: .8; }
+.sk-arc.warp .over, .sk-arc.swap .over, .sk-arc.swap2 .over { stroke-width: 3.5; }
+.sk-arc.out { opacity: 0; transition: opacity .3s; }
+@keyframes arcDraw { to { stroke-dashoffset: 0; } }
+@keyframes arcHit { 0% { opacity: 1; scale: .3; } 100% { opacity: 0; scale: 1.5; } }
+
+/* 骰子结果飞向棋子 */
+.fly-chip {
+  position: fixed; z-index: 60; pointer-events: none; padding: 2px 12px; border-radius: 12px;
+  background: var(--yellow); border: 2.5px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
+  font-weight: 900; font-size: 20px; line-height: 1.3; color: var(--ink);
+}
+
+/* 选秀飞卡与补位 */
+.rcard.lift { transform: translateY(-8px) scale(1.04) rotate(-1.5deg); box-shadow: 0 0 0 4px var(--c), 6px 10px 0 var(--ink); z-index: 2; }
+.rcard.fly-card { position: fixed; margin: 0; z-index: 70; pointer-events: none; box-shadow: 0 0 0 4px var(--c, var(--yellow)), 8px 12px 0 var(--ink); transition: none; }
+.fly-land { animation: flyLand .5s var(--ease); }
+@keyframes flyLand { 35% { scale: 1.08; filter: brightness(1.12); } }
+
+/* 场次切换：横幅退场后赛道名再淡入 */
+.center-track.ct-in { animation: ctIn .45s var(--ease) var(--ctd, 0ms) backwards; }
+@keyframes ctIn { from { opacity: 0; transform: translateY(calc(8 * var(--u))) scale(.94); } }
+
+/* 快进提示 */
+.sync-hint {
+  position: absolute; left: 50%; top: 3%; translate: -50% 0; z-index: 30; pointer-events: none;
+  display: flex; align-items: center; gap: calc(6 * var(--u)); padding: calc(5 * var(--u)) calc(14 * var(--u));
+  border-radius: 99px; background: var(--ink); color: #fff; border: calc(2 * var(--u)) solid #fff; box-shadow: var(--shadow-sm);
+  font-weight: 800; font-size: calc(15 * var(--u)); white-space: nowrap; animation: syncIn .32s var(--ease) both;
+}
+.board.tall .sync-hint { top: 12%; font-size: calc(17 * var(--u)); }
+.sync-hint svg { width: calc(17 * var(--u)); height: calc(17 * var(--u)); color: var(--yellow); }
+.sync-hint.out { opacity: 0; transition: opacity .35s; }
+@keyframes syncIn { from { opacity: 0; transform: translateY(-40%) scale(.9); } }
+@media (prefers-reduced-motion: reduce) {
+  .token.cur::before { animation: none; }
+  .sk-arcs { display: none; }
+}
