@@ -84,7 +84,7 @@
    * 每次触发只建 2～3 个节点（振荡器/噪声源 + [滤波] + 增益），发声结束即断开。
    * 只在 AudioContext 真正在跑时排程：未解锁、后台挂起、全部静音都直接跳过，
    * 避免挂起期间排进去的音在恢复时一次性补放成一团。离线渲染（测试/自检）不受此限。 */
-  const MAX_LIVE = 24; // 动效音效同时在响的声源上限，连发再多也不会叠爆
+  const MAX_LIVE = 32; // 动效音效同时在响的声源上限，连发再多也不会叠爆
   let live = 0;
   let bellWave = null, bellCtx = null, noiseBuf = null;
   function ready() {
@@ -138,14 +138,19 @@
     hold(s, [s, f, g]);
     s.start(t, Math.random() * 0.5, dur + 0.02);
   }
-  // 包一层：静音/未解锁时跳过；gap 秒内重复触发只响第一次（节流）；任何合成异常都吞掉，不影响游戏
+  // 包一层：静音/未解锁时跳过；任何合成异常都吞掉，不影响游戏。
+  // gap 为节流间隔：两次发声至少相隔 gap 秒。只早到一点点（时钟抖动、动画步长正好等于 gap）的不丢，
+  // 顺延到窗口边上再响；早得多的直接丢掉。
   function sfx(fn, gap = 0) {
     let last = -Infinity;
     return function (...args) {
       const c = ready();
       if (!c) return;
-      const t = c.currentTime;
-      if (t - last < gap) return;
+      let t = c.currentTime;
+      if (gap) {
+        if (t < last + gap - 0.015) return;
+        t = Math.max(t, last + gap);
+      }
       last = t;
       try { duck(); fn(t, ...args); } catch (e) { /* ignore */ }
     };
@@ -238,15 +243,15 @@
     /* ---------- 动效音效 ---------- */
     // 技能提示卡弹出：一声小气泡「啵」接钢片琴上行五度「叮—咚」
     callout: sfx((t) => {
-      voice(t, 520, 0.05, { vol: 0.05, to: 900 });
-      voice(t + 0.03, 784, 0.12, { type: 'bell', vol: 0.07 });
-      voice(t + 0.09, 1175, 0.2, { type: 'bell', vol: 0.07 });
+      voice(t, 520, 0.05, { vol: 0.065, to: 900 });
+      voice(t + 0.03, 784, 0.12, { type: 'bell', vol: 0.09 });
+      voice(t + 0.09, 1175, 0.2, { type: 'bell', vol: 0.09 });
     }),
     // 棋子被技能击中：下滑的软「咚」加一小团低通噪声，像打在枕头上；同一时刻多枚棋子被击中只响一次
     hit: sfx((t) => {
       const r = 0.92 + Math.random() * 0.16;
-      voice(t, 300 * r, 0.11, { type: 'triangle', vol: 0.07, to: 120 * r });
-      hiss(t, 0.05, { vol: 0.12, freq: 900, q: 0.7, type: 'lowpass' });
+      voice(t, 300 * r, 0.11, { type: 'triangle', vol: 0.057, to: 120 * r });
+      hiss(t, 0.05, { vol: 0.097, freq: 900, q: 0.7, type: 'lowpass' });
     }, 0.04),
     // 骰点飞落到棋子上：钢琴棒敲钟琴似的「叮」，基音加一个快速衰减的 2.76 倍泛音，点数越大音越高
     diceLand: sfx((t, n = 1) => {
@@ -256,50 +261,50 @@
     }),
     // 选秀卡飞出：带通噪声由低扫到高的「咻」
     swish: sfx((t) => {
-      hiss(t, 0.2, { vol: 0.18, freq: 800, to: 3800, q: 1.4, attack: 0.07 });
+      hiss(t, 0.2, { vol: 0.48, freq: 800, to: 3800, q: 1.4, attack: 0.07 });
     }),
     // 选秀卡落进队伍：纸片「啪」+ 木鱼「嗒」+ 一点钢片琴余音
     cardLand: sfx((t) => {
-      hiss(t, 0.05, { vol: 0.16, freq: 1600, q: 0.9 });
-      voice(t, 1050, 0.06, { vol: 0.06, attack: 0.002 });
-      voice(t + 0.04, 1319, 0.14, { type: 'bell', vol: 0.04 });
+      hiss(t, 0.05, { vol: 0.3, freq: 1600, q: 0.9 });
+      voice(t, 1050, 0.06, { vol: 0.11, attack: 0.002 });
+      voice(t + 0.04, 1319, 0.14, { type: 'bell', vol: 0.075 });
     }),
     // 路径逐格预亮：极短的正弦「嗒」，沿五声音阶逐格升高；60ms 内只响一次
     tick: sfx((t, i = 0) => {
-      voice(t, TICK[clamp(i, 0, TICK.length - 1)], 0.035, { vol: 0.04, attack: 0.002 });
+      voice(t, TICK[clamp(i, 0, TICK.length - 1)], 0.035, { vol: 0.048, attack: 0.002 });
     }, 0.06),
     // 快进/同步提示：钢片琴「叮—铃」上行四度，再带一声轻回声
     syncChime: sfx((t) => {
-      voice(t, 880, 0.16, { type: 'bell', vol: 0.06 });
-      voice(t + 0.08, 1319, 0.3, { type: 'bell', vol: 0.06 });
-      voice(t + 0.24, 1319, 0.25, { type: 'bell', vol: 0.025 });
+      voice(t, 880, 0.16, { type: 'bell', vol: 0.078 });
+      voice(t + 0.08, 1319, 0.3, { type: 'bell', vol: 0.078 });
+      voice(t + 0.24, 1319, 0.25, { type: 'bell', vol: 0.033 });
     }),
     // 名次上升：三角波向上滑到五度再落一个高八度的钢片琴音
     rankUp: sfx((t) => {
-      voice(t, 523, 0.1, { type: 'triangle', vol: 0.07, to: 784 });
-      voice(t + 0.08, 1046, 0.2, { type: 'bell', vol: 0.06 });
+      voice(t, 523, 0.1, { type: 'triangle', vol: 0.105, to: 784 });
+      voice(t + 0.08, 1046, 0.2, { type: 'bell', vol: 0.09 });
     }),
     // 名次下降：两声往下滑的「哇—哇」，滑稽不沮丧
     rankDown: sfx((t) => {
-      voice(t, 523, 0.14, { type: 'triangle', vol: 0.07, to: 392 });
-      voice(t + 0.12, 392, 0.2, { type: 'triangle', vol: 0.06, to: 330 });
+      voice(t, 523, 0.14, { type: 'triangle', vol: 0.13, to: 392 });
+      voice(t + 0.12, 392, 0.2, { type: 'triangle', vol: 0.11, to: 330 });
     }),
     // 领奖台柱子升起：低八度往上滑的「呜—」托起一个钢片琴音；i 为名次，3→2→1 依次升起是 C-E-G 上行
     pillar: sfx((t, i = 3) => {
       const k = clamp(i, 1, PILLAR.length), f = PILLAR[k - 1];
-      voice(t, f / 2, 0.22, { type: 'triangle', vol: 0.06, to: f, glide: 0.16, attack: 0.03 });
-      voice(t + 0.15, f, 0.35, { type: 'bell', vol: 0.07 });
-      if (k === 1) voice(t + 0.22, 1046, 0.4, { type: 'bell', vol: 0.05 });
+      voice(t, f / 2, 0.22, { type: 'triangle', vol: 0.068, to: f, glide: 0.16, attack: 0.03 });
+      voice(t + 0.15, f, 0.35, { type: 'bell', vol: 0.08 });
+      if (k === 1) voice(t + 0.22, 1046, 0.4, { type: 'bell', vol: 0.057 });
     }),
     // 点快进：噪声带通从 600Hz 扫到 5kHz，配一条三角波上滑两个八度的「嗖↑」
     boost: sfx((t) => {
-      hiss(t, 0.32, { vol: 0.14, freq: 600, to: 5000, q: 1.2, attack: 0.12 });
-      voice(t, 330, 0.3, { type: 'triangle', vol: 0.05, to: 1320, glide: 0.26, attack: 0.05 });
+      hiss(t, 0.32, { vol: 0.26, freq: 600, to: 5000, q: 1.2, attack: 0.12 });
+      voice(t, 330, 0.3, { type: 'triangle', vol: 0.093, to: 1320, glide: 0.26, attack: 0.05 });
     }),
     // 操作无效：两声柔和的三角波「嗯嗯↓」，小三度下行，不用方波，不吓人
     deny: sfx((t) => {
-      voice(t, 392, 0.09, { type: 'triangle', vol: 0.08, to: 370 });
-      voice(t + 0.11, 330, 0.16, { type: 'triangle', vol: 0.08, to: 294 });
+      voice(t, 392, 0.09, { type: 'triangle', vol: 0.115, to: 370 });
+      voice(t + 0.11, 330, 0.16, { type: 'triangle', vol: 0.115, to: 294 });
     }),
   };
   window.Sound = S;
