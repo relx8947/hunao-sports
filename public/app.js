@@ -747,8 +747,9 @@
           + `<label class="wpd-name"><input id="lobbyName" maxlength="12" value="${unnamed ? '' : esc(s.name)}" placeholder="${esc(s.name)}" aria-label="你的名字" autocomplete="nickname" enterkeyhint="done" spellcheck="false">${wpdIcon('pencil')}</label>`
           + `<div class="tag wpd-name-tag">${unnamed ? '点上面起个名字' : '回车保存'}</div></div>`;
       }
-      const rename = mine ? `<button type="button" class="wpd-rename" data-rename aria-label="改名，现在叫 ${esc(s.name)}">${wpdIcon('pencil')}</button>` : '';
-      return `<div class="seat${mine ? ' wpd-me' : ''}" style="--c:${c}">${kick}${rename}<div class="ava">${inner}</div><div class="nm">${esc(s.name)}</div><div class="tag">${tag}</div></div>`;
+      // 自己的名字本身就是改名按钮（带一支小铅笔），点一下变回输入框
+      const nm = mine ? `<button type="button" class="nm wpd-nm" data-rename aria-label="改名，现在叫 ${esc(s.name)}"><span>${esc(s.name)}</span>${wpdIcon('pencil')}</button>` : `<div class="nm">${esc(s.name)}</div>`;
+      return `<div class="seat${mine ? ' wpd-me' : ''}" style="--c:${c}">${kick}<div class="ava">${inner}</div>${nm}<div class="tag">${tag}</div></div>`;
     });
     for (let i = room.seats.length; i < 6; i++) cards.push(`<div class="seat empty">${i < 3 ? '至少 3 人' : '空位'}</div>`);
     // 逐个座位比对：只重画变了的那张，正在输入名字的座位不打断，新来的人才有弹入动画
