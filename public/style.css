@@ -1234,3 +1234,125 @@ body { overflow: hidden; }
   .logo-text { font-size: clamp(28px, min(11dvh, 5.4vw), 64px); }
 }
 .room-directory-head h2 .ico { flex: none; }
+
+/* === WP-B 局势与新手理解 === */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* 顶栏标题：场次 · 轮到谁 · 还有几位到你 */
+.top-title .tt-turn { color: var(--ink); }
+.top-title .tt-turn.mine { color: var(--red); }
+.top-title .tt-cue { color: var(--ink2); font-weight: 800; }
+.top-title .tt-cue.soon { color: var(--ink); background: linear-gradient(transparent 58%, rgba(255, 197, 61, .7) 58%); }
+.top-title .tt-sep { color: var(--ink3); }
+@media (max-width: 1000px) and (orientation: portrait) {
+  /* 手机上场次和赛道名已经在赛程胶囊和赛道中央，标题让给「轮到谁 / 还有几位」 */
+  .top-title .tt-race, .top-title .tt-race + .tt-sep { display: none; }
+}
+
+/* 玩家卡：快轮到你时轻轻脉冲 + 小标签 */
+.prow.soon { animation: prowSoon 1.6s ease-in-out infinite; }
+.prow .soon-tag { position: absolute; right: -4px; top: -9px; padding: 0 7px; border-radius: 99px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); font-size: 10.5px; font-weight: 900; line-height: 16px; white-space: nowrap; animation: pop .3s var(--ease); pointer-events: none; }
+@keyframes prowSoon { 50% { box-shadow: 2px 2px 0 var(--ink), 0 0 0 4px rgba(255, 197, 61, .6); } }
+.prow .pn b .pnm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow .pnm.clip { text-overflow: clip; }
+/* 窄屏玩家卡（4 人以上的手机竖屏）：头像 + 分数一行，名字单独占满一行；AI 用灰字、你用黑底角标 */
+@media (max-width: 1000px) and (orientation: portrait) {
+  .players.pf-stack .prow { grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: 22px auto; column-gap: 3px; row-gap: 1px; padding: 2px 5px 3px; }
+  .players.pf-stack .prow .pav { grid-row: 1; grid-column: 1; width: 22px; height: 22px; border-width: 2px; box-shadow: 0 0 0 1.5px var(--ink); }
+  .players.pf-stack .prow .pav .init { font-size: 12px; }
+  .players.pf-stack .prow .sc { grid-row: 1; grid-column: 2; align-self: center; }
+  .players.pf-stack .prow .sc b { font-size: 15px; }
+  .players.pf-stack .prow .pn { grid-row: 2; grid-column: 1 / -1; }
+  .players.pf-stack .prow .pn b { display: flex; gap: 2px; font-size: 11.5px; line-height: 14px; }
+  .players.pf-stack .prow .pn b .pnm { flex: 0 1 auto; }
+  .players.pf-stack .prow .pn b .you { order: -1; margin: 0; padding: 0 3px; font-size: 9px; line-height: 13px; }
+  .players.pf-stack .prow .pn b .auto { display: none; }
+  .players.pf-stack .prow.is-ai .pnm { color: var(--ink2); }
+  .players.pf-stack .prow .soon-tag { font-size: 9.5px; padding: 0 5px; line-height: 14px; top: -8px; }
+}
+
+/* 名次条：还差几格 + 你的选手 */
+.st-item .ss b { font-size: 1.15em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.st-item .ss.bad b { color: inherit; }
+.st-item .sn i .st-you { font-style: normal; margin-left: 4px; padding: 0 5px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 10px; }
+
+/* 比赛中赛道中央：标题退到背景，解说贴着行动卡，行动卡是主角 */
+.center.hud-race .center-track small { display: none; }
+.center.hud-race .center-track b { font-size: calc(28 * var(--u)); opacity: .55; text-shadow: none; -webkit-text-stroke-width: calc(1.5 * var(--u)); }
+.center.hud-race .commentary { bottom: calc(6 * var(--u)); }
+.board.tall .center.hud-race .commentary { bottom: calc(4 * var(--u)); }
+
+/* 行动卡：右上角「再过 n 位」标签、进度条、行动顺序 */
+.turn-card { position: relative; }
+.tc-cue { position: absolute; right: calc(10 * var(--u)); top: calc(-1 * var(--u)); z-index: 2; padding: calc(1 * var(--u)) calc(8 * var(--u)) calc(2 * var(--u)); border-radius: 0 0 calc(8 * var(--u)) calc(8 * var(--u)); background: var(--ink); color: #fff; font-size: max(10px, calc(11.5 * var(--u))); font-weight: 900; white-space: nowrap; }
+.tc-cue.soon { background: var(--yellow); color: var(--ink); border: calc(1.5 * var(--u)) solid var(--ink); border-top: 0; animation: cueSoon 1.4s ease-in-out infinite; }
+.tc-cue.mine { background: var(--red); }
+@keyframes cueSoon { 50% { transform: translateY(calc(2 * var(--u))); } }
+.tc-who { flex: 1; min-width: 0; padding-right: calc(4 * var(--u)); }
+.tc-who b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-bar { height: calc(4 * var(--u)); background: rgba(35, 31, 51, .12); }
+.tc-bar em { display: block; height: 100%; background: var(--c); border-right: calc(1.5 * var(--u)) solid var(--ink); transition: width .4s ease; }
+.tc-bar em[style="width:0%"] { border-right: 0; }
+.tc-st { display: flex; align-items: center; justify-content: space-between; gap: calc(6 * var(--u)); }
+.tc-pos { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-pos.bad { color: var(--red); }
+.tc-q { flex: none; display: inline-flex; align-items: center; gap: calc(2 * var(--u)); }
+.tc-q .tq { position: relative; display: block; width: calc(20 * var(--u)); height: calc(20 * var(--u)); border-radius: 50%; background: var(--paper); border: calc(2 * var(--u)) solid var(--c); box-shadow: 0 0 0 calc(1 * var(--u)) var(--ink); overflow: hidden; opacity: .8; }
+.tc-q .tq svg { width: 118%; height: 118%; margin: -9%; }
+.tc-q .tq.now { width: calc(24 * var(--u)); height: calc(24 * var(--u)); opacity: 1; box-shadow: 0 0 0 calc(1.5 * var(--u)) var(--ink), 0 0 0 calc(3.5 * var(--u)) var(--yellow); }
+.tc-q .tq.me { opacity: 1; overflow: visible; }
+.tc-q .tq.me svg { border-radius: 50%; }
+.tc-q .tq em { position: absolute; left: 50%; bottom: calc(-6 * var(--u)); transform: translateX(-50%); padding: 0 calc(3 * var(--u)); border-radius: 99px; background: var(--ink); color: #fff; font-style: normal; font-size: max(8px, calc(8.5 * var(--u))); line-height: 1.25; font-weight: 900; white-space: nowrap; }
+.tq-arr { width: calc(5 * var(--u)); height: calc(5 * var(--u)); border-top: calc(1.5 * var(--u)) solid var(--ink3); border-right: calc(1.5 * var(--u)) solid var(--ink3); transform: rotate(45deg); margin: 0 calc(1 * var(--u)) 0 calc(-1 * var(--u)); }
+.tq-more { font-size: max(9px, calc(10 * var(--u))); font-weight: 900; color: var(--ink3); margin-left: calc(2 * var(--u)); }
+
+/* 解说：技能因果（技能名 + 发动者 + 造成了什么），最多两行 */
+.commentary .com-vis { display: contents; }
+.commentary .com-skill { white-space: normal; text-align: left; max-width: min(100%, calc(460 * var(--u))); border-color: var(--ink); border-left: calc(5 * var(--u)) solid var(--c, var(--yellow)); border-radius: calc(12 * var(--u)); line-height: 1.35; display: -webkit-inline-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.commentary .com-skill .cs-tag { display: inline-block; margin-right: calc(4 * var(--u)); padding: 0 calc(6 * var(--u)); border-radius: 99px; background: var(--ink); color: #fff; font-size: .72em; font-weight: 900; vertical-align: .1em; }
+.commentary .com-skill .cs-name { color: var(--ink); }
+.commentary .com-skill .cs-who { font-style: normal; color: var(--ink2); font-size: .86em; margin: 0 calc(4 * var(--u)); }
+.commentary .com-skill .cs-eff { font-style: normal; font-weight: 800; color: var(--ink); }
+.commentary .com-skill .cs-eff::before { content: "→ "; color: var(--ink3); }
+
+/* 选秀顺位条：一行完整可见；当前那手展开成名字 */
+.draft-order { overflow: hidden; max-width: 100%; gap: 6px; }
+.draft-order .do-row { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.draft-order .do { position: relative; display: flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0; border-radius: 99px; border: 2px solid var(--c); background: var(--paper); color: var(--c); font-size: 11px; font-weight: 900; transform: none; }
+.draft-order .do > span { padding: 0 2px; white-space: nowrap; }
+.draft-order .do.past { opacity: .35; border-style: solid; background: var(--c); color: #fff; }
+.draft-order .do.me:not(.now) { background: var(--ink); border-color: var(--ink); color: #fff; box-shadow: 0 0 0 2px var(--c); }
+.draft-order .do.now { height: 26px; padding: 0 9px; background: var(--c); color: #fff; border-color: var(--ink); box-shadow: var(--shadow-sm); font-size: 12.5px; animation: doNow .5s var(--ease); max-width: 7.5em; }
+.draft-order .do.now > span { overflow: hidden; text-overflow: ellipsis; }
+.draft-order .do.now.me { background: var(--red); }
+@keyframes doNow { from { transform: scale(.7); } }
+.draft-order .do-cue { flex: none; padding: 2px 8px; border-radius: 99px; background: var(--bg2); color: var(--ink2); font-size: 11.5px; font-weight: 900; white-space: nowrap; }
+.draft-order .do-cue.soon { background: var(--yellow); color: var(--ink); border: 1.5px solid var(--ink); }
+.draft-order .do-cue.mine { background: var(--red); color: #fff; }
+.draft-order.fit1 .do:not(.now):not(.me) > span { display: none; }
+.draft-order.fit1 .do:not(.now) { min-width: 14px; height: 14px; }
+.draft-order.fit1 .do.me:not(.now) { min-width: 18px; height: 18px; font-size: 10px; }
+.draft-order.fit2 .do-label { display: none; }
+.draft-order.fit3 .do.past { display: none; }
+
+/* 我的队伍：只有新加入的那张弹入；下一个空位斜纹高亮；计数 */
+.mt-slot.filled.old { animation: none; }
+.mt-slot.filled.fresh { animation: mtIn .5s var(--ease); }
+@keyframes mtIn { 0% { transform: scale(.4) rotate(-8deg); opacity: 0; } 70% { transform: scale(1.08) rotate(2deg); opacity: 1; } }
+.mt-slot.next { border-color: var(--ink3); color: var(--ink2); background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(255, 197, 61, .18) 6px 12px); }
+.mt-label small { display: block; font-size: 10.5px; color: var(--ink3); font-weight: 900; font-variant-numeric: tabular-nums; }
+
+/* 说明卡：分区更清楚，状态带进度条 */
+.tip-skill { display: flex; align-items: center; gap: 6px; }
+.tip-skill em { font-style: normal; font-size: 10.5px; font-weight: 900; color: var(--ink3); letter-spacing: .1em; }
+.tip-body p { font-size: 13.5px; line-height: 1.55; color: var(--ink); }
+.tip-pw em { font-style: normal; font-weight: 900; margin-right: 2px; color: var(--purple); }
+.tip-st b { color: var(--ink); }
+.tip-st i { font-style: normal; color: var(--red); }
+.tip-bar { display: block; height: 5px; margin-top: 4px; border-radius: 99px; background: var(--bg2); overflow: hidden; }
+.tip-bar em { display: block; height: 100%; background: var(--rc); border-right: 1.5px solid var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .prow.soon, .tc-cue.soon { animation: none; }
+  .mt-slot.filled.fresh, .draft-order .do.now { animation: none; }
+}
