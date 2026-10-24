@@ -310,11 +310,11 @@
     if (isSpectator() && ['act', 'auto', 'emote'].includes(m.type)) return false;
     if (isSpectator() && ['speed', 'replay'].includes(m.type) && room?.host !== me.id) return false;
     if (!ws || ws.readyState !== WebSocket.OPEN || (m.type !== 'hello' && (!greeted || connection !== 'ready'))) {
-      if (!quiet) toast('尚未连接，请等重连完成后重新操作', true);
+      if (!quiet) { denyCue(); toast('尚未连接，请等重连完成后重新操作', true); }
       return false;
     }
     try { ws.send(JSON.stringify(m)); return true; } catch (e) {
-      if (!quiet) toast('发送失败，请重连后重试', true);
+      if (!quiet) { denyCue(); toast('发送失败，请重连后重试', true); }
       ws.close();
       return false;
     }
@@ -466,6 +466,7 @@
           if (room && room.status === 'lobby') renderLobby();
           toast(raw.includes('名字') ? '这个名字用不了，换一个试试（最多 12 个字）' : friendlyError(raw), true);
         } else toast(friendlyError(raw), true);
+        denyCue();
         if (!msg.for || msg.for === 'act') { clearSubmission(); hideOverlay(true); unlockPrompt(); }
         if (!msg.for || msg.for === navigationPending) { clearNavigation(); renderPrompt(); }
         if (msg.retryIn > 0 && msg.for === 'lobby') toast('最终动画还没结束，请稍后再试');
@@ -699,7 +700,7 @@
     $('#createBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'create' }); };
     const join = () => {
       const code = $('#codeInput').value.trim().toUpperCase();
-      if (!/^[A-Z0-9]{4}$/.test(code)) { showCodeError(joinProblem(code, '格式', 'input')); return; }
+      if (!/^[A-Z0-9]{4}$/.test(code)) { denyCue(); showCodeError(joinProblem(code, '格式', 'input')); return; }
       Sound.click(); ensureName();
       if (send({ type: 'join', code })) joinTry = { code, via: 'input' };
     };
@@ -1396,7 +1397,7 @@
           store.set('hn_tapHint', 1);
           $$('#draftCards .rcard').forEach((c) => { c.classList.remove('pickable', 'tap-hint'); c.onclick = null; });
         }
-      } : isParticipant() && vs && vs.phase === 'draft' ? () => { haptic('deny'); nudge(el); } : null;
+      } : isParticipant() && vs && vs.phase === 'draft' ? () => { denyCue(); nudge(el); } : null;
     }
     // 第一次轮到自己选人：在第一张可见卡上挂一枚静态「点我选人」，选过一次就不再出现
     if (mine && !store.get('hn_tapHint', 0)) {
@@ -1864,7 +1865,6 @@
           o.className = 'owner'; o.style.setProperty('--c', PCOL[e.seat % 6]); o.textContent = vs.players[e.seat].name;
           $('.art', el).appendChild(o);
         }
-        Sound.card();
         renderPlayers();
         // 被选走的卡先被「拎起」，再飞向该玩家的队伍栏/玩家卡；找不到落点就原地淡出
         const target = el && !el.hidden && !fast && !reducedMotion.matches ? flyTarget(e.seat, vs.players[e.seat].hand.length - 1) : null;
@@ -1872,9 +1872,12 @@
           el.classList.add('lift');
           el.style.setProperty('--c', PCOL[e.seat % 6]);
           await pause(160);
-          flyCard(el, target);
+          // 起飞「咻」、落进队伍「啪嗒」；旧 sound.js 没有这两个音时退回原来的翻卡声
+          if (!playSfx('swish')) Sound.card();
+          flyCard(el, target, () => playSfx('cardLand'));
           await pause(440);
         } else {
+          Sound.card();
           if (el) el.classList.add('gone');
           await pause(560);
         }
@@ -1961,7 +1964,8 @@
         await pause(T.spin);
         clearInterval(spin); animationIntervals.delete(spin);
         setDice(`<div class="die land" style="--c:${r ? PCOL[r.seat % 6] : INK}">${die(e.value)}<div class="die-cap">${cap}</div></div>`, `掷出 ${e.value} 点`);
-        Sound.diceLand(e.value);
+        // 「叮」响在点数落到棋子上的那一刻：后面跟着 calc 的，由 calc 的飞点落地时响；没有加减值的，定格的骰点就是最终点数
+        if (!fast && !calcFollows(e)) playSfx('diceLand', e.value);
         await pause(T.land);
         break;
       }
@@ -1970,7 +1974,7 @@
         setDice(`<div class="calc"><div class="die" style="width:calc(56*var(--u));height:calc(56*var(--u))">${e.base <= 6 ? die(e.base) : ''}</div>${e.base > 6 ? `<b>${e.base}</b>` : ''}${mods}<span>=</span><span class="eq">${e.total}</span></div>`, `主移动 ${e.total} 格`);
         await pause(e.ai ? 320 : 500);
         // 结果小标签从骰子区飞到要走的棋子身上
-        flyChip($('#diceZone .calc .eq'), e.rid, e.total);
+        if (!flyChip($('#diceZone .calc .eq'), e.rid, e.total, () => playSfx('diceLand', e.total)) && !fast) playSfx('diceLand', e.total);
         await pause(e.ai ? 240 : 350);
         break;
       }
@@ -1980,7 +1984,7 @@
         const el = tokenEl(r);
         const back = e.to < e.from;
         // 主移动：先逐格预亮路径、落点放幽灵棋子，再开始跳
-        const preview = e.kind === 'main' ? previewPath(r, e.path) : null;
+        const preview = e.kind === 'main' ? previewPath(r, e.path, Timing.previewMs(e) / speed) : null;
         el.classList.toggle('quick', !!e.ai);
         if (preview) await pause(Timing.previewMs(e));
         let i = 0;
@@ -2032,9 +2036,10 @@
       }
       case 'power': {
         // 技能提示卡：发动者亮圈 + 卡片（头像 / 技能名 / 一句话），连线指向受影响的人（WP-A）
-        skillCallout(e.rid, e.key, powerTargets(e));
+        const voiced = skillCallout(e.rid, e.key, powerTargets(e));
         commentary(skillLine(e)); // WP-B：技能解说（谁发动、造成了什么）
-        Sound.power();
+        // 提示卡弹出时已响 callout；没弹卡（快进等）或旧 sound.js 时才用原来的 power 音，免得两声叠在一起
+        if (!voiced) Sound.power();
         await pause(e.ai ? 520 : 640);
         break;
       }
@@ -2150,8 +2155,9 @@
       }
       case 'gameOver':
         vs.phase = 'over';
+        // 号角改由 showFinalOverlay 在领奖台柱子升完后接上（浮层可能要等单场结算停够才出来）
+        finalCheer = true;
         showFinalOverlay(e);
-        Sound.fanfare();
         confetti(260);
         await pause(560);
         await hold(Timing.FIXED.gameOver, epoch);
@@ -2306,7 +2312,7 @@
   // 技能提示卡
   function skillCallout(rid, key, targets = []) {
     const info = R[key];
-    if (!info || fast) return;
+    if (!info || fast) return false;
     const el = tokenOf(rid);
     const r = vr(rid);
     const [W, H] = VB();
@@ -2330,6 +2336,7 @@
     card.style.setProperty('--ax', Math.max(16, Math.min(cw - 16, pt.x - left)));
     card.classList.add(below ? 'below' : 'above', layout === 'tall' ? 'tall' : 'wide');
     fl.appendChild(card);
+    const voiced = playSfx('callout');
     const life = reducedMotion.matches ? 1200 : Math.max(1000, 1700 / speed);
     animationLater(() => card.classList.add('out'), life);
     animationLater(() => card.remove(), life + 260);
@@ -2339,16 +2346,20 @@
       const tel = tokenOf(t);
       if (!tel || !el || t === rid) continue;
       drawArc(tokenPt(el), tokenPt(tel), 'power', Math.max(700, 1100 / speed), col);
-      animationLater(() => { restartClass(tel, 'sk-hit', 560); buzz('hit', t); }, reducedMotion.matches ? 0 : 380 / Math.min(speed, 1.5));
+      // 同一帧多枚棋子被击中时 Sound.hit 内部会合并成一声
+      animationLater(() => { restartClass(tel, 'sk-hit', 560); playSfx('hit'); buzz('hit', t); }, reducedMotion.matches ? 0 : 380 / Math.min(speed, 1.5));
     }
+    return voiced;
   }
   // 主移动预览：路径逐格亮起，落点放一个幽灵棋子；返回清理函数
-  function previewPath(r, path) {
+  function previewPath(r, path, windowMs = Infinity) {
     if (fast || reducedMotion.matches || !path || !path.length) return null;
     const cells = [];
     path.forEach((p, k) => {
       const c = $(`#trackSvg .cell[data-p="${p}"]`);
       if (!c) return;
+      // 每隔一格滴答一次（Sound.tick 自带 60ms 节流，40ms 一格会被吞掉一半），音高逐格上行
+      if (k % 2 === 0 && k * 40 <= 320 && k * 40 < windowMs - 10) animationLater(() => playSfx('tick', k / 2), k * 40);
       c.style.setProperty('--d', `${Math.min(k * 40, 320)}ms`);
       c.classList.remove('path-lit'); void c.getBoundingClientRect(); c.classList.add('path-lit');
       cells.push(c);
@@ -2374,9 +2385,10 @@
     return clean;
   }
   // 骰子区的结果标签飞到棋子身上（和金币同一种弧线手感，WAAPI 驱动）
-  function flyChip(src, rid, v) {
+  // 返回是否真的飞了；onLand 在飞点落到棋子上时调用
+  function flyChip(src, rid, v, onLand) {
     const to = tokenOf(rid);
-    if (!src || !to || fast || reducedMotion.matches) return;
+    if (!src || !to || fast || reducedMotion.matches) return false;
     const a = src.getBoundingClientRect(), b = to.getBoundingClientRect();
     const c = document.createElement('div');
     c.className = 'fly-chip';
@@ -2391,8 +2403,20 @@
       { transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5 - 36}px)) scale(.9)`, opacity: 1, offset: 0.55 },
       { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.55)`, opacity: 0.2 },
     ], { duration: dur, easing: 'cubic-bezier(.45, 0, .35, 1)', fill: 'forwards' });
-    anim.onfinish = () => { c.remove(); restartClass(to, 'chip-land', 420); };
+    anim.onfinish = () => { c.remove(); restartClass(to, 'chip-land', 420); if (onLand) onLand(); };
     setTimeout(() => c.remove(), dur + 200);
+    return true;
+  }
+  // 掷骰之后同一批里是否还有这名选手的 calc（加减值后的点数会再飞到棋子上）
+  function calcFollows(e) {
+    if (!playAhead) return false;
+    const { list, i } = playAhead;
+    for (let k = i + 1; k < list.length; k++) {
+      const x = list[k];
+      if (x.t === 'calc') return x.rid === e.rid;
+      if (x.t === 'roll' || x.t === 'turn' || x.t === 'move') return false;
+    }
+    return false;
   }
   // 选秀飞卡：落点由 WP-B 的 data-fly-target / data-slot 提供，读不到就退回玩家卡；都没有返回 null
   function flyTarget(seat, slot) {
@@ -2407,7 +2431,7 @@
       || ok($(`#players .prow[data-seat="${seat}"]`))
       || null;
   }
-  function flyCard(el, target) {
+  function flyCard(el, target, onLand) {
     const a = el.getBoundingClientRect(), b = target.getBoundingClientRect();
     const c = el.cloneNode(true);
     c.classList.remove('pickable', 'deal', 'lift', 'gone');
@@ -2425,7 +2449,7 @@
       { transform: `translate(${dx * 0.45}px, ${dy * 0.45 - 30}px) scale(${(1 + s) / 2}) rotate(-8deg)`, opacity: 1, offset: 0.5 },
       { transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(0deg)`, opacity: 0.35 },
     ], { duration: dur, easing: 'cubic-bezier(.5, 0, .3, 1)', fill: 'forwards' });
-    anim.onfinish = () => { c.remove(); restartClass(target, 'fly-land', 520); };
+    anim.onfinish = () => { c.remove(); restartClass(target, 'fly-land', 520); if (onLand) onLand(); };
     setTimeout(() => c.remove(), dur + 250);
   }
   // 移走选秀卡，其余卡用 FLIP 平滑补位（分页可能重排，先量旧位置）
@@ -2470,6 +2494,7 @@
     h.setAttribute('role', 'status');
     h.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l6 6-6 6M12 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>已快进 ${n} 步，同步到最新局面</span>`;
     fl.appendChild(h);
+    playSfx('syncChime');
     animationLater(() => h.classList.add('out'), 2200);
     animationLater(() => h.remove(), 2600);
     if (before && vs.racers) {
@@ -2555,7 +2580,7 @@
     down: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v9.5M3.5 8.5L8 13l4.5-4.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   };
   // 名次 FLIP：先按旧名次的位置摆放，到点再滑到新位置
-  function flipRows(rows, delay) {
+  function flipRows(rows, delay, onGo) {
     if (!rows.length) return;
     const moved = rows.filter((r) => Number(r.dataset.from) !== Number(r.dataset.to));
     const settle = () => { for (const r of rows) { r.style.translate = ''; r.classList.add('settled'); } };
@@ -2564,6 +2589,7 @@
     for (const r of moved) { r.classList.add('flip-prep'); r.style.translate = `0 ${(Number(r.dataset.from) - Number(r.dataset.to)) * pitch}px`; }
     animationLater(() => {
       for (const r of moved) { r.classList.remove('flip-prep'); r.classList.add('flip-go'); }
+      if (onGo) onGo(moved);
       requestAnimationFrame(settle);
     }, delay);
   }
@@ -2616,7 +2642,12 @@
       if (g) rollNumber(g, 0, e.scores[seat] - prev, 450, 520 + k * 70);
       rollNumber($('.tot', row), prev, e.scores[seat], 600, 760 + k * 70);
     });
-    flipRows(rowEls, 1500 + rowEls.length * 70);
+    flipRows(rowEls, 1500 + rowEls.length * 70, (moved) => {
+      // 多人同时变动：玩家只听自己的升降；观众（没有自己的名次）只响一次
+      const mine = isParticipant() ? moved.find((r) => Number(r.dataset.seat) === you) : moved[0];
+      if (!mine) return;
+      playSfx(Number(mine.dataset.to) < Number(mine.dataset.from) ? 'rankUp' : 'rankDown');
+    });
     const mine = st.find((s) => s.seat === you);
     if (mine && mine.finished && animOk()) animationLater(() => haptic('finish'), 400);
     $('#ovClose').onclick = () => { Sound.click(); resultsHold = 0; clearTimeout(overlayDeferTimer); hideOverlay(); };
@@ -2664,6 +2695,7 @@
     return isSpectator() ? 'replay' : quickAgain() ? 'again' : 'lobby';
   }
   let finalReadyAt = 0;
+  let finalCheer = false; // 本次终局浮层是否由 gameOver 事件带出（要放柱子音和号角）
   let finalReadyTimer = null;
   function syncFinalActions() {
     if (overlayKind !== 'final') return;
@@ -2680,7 +2712,7 @@
         again.onclick = () => {
           Sound.click();
           if (navigate(type, again)) { again.classList.add('is-loading'); $('.lbl', again).textContent = type === 'again' ? '正在重开…' : spectator ? '正在准备…' : '正在回大厅…'; }
-          else haptic('deny');
+          else denyCue();
         };
       }
       // 终局动画还在播时服务端会拒绝重开：按钮先显示等待进度，到点自动可点
@@ -2741,6 +2773,14 @@
       <div class="ov-actions"><span id="finalReplayControl"></span><button class="btn" id="toHome" data-navigation="leave"><span class="ico">${icon('door')}</span>回到首页</button><button class="btn" id="ovClose"><span class="ico">${icon('map')}</span>看看赛道</button></div></div>`, 'final');
     const ov = $('#overlay');
     for (const el of $$('.pod-sc', ov)) rollNumber(el, 0, Number(el.textContent), 700, 650);
+    if (finalCheer) {
+      finalCheer = false;
+      if (animOk() && typeof Sound.pillar === 'function') {
+        // 与 .wpc-fpod .blk 的 animation-delay（200ms + k×300ms）对齐：第 3、2、1 名依次升起，最后接号角
+        [[rows[2], 3, 200], [rows[1], 2, 500], [rows[0], 1, 800]].forEach(([x, i, ms]) => { if (x) animationLater(() => Sound.pillar(i), ms); });
+        animationLater(() => Sound.fanfare(), 1150);
+      } else Sound.fanfare();
+    }
     // 冠军压轴：最后一根柱子升起时第二次喷彩纸（冠军是你时）
     if (youWon && animOk()) {
       animationLater(() => confetti(160, innerWidth / 2, innerHeight * 0.3), 1250);
@@ -2772,7 +2812,7 @@
     updatePickStatus(d);
     fitOverlayCards(true);
     for (const el of $$('#pickCards .rcard')) {
-      el.onclick = canPick ? () => { if (answer(d, el.dataset.id)) { Sound.card(); el.classList.add('chosen'); } } : () => { haptic('deny'); nudge(el); };
+      el.onclick = canPick ? () => { if (answer(d, el.dataset.id)) { Sound.card(); el.classList.add('chosen'); } } : () => { denyCue(); nudge(el); };
     }
     if (canPick) focusFirst('#pickCards .rcard.pickable:not([hidden])', `pick:${d.id}`);
   }
@@ -2822,6 +2862,21 @@
   const hasKeyboard = matchMedia('(hover: hover) and (pointer: fine)');
   const HAPTIC = { deny: 10, land: 15, turn: 30, hit: [20, 40, 20], finish: [30, 50, 60], champ: [40, 60, 40, 60, 120] };
   // 振动跟随声音设置：「全部静音」时一起关掉；只在用户已与页面交互后触发（浏览器也要求如此）
+  // wp-sfx 的动效音效：旧版 sound.js 没有对应函数时静默跳过；返回是否真的调用了
+  function playSfx(name, ...args) {
+    if (!window.Sound || typeof Sound[name] !== 'function') return false;
+    Sound[name](...args);
+    return true;
+  }
+  // 操作被拒：声音 + 触觉；同一次点击可能同时触发「发送失败」和按钮自身的拒绝，300ms 内只响一次
+  let lastDenyAt = 0;
+  function denyCue() {
+    const t = performance.now();
+    if (t - lastDenyAt < 300) return;
+    lastDenyAt = t;
+    haptic('deny');
+    playSfx('deny');
+  }
   function haptic(kind) {
     const pattern = HAPTIC[kind];
     if (!pattern || !navigator.vibrate || !navigator.userActivation?.hasBeenActive) return false;
@@ -2876,7 +2931,7 @@
     const current = snap && snap.pending;
     if (!isParticipant() || locked || playing || queue.length || !current || current.id !== d.id ||
         (current.simul ? !current.seats.includes(you) || current.done.includes(you) : current.seat !== you)) {
-      if (isParticipant()) haptic('deny');
+      if (isParticipant()) denyCue();
       return false;
     }
     // 旧后端没有 gameId 字段；新后端始终下发并严格校验，升级前仍可继续现有对局。
@@ -3075,8 +3130,8 @@
     const b = $('#dock [data-x="skip"]');
     if (!b) return;
     b.onclick = () => {
-      Sound.click();
-      if (!send({ type: 'skip' })) { haptic('deny'); nudge(b); return; }
+      if (!send({ type: 'skip' })) { denyCue(); nudge(b); return; }
+      if (!playSfx('boost')) Sound.click();
       skipSentRace = `${gameId}:${vs.raceNo}`;
       b.disabled = true; b.classList.add('is-loading'); $('.lbl', b).textContent = '正在快进…';
       clearTimeout(skipTimer);
@@ -3322,7 +3377,8 @@
 
   /* ================= 对局顶栏 ================= */
   function initGameBar() {
-    $('#speedBtn').onclick = () => { Sound.click(); send({ type: 'speed' }); };
+    // 倍速循环 1 → 1.5 → 2.2 → 1（与 hub.js 的 SPEEDS 一致）：往快里切用「嗖↑」，绕回 1 倍用普通点击
+    $('#speedBtn').onclick = () => { if (!(speed < 2.2 && playSfx('boost'))) Sound.click(); send({ type: 'speed' }); };
     $('#autoBtn').onclick = () => { Sound.click(); send({ type: 'auto', on: !autoFlags[you] }); };
     $('#soundBtn').onclick = () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); };
     $('#leaveGame').onclick = () => {
