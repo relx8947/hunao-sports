@@ -697,7 +697,7 @@ test('已结束观战房可加入观众并由新在线房主 replay，全局 dis
   for (const ws of [B, tab]) { assert.equal(ws.room, null); assert.equal(ws.player, null); }
   assert.equal(f.command(tab, 'watch'), '服务已关闭');
 });
-const DIRECTORY_KEYS = ['code', 'mode', 'status', 'hostName', 'playerCount', 'aiCount', 'humanCount', 'onlineCount', 'maxPlayers', 'spectatorCount', 'onlineSpectatorCount', 'canJoin', 'isMember'].sort();
+const DIRECTORY_KEYS = ['code', 'mode', 'status', 'edition', 'hostName', 'playerCount', 'aiCount', 'humanCount', 'onlineCount', 'maxPlayers', 'spectatorCount', 'onlineSpectatorCount', 'canJoin', 'isMember'].sort();
 function directory(f, ws) { return f.last(ws, 'roomList').rooms; }
 function listed(f, ws, code) { return directory(f, ws).find((room) => room.code === code); }
 function listCount(ws) { return ws.messages.filter((msg) => msg.type === 'roomList').length; }
@@ -731,7 +731,7 @@ test('其他人创建、加减 AI、加入、改名与离开自动推送轻量�
   f.command(A, 'create');
   const room = f.hub.rooms.get(A.room);
   assert.deepEqual(listed(f, lobby, room.code), {
-    code: room.code, mode: 'play', status: 'lobby', hostName: '原房主',
+    code: room.code, mode: 'play', status: 'lobby', edition: 'v1', hostName: '原房主',
     playerCount: 1, aiCount: 0, humanCount: 1, onlineCount: 1, maxPlayers: 6,
     spectatorCount: 0, onlineSpectatorCount: 0, canJoin: true, isMember: false,
   });
@@ -990,4 +990,82 @@ test('dispose 清理目录订阅，迟到 listRooms/cleanup/disconnect 不再发
   f.hub.dispose(); f.hub.cleanup(); f.hub.disconnect(lobby);
   assert.equal(listCount(lobby), before); assert.equal(f.timers.size, 0); assert.equal(f.intervals.size, 0);
 });
-console.log(`房间生命周期回归通过：${lifecycleCount} 项；公开房间目录回归通过：${count - lifecycleCount} 项（合计 ${count} 项）`);
+
+/* ---------- 模式（一代 / 二代 / 混合） ---------- */
+const editionCount = count;
+test('建房缺省一代；房主可在大厅切换模式，非法/越权/开局后切换拒绝；目录与房间摘要带模式', f => {
+  const lobby = f.socket('首页'), A = f.socket('房主'), B = f.socket('朋友');
+  f.command(lobby, 'listRooms');
+  f.command(A, 'create');
+  const room = f.hub.rooms.get(A.room);
+  assert.equal(room.edition, 'v1');
+  assert.equal(f.last(A, 'room').room.edition, 'v1');
+  assert.equal(listed(f, lobby, room.code).edition, 'v1');
+  assert.equal(f.command(B, 'join', { code: room.code }), null);
+  assert.match(f.command(B, 'edition', { edition: 'v2' }), /房主/);
+  assert.match(f.command(A, 'edition', { edition: 'v3' }), /模式/);
+  assert.equal(room.edition, 'v1');
+  assert.equal(f.command(A, 'edition', { edition: 'mix' }), null);
+  assert.equal(f.last(B, 'room').room.edition, 'mix');
+  assert.equal(listed(f, lobby, room.code).edition, 'mix');
+  f.command(A, 'addAI');
+  assert.equal(f.command(A, 'start'), null);
+  assert.equal(room.game.edition, 'mix');
+  assert.deepEqual(room.game.schedule, ['mild', 'wild', 'twisty', 'whirly']);
+  assert.equal(f.last(A, 'game').edition, 'mix');
+  assert.equal(f.last(A, 'game').snap.edition, 'mix');
+  assert.match(f.command(A, 'edition', { edition: 'v1' }), /已开始/);
+  // 带模式建房；非法模式不建房
+  const C = f.socket('二代房主');
+  assert.match(f.command(C, 'create', { edition: 'nope' }), /模式/);
+  assert.equal(C.room, null);
+  assert.equal(f.command(C, 'create', { edition: 'v2' }), null);
+  assert.equal(f.hub.rooms.get(C.room).edition, 'v2');
+});
+
+for (const edition of ['v1', 'v2', 'mix']) {
+  test(`${edition}：快速局托管跑完四场，断线重连拿到同模式完整快照`, f => {
+    const A = f.socket('玩家');
+    assert.equal(f.command(A, 'quick', { ai: 3, edition }), null);
+    const room = f.hub.rooms.get(A.room);
+    assert.equal(room.edition, edition);
+    f.command(A, 'auto', { on: true });
+    let actions = 0, reconnected = false;
+    while (room.game.pending && actions++ < 6000) {
+      assert(f.runNext(), '托管必须有下一步调度');
+      if (!reconnected && room.game.phase === 'race' && room.game.raceNo === 2) {
+        reconnected = true;
+        const token = A.player.token;
+        f.hub.disconnect(A);
+        f.command(A, 'hello', { token });
+        const full = f.last(A, 'game');
+        assert.equal(full.full, true); assert.equal(full.edition, edition); assert.equal(full.snap.edition, edition);
+        if (edition !== 'v1') assert(full.snap.v2, '二代/混合快照带 v2 状态');
+        else assert.equal(full.snap.v2, undefined);
+        f.command(A, 'auto', { on: true });
+      }
+    }
+    assert(reconnected);
+    assert.equal(room.game.phase, 'over');
+    assert.deepEqual(room.game.results.map(r => r.track), require('../game/tracks').EDITIONS[edition].schedule);
+  });
+  test(`${edition}：AI 观战房带模式跑完整局`, f => {
+    const W = f.socket('观众');
+    assert.equal(f.command(W, 'watch', { ai: 5, edition }), null);
+    const room = f.hub.rooms.get(W.room);
+    assert.equal(room.mode, 'spectator'); assert.equal(room.edition, edition);
+    assert.equal(f.last(W, 'room').room.edition, edition);
+    let actions = 0;
+    while (room.game.pending && actions++ < 6000) assert(f.runNext());
+    assert.equal(room.game.phase, 'over');
+    assert.equal(f.last(W, 'game').you, -1);
+  });
+}
+test('watch/quick 非法模式不建房', f => {
+  const A = f.socket('A');
+  assert.match(f.command(A, 'watch', { ai: 4, edition: 'x' }), /模式/);
+  assert.match(f.command(A, 'quick', { ai: 3, edition: 'x' }), /模式/);
+  assert.equal(A.room, null); assert.equal(f.hub.rooms.size, 0);
+});
+console.log(`模式回归通过：${count - editionCount} 项`);
+console.log(`房间生命周期回归通过：${lifecycleCount} 项；公开房间目录回归通过：${editionCount - lifecycleCount} 项（合计 ${count} 项）`);

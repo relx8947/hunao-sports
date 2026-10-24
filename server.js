@@ -6,9 +6,12 @@ const path = require('path');
 const { WebSocket, WebSocketServer } = require('ws');
 const defaultHub = require('./server/hub');
 
-const { RACERS } = require('./game/racers');
-const { TRACKS, FINISH, GOLD, SILVER, SCHEDULE } = require('./game/tracks');
-const RACERS_JS = `window.RACERS=${JSON.stringify(RACERS)};window.TRACKS=${JSON.stringify(TRACKS)};window.FINISH=${FINISH};window.GOLD=${JSON.stringify(GOLD)};window.SILVER=${JSON.stringify(SILVER)};window.SCHEDULE=${JSON.stringify(SCHEDULE)};`;
+const { RACERS, RACERS_ALL, TWISTS } = require('./game/racers');
+const { TRACKS, FINISH, GOLD, SILVER, SCHEDULE, EDITIONS, EDITION_KEYS, DEFAULT_EDITION } = require('./game/tracks');
+// 现有前端读取的 RACERS/TRACKS/SCHEDULE 保持一代内容不变；二代与混合模式的数据放在新增的 *_ALL/EDITIONS/TWISTS 里。
+const TRACKS_V1 = { mild: TRACKS.mild, wild: TRACKS.wild };
+const RACERS_JS = `window.RACERS=${JSON.stringify(RACERS)};window.TRACKS=${JSON.stringify(TRACKS_V1)};window.FINISH=${FINISH};window.GOLD=${JSON.stringify(GOLD)};window.SILVER=${JSON.stringify(SILVER)};window.SCHEDULE=${JSON.stringify(SCHEDULE)};` +
+  `window.RACERS_ALL=${JSON.stringify(RACERS_ALL)};window.TRACKS_ALL=${JSON.stringify(TRACKS)};window.TWISTS=${JSON.stringify(TWISTS)};window.EDITIONS=${JSON.stringify(EDITIONS)};window.DEFAULT_EDITION=${JSON.stringify(DEFAULT_EDITION)};`;
 
 const PORT = Number(process.env.PORT) || 8096;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -48,7 +51,8 @@ function inside(root, file) {
 
 function boundedString(value, max) { return typeof value === 'string' && value.length <= max; }
 function optionalString(value, max) { return value == null || boundedString(value, max); }
-const NO_PAYLOAD = new Set(['create', 'leave', 'addAI', 'start', 'speed', 'lobby', 'replay', 'again', 'skip']);
+const NO_PAYLOAD = new Set(['leave', 'addAI', 'start', 'speed', 'lobby', 'replay', 'again', 'skip']);
+const optionalEdition = (value) => value === undefined || (typeof value === 'string' && EDITION_KEYS.includes(value));
 
 // 不将数组/对象/字符串数字强制转换成业务字段，避免非法输入绕过席位、决策或开关校验。
 function messageError(msg) {
@@ -61,8 +65,10 @@ function messageError(msg) {
     case 'setName': valid = boundedString(msg.name, 128); break;
     case 'join': valid = boundedString(msg.code, 16) && /^[a-z2-9]{4}$/i.test(msg.code); break;
     case 'removeAI': valid = Number.isInteger(msg.seat) && msg.seat >= 0 && msg.seat < 6; break;
-    case 'quick': valid = msg.ai === undefined || (Number.isInteger(msg.ai) && msg.ai >= 2 && msg.ai <= 5); break;
-    case 'watch': valid = msg.ai === undefined || (Number.isSafeInteger(msg.ai) && msg.ai >= 3 && msg.ai <= 6); break;
+    case 'create': valid = optionalEdition(msg.edition); break;
+    case 'edition': valid = typeof msg.edition === 'string' && EDITION_KEYS.includes(msg.edition); break;
+    case 'quick': valid = (msg.ai === undefined || (Number.isInteger(msg.ai) && msg.ai >= 2 && msg.ai <= 5)) && optionalEdition(msg.edition); break;
+    case 'watch': valid = (msg.ai === undefined || (Number.isSafeInteger(msg.ai) && msg.ai >= 3 && msg.ai <= 6)) && optionalEdition(msg.edition); break;
     case 'act':
       valid = boundedString(msg.gameId, 64) && msg.gameId.length > 0 &&
         Number.isSafeInteger(msg.id) && msg.id > 0 &&

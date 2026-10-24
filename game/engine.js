@@ -595,7 +595,7 @@ class Game {
       const c = (this.pwCount.get(k) || 0) + 1;
       this.pwCount.set(k, c);
       // 规则 8：同一技能在完全相同的局面下再次触发 = 进入无限循环，走完一遍就停
-      const sig = `${k}|${this.racers.map((o) => `${o.pos}${o.tripped ? 't' : ''}${o.finished || o.out ? 'x' : ''}`).join(',')}`;
+      const sig = `${k}|${this.stateSig()}`;
       const looped = this.pwSeen.has(sig);
       this.pwSeen.add(sig);
       if (c > PW_PER_TURN || ++this.pwTotal > PW_BUDGET) return;
@@ -742,6 +742,16 @@ class Game {
   *move(r, amount, kind = 'power', opts = {}) {
     if (!this.active(r) || !amount) return;
     yield* this.refreshCopies();
+    // 兜底：同一回合里，同一运动员在完全相同的局面下反复做同样的移动 = 无限循环。
+    // 例：狂野荒原 24 号箭头（后退 2）+ 浪漫鳄的「啊，爱情！」会在 22↔24 之间往返，先移动后计数的技能
+    // 绕过了 PW_PER_TURN，只剩深度上限，分支会指数爆炸。同一签名超过 PW_PER_TURN 次就停。
+    const sig = `${r.rid}|${amount}|${kind}|${this.stateSig()}`;
+    const seen = (this.moveSeen.get(sig) || 0) + 1;
+    this.moveSeen.set(sig, seen);
+    if (seen > PW_PER_TURN) {
+      if (!this.loopNoted) { this.loopNoted = true; this.emit({ t: 'info', text: '触发了无限循环，按规则走完一遍就停' }); }
+      return;
+    }
     if (++this.depth > 60) { this.depth--; return; }
     try {
       const from = r.pos;
@@ -1074,9 +1084,12 @@ class Game {
   }
 
   /* ================= 回合 ================= */
+  stateSig() { return this.racers.map((o) => `${o.pos}${o.tripped ? 't' : ''}${o.finished || o.out ? 'x' : ''}`).join(','); }
+
   resetTurnCounters() {
     this.pwCount = new Map();
     this.pwSeen = new Set();
+    this.moveSeen = new Map();
     this.pwTotal = 0;
     this.depth = 0;
     this.loopNoted = false;

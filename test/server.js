@@ -97,6 +97,22 @@ function spectatorSnapshot(game, n) {
       assert.equal(response.headers['x-content-type-options'], 'nosniff');
       assert(response.body.length > 0); checks++;
     }
+    {
+      // /racers-data.js：原有全局保持一代内容（前端默认模式不变），二代/混合数据走新增全局
+      const vm = require('node:vm');
+      const ctx = { window: {} };
+      vm.runInNewContext((await request('/racers-data.js')).body, ctx);
+      const w = ctx.window;
+      assert.equal(w.RACERS.length, 36); assert(w.RACERS.every(r => r.edition === 1));
+      assert.deepEqual(Object.keys(w.TRACKS), ['mild', 'wild']);
+      assert.deepEqual(Array.from(w.SCHEDULE), ['mild', 'wild', 'mild', 'wild']);
+      assert.equal(w.TRACKS.wild.spaces[16].n, -4);
+      assert.equal(w.RACERS_ALL.length, 72); assert.equal(w.TWISTS.length, 13);
+      assert.deepEqual(Object.keys(w.TRACKS_ALL), ['mild', 'wild', 'twisty', 'whirly']);
+      assert.deepEqual(Object.keys(w.EDITIONS), ['v1', 'v2', 'mix']); assert.equal(w.DEFAULT_EDITION, 'v1');
+      assert.equal(w.TRACKS_ALL.twisty.twistAt, 14); assert.equal(w.TRACKS_ALL.whirly.whirls.length, 6);
+      checks++;
+    }
     const head = await request('/app.js', 'HEAD');
     assert.equal(head.status, 200); assert.equal(head.body, ''); assert(Number(head.headers['content-length']) > 0); checks++;
     const post = await request('/healthz', 'POST');
@@ -350,7 +366,7 @@ function spectatorSnapshot(game, n) {
   const directoryClock = clockHub(), directoryServer = createServer({ hub: directoryClock.hub });
   const directorySockets = [];
   let directoryChecks = 0;
-  const directoryKeys = ['code', 'mode', 'status', 'hostName', 'playerCount', 'aiCount', 'humanCount', 'onlineCount', 'maxPlayers', 'spectatorCount', 'onlineSpectatorCount', 'canJoin', 'isMember'].sort();
+  const directoryKeys = ['code', 'mode', 'status', 'edition', 'hostName', 'playerCount', 'aiCount', 'humanCount', 'onlineCount', 'maxPlayers', 'spectatorCount', 'onlineSpectatorCount', 'canJoin', 'isMember'].sort();
   const list = (ws, predicate = () => true) => wait(ws, m => m.type === 'roomList' && predicate(m.rooms));
   const refreshList = ws => {
     // 丢弃本轮请求前缓存的目录推送；直接断言之后的第一条目录，不能用内容过滤掩盖错误响应。
@@ -397,7 +413,7 @@ function spectatorSnapshot(game, n) {
     command(host, 'create');
     const room = (await wait(host, m => m.type === 'room')).room;
     const created = summary(await listRoom(home, room.code), room.code);
-    assert.deepEqual(created, { code: room.code, mode: 'play', status: 'lobby', hostName: '目录房主',
+    assert.deepEqual(created, { code: room.code, mode: 'play', status: 'lobby', edition: 'v1', hostName: '目录房主',
       playerCount: 1, aiCount: 0, humanCount: 1, onlineCount: 1, maxPlayers: 6,
       spectatorCount: 0, onlineSpectatorCount: 0, canJoin: true, isMember: false });
     assert(!homeTab.messages.some(m => m.type === 'roomList'), '请求目录不扩散到同身份其他标签'); directoryChecks++;
