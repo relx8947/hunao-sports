@@ -1413,3 +1413,12 @@ body { overflow: hidden; }
   .wpc-final .st-row .rk, .wpc-results .st-row .rk { width: 20px; height: 20px; font-size: 11px; }
   .wpc-final .ov-actions, .wpc-results .ov-actions { margin-top: 8px; }
 }
+/* WP-C：电脑中等屏高（如 1440×900）六人终局：柱子与行距略收，一屏放下 */
+@media (min-width: 521px) and (min-height: 761px) and (max-height: 960px) {
+  .wpc-final .podium { margin-top: 16px; }
+  .wpc-final .pod.p1 .blk { height: 92px; font-size: 36px; }
+  .wpc-final .pod.p2 .blk { height: 66px; font-size: 30px; }
+  .wpc-final .pod.p3 .blk { height: 48px; font-size: 22px; }
+  .wpc-final .pod .nm { margin-top: 6px; }
+  .wpc-final .st-row { padding-top: 6px; padding-bottom: 6px; }
+}
