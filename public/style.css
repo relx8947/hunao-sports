@@ -1359,7 +1359,6 @@ body { overflow: hidden; }
 }
 
 /* === WP-C 决策浮层与庆祝 === */
-.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* 按下 / 拒绝 / 加载 / 等待 四种按钮反馈 */
 .wpc-nudge { animation: wpcNudge .38s ease both; }

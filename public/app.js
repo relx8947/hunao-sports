@@ -2989,7 +2989,7 @@
     if (connection !== 'ready' || submitted) {
       if (d && d.simul) showPickOverlay(d);
       else if (overlayKind === 'choose' || overlayKind === 'pick') hideOverlay(true);
-      dock.innerHTML = promptHtml({ seat: you, mine: false, busy: true, title: submitted ? '正在提交，等待服务器确认' : '连接已断开，正在重新同步', sub: submitted ? '确认前不会重复提交；其他选手的更新不会误判为成功' : '重连完成后按最新局面重新操作，未发送的动作不会自动补发' });
+      dock.innerHTML = promptHtml({ seat: you, mine: false, busy: true, title: submitted ? '正在提交，等服务器确认' : '网络断了，正在重连', sub: submitted ? '稍等一下，不用重复点' : '恢复后接着刚才的局面，没发出去的操作要再点一次' });
       addTimer();
       return;
     }
@@ -3245,7 +3245,7 @@
         <section class="rule-sec"><h4>联机小贴士</h4><ul>
           <li>把房间码或邀请链接发给朋友；人不够可以加 AI。</li>
           <li>掉线或超时会自动托管，回来点一下「托管」即可接管。</li>
-          <li>空格键可以直接掷骰。</li>
+          ${hasKeyboard.matches ? '<li>空格键可以直接掷骰。</li>' : ''}
         </ul></section></div>`;
     }
     m.innerHTML = `<div class="modal-box card modal-${kind === 'gallery' || kind === 'tracks' ? kind : 'rules'}"><div class="modal-head"><h3>${title}</h3><div class="pager" id="mPager" hidden></div><button class="icon-btn" id="mClose" aria-label="关闭"><span class="ico">${icon('close')}</span></button></div><div class="modal-body">${body}</div></div>`;
