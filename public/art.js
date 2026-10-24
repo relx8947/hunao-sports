@@ -591,6 +591,7 @@
     arrowL: '<path d="M20 12H5M11 6l-6 6 6 6"/>',
     sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
     mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
+    music: '<path d="M9 17.5V5.5l10-2v12"/><path d="M9 9.5l10-2"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
     bolt: '<path d="M13.5 3L5.5 13.5H12L10.5 21l8-10.5H12z"/>',
     robot: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M9.5 16.2h5M3 12.5v3M21 12.5v3"/><circle cx="12" cy="4" r="1"/>',
     copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/>',

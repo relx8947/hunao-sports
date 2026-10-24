@@ -11,9 +11,10 @@
     "test:multi": "node test/multi.js",
     "test:spectator": "node test/spectator.js",
     "test:directory": "node test/directory.js",
+    "test:music": "node test/music.js",
     "test:browser-helper": "node test/browser-helper-test.js",
     "test:layout": "node test/layout-fit.js",
-    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi && npm run test:spectator && npm run test:directory && npm run test:layout"
+    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi && npm run test:spectator && npm run test:directory && npm run test:music && npm run test:layout"
   },
   "engines": {
     "node": ">=20"

@@ -1209,3 +1209,11 @@ body { overflow: hidden; }
 @media (hover: none) {
   .rcard.pickable:hover { transform: none; }
 }
+
+/* 首页 / 房间的声音开关（对局里用顶栏 #soundBtn） */
+.home-foot .sound-toggle { min-width: 44px; justify-content: center; padding-left: 8px; padding-right: 8px; }
+.lobby-sound { position: absolute; top: 0; right: 0; z-index: 2; }
+@media (max-width: 400px) { .home-foot { gap: 4px 6px; } }
+@media (min-aspect-ratio: 5/4) and (max-height: 560px) {
+  .lobby-sound { position: static; grid-column: 1; grid-row: 1; justify-self: end; align-self: start; }
+}

@@ -392,6 +392,13 @@
     showScreen('home');
     requestRooms();
   }
+  // 背景音乐跟随界面与阶段：music.js 每 60ms 读一次，场景变了自己交叉淡入淡出；heat 是领跑者离终点的进度
+  function musicScene() {
+    if (document.body.dataset.screen !== 'game' || !vs) return { scene: 'home' };
+    if (vs.phase === 'over') return { scene: 'over' };
+    if (vs.phase !== 'race') return { scene: 'draft' };
+    return { scene: 'race', heat: Math.max(0, ...(vs.racers || []).map((r) => (r.finished ? FIN : r.pos || 0))) / FIN };
+  }
   function showScreen(id) {
     for (const s of ['home', 'lobby', 'game']) $(`#${s}`).hidden = s !== id;
     document.body.dataset.screen = id;
@@ -924,6 +931,14 @@
     $('#spectatorCode').textContent = room?.code ? `房间 ${room.code}` : '';
     $('#spectatorCode').hidden = !room?.code;
   }
+  // 首页、房间里的声音开关：和对局顶栏的 #soundBtn 一样读 Sound.ui
+  function renderSoundToggles() {
+    for (const b of $$('[data-sound]')) {
+      b.innerHTML = `<span class="ico">${icon(Sound.ui.icon)}</span>`;
+      b.title = Sound.ui.label;
+      b.setAttribute('aria-label', Sound.ui.label);
+    }
+  }
   function renderTopButtons() {
     renderSpectatorStatus();
     $('#speedLabel').textContent = `${speed}x`;
@@ -937,7 +952,10 @@
     $('#autoBtn').title = autoFlags[you] ? '点击关闭托管并接管' : '点击开启托管';
     $('#autoBtn').hidden = !isParticipant();
     $('#emotes').hidden = !isParticipant();
-    $('#soundBtn').innerHTML = `<span class="ico">${icon(Sound.muted ? 'mute' : 'sound')}</span>`;
+    $('#soundBtn').innerHTML = `<span class="ico">${icon(Sound.ui.icon)}</span>`;
+    $('#soundBtn').title = Sound.ui.label;
+    $('#soundBtn').setAttribute('aria-label', Sound.ui.label);
+    renderSoundToggles();
   }
 
   function renderPlayers() {
@@ -2119,7 +2137,7 @@
   function initGameBar() {
     $('#speedBtn').onclick = () => { Sound.click(); send({ type: 'speed' }); };
     $('#autoBtn').onclick = () => { Sound.click(); send({ type: 'auto', on: !autoFlags[you] }); };
-    $('#soundBtn').onclick = () => { Sound.setMuted(!Sound.muted); renderTopButtons(); Sound.click(); };
+    $('#soundBtn').onclick = () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); };
     $('#leaveGame').onclick = () => {
       if ($('#leaveGame').dataset.armed) { navigate('leave', $('#leaveGame')); return; }
       $('#leaveGame').dataset.armed = '1';
@@ -2156,7 +2174,10 @@
     initLobby();
     initGameBar();
     initEmotes();
+    if (window.Music) Music.follow(musicScene);
     for (const b of $$('[data-open]')) b.addEventListener('click', () => { Sound.click(); openModal(b.dataset.open); });
+    for (const b of $$('[data-sound]')) b.addEventListener('click', () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); });
+    renderSoundToggles();
     window.addEventListener('resize', () => { checkLayout(); renderStandings(); hideTip(); refitPagers(); fitRooms(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && queue.length > 1) fast = true; });
     showScreen(new URLSearchParams(location.search).get('room') ? 'lobby' : 'home');
