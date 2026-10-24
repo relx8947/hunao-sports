@@ -1234,3 +1234,152 @@ body { overflow: hidden; }
   .logo-text { font-size: clamp(28px, min(11dvh, 5.4vw), 64px); }
 }
 .room-directory-head h2 .ico { flex: none; }
+
+/* === WP-C 决策浮层与庆祝 === */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* 按下 / 拒绝 / 加载 / 等待 四种按钮反馈 */
+.wpc-nudge { animation: wpcNudge .38s ease both; }
+@keyframes wpcNudge { 20%, 60% { translate: -5px 0; } 40%, 80% { translate: 5px 0; } }
+.btn.is-loading { position: relative; }
+.btn.is-loading:disabled { opacity: .85; }
+.btn.is-loading::after { content: ""; width: 14px; height: 14px; flex: none; border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+.btn.waiting { position: relative; overflow: hidden; }
+.btn.waiting:disabled { opacity: .78; }
+.btn.waiting::before { content: ""; position: absolute; left: 0; bottom: 0; height: 4px; width: 100%; background: var(--ink); opacity: .55; transform-origin: left; animation: wpcFill var(--wait, 3s) linear both; }
+@keyframes wpcFill { from { transform: scaleX(0); } }
+.prompt.locked .btn { opacity: .55; }
+.prompt.busy::before { content: ""; position: absolute; left: 0; top: 0; height: 3px; width: 34%; background: var(--blue); border-radius: 0 0 3px 3px; animation: wpcBusy 1.1s ease-in-out infinite; }
+@keyframes wpcBusy { from { translate: -100% 0; } to { translate: 300% 0; } }
+.timer.urgent { animation: wpcUrgent .5s ease-in-out infinite alternate; }
+@keyframes wpcUrgent { to { height: 7px; background: #D8321C; } }
+
+/* 自己的选手跑完：快进到结算 */
+.prompt.wpc-done { background: #E9F8EF; }
+.prompt.wpc-done .p-txt b::after { content: none; }
+.prompt.wpc-done.boost { background: repeating-linear-gradient(115deg, #E9F8EF 0 18px, #D6F1E2 18px 36px); background-size: 200% 100%; animation: rise .35s var(--ease), wpcStreak .6s linear infinite; }
+@keyframes wpcStreak { to { background-position: -76px 0; } }
+.wpc-skip { animation: breathe 1.6s ease-in-out infinite; }
+.wpc-skip .ico { width: 18px; height: 18px; }
+
+/* 可选卡牌：呼吸光边（2 秒一循环），首次轮到自己时第一张挂「点我选人」 */
+.rcard.pickable::before { content: ""; position: absolute; inset: 0; z-index: 3; border-radius: 13px; pointer-events: none; box-shadow: inset 0 0 0 3px var(--yellow), inset 0 0 18px rgba(255, 197, 61, .55); opacity: .35; animation: wpcGlow 2s ease-in-out infinite; }
+@keyframes wpcGlow { 50% { opacity: 1; } }
+.rcard.pickable:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.rcard.tap-hint::after { content: "点我选人"; position: absolute; z-index: 4; right: 6px; top: 6px; padding: 2px 9px; border: 2px solid var(--ink); border-radius: 99px; background: var(--yellow); color: var(--ink); font-size: 12px; font-weight: 900; box-shadow: var(--shadow-sm); pointer-events: none; }
+.rcard.chosen { animation: wpcChosen .4s var(--ease) both; }
+@keyframes wpcChosen { 40% { transform: scale(1.04); } }
+.rcard.chosen::before { opacity: 1; animation: none; box-shadow: inset 0 0 0 4px var(--green); }
+
+/* 选择浮层：只有一张候选时的主按钮 */
+.wpc-main .ico { width: 20px; height: 20px; }
+
+/* 翻牌：自己的选手 */
+.flip.mine .who { color: var(--ink) !important; }
+.flip.mine .who::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--yellow); border: 2px solid var(--ink); vertical-align: 0; }
+
+/* ---------- 单场结算 ---------- */
+.me-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 10px; font-style: normal; font-weight: 900; line-height: 1.6; vertical-align: 2px; }
+.wpc-results .wpc-note { margin-top: 4px; font-size: 12px; color: var(--red); }
+.wpc-pod .who { animation: wpcPop .5s var(--ease) both, podBounce 1s ease-in-out infinite alternate; animation-delay: calc(220ms + var(--k) * 240ms), calc(720ms + var(--k) * 240ms); }
+.wpc-pod .blk, .wpc-fpod .blk { transform-origin: bottom; animation: wpcRise .55s var(--ease) both; animation-delay: calc(120ms + var(--k) * 240ms); }
+.wpc-pod .nm, .wpc-pod .rn { animation: fadeIn .3s ease both; animation-delay: calc(420ms + var(--k) * 240ms); }
+.pod .blk .medal-no { line-height: 1; }
+@keyframes wpcPop { 0% { opacity: 0; transform: scale(.3) rotate(-12deg); } 70% { opacity: 1; transform: scale(1.12) rotate(3deg); } }
+@keyframes wpcRise { from { transform: scaleY(0); } }
+.st-head { display: grid; grid-template-columns: 28px minmax(0, 1fr) 40px 52px 44px; gap: 8px; width: min(560px, 100%); margin: 14px auto -4px; padding: 0 12px; font-size: 11px; font-weight: 800; color: var(--ink3); text-align: left; }
+.st-head span:nth-child(n + 3) { text-align: center; }
+.st-head span:last-child { text-align: right; }
+.wpc-row { grid-template-columns: 28px minmax(0, 1fr) 40px 52px 44px; gap: 8px; }
+.wpc-row.flip-go { transition: translate .6s var(--ease); }
+.wpc-row.flip-prep { z-index: 0; }
+.wpc-row.me { box-shadow: inset 5px 0 0 var(--c); }
+.wpc-row .rk { width: 26px; height: 26px; }
+.st-name { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.st-name .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c); border: 2px solid var(--ink); }
+.st-name .nm-t { overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 2em; }
+.st-name .me-tag { flex: none; margin-left: 0; }
+.st-place { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 700; color: var(--ink2); }
+.wpc-row .mv { display: inline-flex; align-items: center; justify-content: center; gap: 1px; font-size: 12px; font-weight: 900; opacity: 0; transform: scale(.4); }
+.wpc-row .mv svg { width: 14px; height: 14px; }
+.wpc-row .mv.up { color: var(--green); }
+.wpc-row .mv.down { color: var(--red); }
+.wpc-row.settled .mv { opacity: 1; transform: none; transition: opacity .25s ease, transform .35s var(--ease); }
+.wpc-row .gain { justify-self: center; min-width: 40px; padding: 1px 6px; border-radius: 99px; text-align: center; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.wpc-row .gain.pos { background: #DDF5E8; border: 1.5px solid var(--ink); color: #137A47; animation: wpcPop .4s var(--ease) both; animation-delay: inherit; }
+.wpc-row .gain.zero { color: var(--ink3); }
+.wpc-row .tot { text-align: right; }
+.tot.landed { animation: wpcBump .35s var(--ease); }
+@keyframes wpcBump { 45% { transform: scale(1.3); color: var(--green); } }
+.wpc-next { min-width: 118px; }
+.wpc-next .cd { min-width: 22px; height: 22px; padding: 0 4px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 12px; line-height: 22px; font-variant-numeric: tabular-nums; }
+.wpc-next .cd:empty { display: none; }
+.wpc-ring { display: none; }
+
+/* ---------- 终局：2–1–3 领奖台 + 逐场得分表 ---------- */
+.wpc-podium { gap: 10px; }
+.wpc-fpod { position: relative; width: 138px; }
+.wpc-fpod .who { animation: wpcPop .5s var(--ease) both, podBounce 1s ease-in-out infinite alternate; animation-delay: calc(420ms + var(--k) * 300ms), calc(920ms + var(--k) * 300ms); }
+.wpc-fpod .blk { animation-delay: calc(200ms + var(--k) * 300ms); }
+.wpc-fpod .nm { animation: fadeIn .3s ease both; animation-delay: calc(520ms + var(--k) * 300ms); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pod.p3 .blk { background: var(--bronze); color: #fff; font-size: 26px; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; height: 62px; }
+.wpc-fpod.p1 .who { width: 108px; height: 108px; }
+.wpc-fpod .crown { position: absolute; top: -26px; left: 50%; width: 40px; height: 34px; margin-left: -20px; z-index: 2; animation: wpcCrown .6s var(--ease) both; animation-delay: 1.2s; }
+.wpc-fpod .crown svg { width: 100%; height: 100%; fill: var(--yellow); stroke: var(--ink); stroke-width: 2.2; }
+@keyframes wpcCrown { 0% { opacity: 0; transform: translateY(-30px) rotate(-25deg) scale(.6); } 70% { opacity: 1; transform: translateY(3px) rotate(6deg) scale(1.1); } }
+.pod-sc { font-variant-numeric: tabular-nums; }
+.wpc-final.won h2 { background: linear-gradient(transparent 62%, var(--yellow) 62%, var(--yellow) 92%, transparent 92%); display: inline-block; align-self: center; padding: 0 6px; }
+.fx-head, .wpc-frow { display: grid; grid-template-columns: 26px minmax(0, 1fr) repeat(var(--races, 4), 40px) 44px; gap: 6px; align-items: center; }
+.fx-head { width: min(560px, 100%); margin: 14px auto -4px; padding: 0 12px; font-size: 11px; font-weight: 800; color: var(--ink3); text-align: center; }
+.fx-head span:nth-child(2) { text-align: left; }
+.fx-head span:last-child { text-align: right; }
+.wpc-frow .rk { width: 24px; height: 24px; }
+.wpc-frow.me { box-shadow: inset 5px 0 0 var(--c); }
+.wpc-frow .st-name { display: block; overflow: hidden; text-overflow: ellipsis; }
+.fx-c { justify-self: center; min-width: 30px; padding: 1px 4px; border-radius: 8px; text-align: center; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; animation: pop .3s var(--ease) both; animation-delay: var(--d); }
+.fx-c.best { background: var(--yellow); border: 1.5px solid var(--ink); }
+.fx-c.z { color: var(--ink3); font-weight: 700; }
+.wpc-frow .tot { text-align: right; }
+.wpc-again .ico { width: 18px; height: 18px; }
+.wpc-wait { align-self: center; }
+
+/* 一屏：矮屏和窄屏逐级收紧 */
+@media (max-width: 520px) {
+  .wpc-fpod { width: 31%; max-width: 116px; }
+  .wpc-fpod .who, .wpc-fpod.p1 .who { width: 60px; height: 60px; }
+  .wpc-fpod .crown { top: -20px; width: 30px; height: 26px; margin-left: -15px; }
+  .fx-head, .wpc-frow { grid-template-columns: 22px minmax(0, 1fr) repeat(var(--races, 4), 28px) 34px; gap: 4px; }
+  .fx-head { padding: 0 8px; font-size: 10px; }
+  .wpc-frow { padding-left: 8px; padding-right: 8px; }
+  .fx-c { min-width: 24px; padding: 1px 2px; font-size: 12px; }
+  .wpc-frow .tot { font-size: 17px; }
+  .st-head, .wpc-row { grid-template-columns: 24px minmax(0, 1fr) 30px 44px 34px; gap: 5px; }
+  .st-head { padding: 0 8px; }
+  .wpc-row { padding-left: 8px; padding-right: 8px; }
+  .wpc-row .gain { min-width: 34px; padding: 1px 4px; font-size: 12px; }
+  .wpc-row .tot { font-size: 18px; }
+  .st-place { display: none; }
+}
+@media (max-height: 760px) {
+  .st-head, .fx-head { margin-top: 8px; }
+  .wpc-fpod.p1 .who { width: 64px; height: 64px; }
+  .wpc-fpod .who { width: 56px; height: 56px; }
+  .pod.p3 .blk { height: 32px; font-size: 20px; }
+  .wpc-fpod .crown { top: -20px; width: 30px; height: 26px; margin-left: -15px; }
+}
+@media (max-height: 620px) {
+  .st-head, .fx-head { display: none; }
+  .wpc-fpod .who, .wpc-fpod.p1 .who { width: 44px; height: 44px; }
+  .pod.p3 .blk { height: 28px; font-size: 18px; }
+  .wpc-fpod .crown { top: -16px; width: 24px; height: 20px; margin-left: -12px; }
+  .ov-actions .btn { padding-top: 8px; padding-bottom: 8px; }
+}
+@media (max-height: 460px) {
+  .wpc-podium { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rcard.pickable::before { opacity: 1; }
+  .wpc-row, .wpc-frow, .fx-c, .wpc-pod .who, .wpc-pod .blk, .wpc-pod .nm, .wpc-pod .rn, .wpc-fpod .who, .wpc-fpod .blk, .wpc-fpod .nm, .wpc-fpod .crown, .wpc-row .gain.pos { animation-delay: 0s !important; }
+  .prompt.wpc-done.boost { animation: none; }
+}

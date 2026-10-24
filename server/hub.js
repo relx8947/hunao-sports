@@ -12,6 +12,7 @@ const AWAY_DELAY = 2500;
 const ROOM_TTL = 30 * 60 * 1000;
 const PLAYER_TTL = 24 * 60 * 60 * 1000;
 const SPEEDS = [1, 1.5, 2.2];
+const SKIP_SPEED = 6; // 真人都跑完后「快进到结算」：只加速本场剩余的 AI 回合
 const rid = (n) => crypto.randomBytes(n).toString('hex');
 const cleanName = (s) => typeof s === 'string' ? s.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 12) : '';
 
@@ -397,8 +398,45 @@ function createHub(options = {}) {
     return null;
   }
 
+  // 只有一名真人的快速局：沿用同一房间与 AI 席位直接重开，不再先回大厅。
+  function playAgain(ws) {
+    const room = hostRoom(ws);
+    if (typeof room === 'string') return room;
+    if (room.mode === 'spectator') return '观战房间请使用再看一局';
+    if (room.status !== 'over' || !room.game || room.game.phase !== 'over') return '对局还没结束';
+    if (room.seats.filter((s) => !s.ai).length !== 1) return '多人房间请回到大厅再开一局';
+    if (now() < room.busyUntil) return '结算动画还没结束，请稍等';
+    for (const s of room.seats) s.autoMode = null;
+    room.boost = null;
+    return beginGame(room);
+  }
+  // 本场所有真人选手都已冲线或出局时，任一真人可把本场剩余的 AI 回合快进；下一场恢复原速度。
+  function skipRace(ws) {
+    const room = currentRoom(ws);
+    if (!room || !room.game) return '没有进行中的对局';
+    const seat = seatOf(room, ws.player.id);
+    if (seat < 0) return '你是观众';
+    const g = room.game;
+    if (room.status !== 'playing' || g.phase !== 'race') return '现在不能快进';
+    const done = (s) => { const r = g.racers.find((x) => x.seat === s); return !r || !!r.finished || !!r.out; };
+    if (!room.seats.every((s, i) => s.ai || done(i))) return '还有真人选手在比赛';
+    if (room.boost) return null;
+    room.boost = { race: g.raceNo, prev: room.speed };
+    room.speed = SKIP_SPEED;
+    for (const c of viewers(room)) send(c, { type: 'speed', speed: room.speed, boost: true, deadlineIn: deadlineIn(room, seatOf(room, c.player.id)) });
+    return null;
+  }
+  // 快进只覆盖本场：一旦这一批事件跑出了本场（结算、下一场或终局），在排程前恢复原速度。
+  function settleBoost(room) {
+    const b = room.boost;
+    if (!b || (room.game && room.game.phase === 'race' && room.game.raceNo === b.race)) return;
+    room.boost = null;
+    if (room.speed === SKIP_SPEED) room.speed = b.prev;
+  }
+
   /* ---------- 对局 ---------- */
   function flush(room, full) {
+    settleBoost(room);
     const events = room.game.drain();
     const t = now();
     room.busyUntil = Math.max(room.busyUntil, t) + batchMs(events) / room.speed;
@@ -574,6 +612,8 @@ function createHub(options = {}) {
       case 'emote': return emote(ws, msg.key);
       case 'speed': return setSpeed(ws);
       case 'lobby': return backToLobby(ws);
+      case 'again': return playAgain(ws);
+      case 'skip': return skipRace(ws);
       default: return '未知指令';
     }
   }
@@ -615,7 +655,7 @@ function createHub(options = {}) {
       gameId: room?.game ? room.gameId : null,
       deadlineIn: getDeadlineIn(ws),
       decisionId: room?.game?.pending?.id ?? null,
-      ...((type === 'lobby' || type === 'replay') && room?.status === 'over' && now() < room.busyUntil ? { retryIn: Math.ceil(room.busyUntil - now()) } : {}),
+      ...((type === 'lobby' || type === 'replay' || type === 'again') && room?.status === 'over' && now() < room.busyUntil ? { retryIn: Math.ceil(room.busyUntil - now()) } : {}),
     };
   }
   return { handle, disconnect, rooms, cleanup, dispose, getDeadlineIn, recover, errorContext };
