@@ -3144,7 +3144,7 @@
     const r = vs.racers.find((x) => x.seat === seat);
     const c = PCOL[seat % 6] || '#ccc';
     const ava = r && vs.phase === 'race' ? art(r.rid) : '';
-    return `<div class="prompt ${mine ? 'mine' : 'wait'} ${busy ? 'busy' : ''} ${cls || ''}" style="--c:${c}">${ava ? `<div class="p-ava">${ava}</div>` : ''}<div class="p-txt"><b>${esc(title)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>${opts ? `<div class="p-opts">${opts}</div>` : ''}<div class="timer" hidden></div></div>`;
+    return `<div class="prompt ${mine ? 'mine' : 'wait'} ${busy ? 'busy' : ''} ${cls || ''}" style="--c:${c}">${ava ? `<div class="p-ava">${ava}</div>` : ''}<div class="p-txt" title="${esc(sub ? `${title}\n${sub}` : title)}"><b>${esc(title)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>${opts ? `<div class="p-opts">${opts}</div>` : ''}<div class="timer" hidden></div></div>`;
   }
   function addTimer() {
     clearInterval(timerTicker); timerTicker = null;

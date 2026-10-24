@@ -1797,3 +1797,33 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   .connection-status, .toast.wpd-toast, .code-error, #codeInput.wpd-shake, .seat.wpd-unnamed { animation: none !important; transition: none !important; }
   .connection-status .cs-ico, .connection-status .cs-ico .icon { animation: none !important; }
 }
+
+/* === 集成：底栏高度稳定 === */
+/* 底栏贴着视口底边。原来的 rise 入场是整条从下方 24px 升上来，位移期间页面会瞬间多出一截可滚动高度
+   （手机 866/852、电脑 912/900）。改成原地淡入并轻微缩放，盒子只会变小、不会越过底边；
+   文字和按钮在条内上浮，被 .prompt 自身的 overflow:hidden 裁在条里，不计入页面高度。 */
+#dock .prompt { animation: dockIn .3s var(--ease); }
+#dock .prompt.mine { animation: dockIn .3s var(--ease), mineGlow 1.8s ease-in-out .35s infinite; }
+#dock .prompt.wpc-done.boost { animation: dockIn .3s var(--ease), wpcStreak .6s linear infinite; }
+#dock .prompt > .p-ava, #dock .prompt > .p-txt, #dock .prompt > .p-opts { animation: dockContent .35s var(--ease) both; }
+@keyframes dockIn { from { opacity: 0; transform: scale(.97); } }
+@keyframes dockContent { from { opacity: 0; transform: translateY(10px); } }
+/* 等待 ↔ 轮到你 切换时高度不跳：「轮到你」角标的位置在所有状态都预留；标题/说明固定行高、单行；
+   整条预留到「带掷骰按钮」那一档的高度。多行选项（暗选、数字）本来就更高，不在此列。 */
+#dock .prompt .p-txt { padding-top: 6px; }
+#dock .prompt .p-txt b, #dock .prompt .p-txt span { line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dock .prompt { min-height: 86px; }
+@media (max-width: 1000px) and (orientation: portrait) {
+  #dock .prompt { min-height: 70px; }
+}
+@media (max-width: 1000px) and (orientation: portrait) and (max-height: 700px) {
+  #dock .prompt .p-txt { padding-top: 8px; }
+}
+@media (max-width: 1000px) and (orientation: landscape) and (max-height: 550px) {
+  #dock .prompt { min-height: 60px; }
+  #dock .prompt .p-opts .btn.roll-btn { padding: 5px 14px; font-size: 16px; }
+  #dock .prompt .p-opts .btn.roll-btn .ico { width: 22px; height: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #dock .prompt, #dock .prompt > .p-ava, #dock .prompt > .p-txt, #dock .prompt > .p-opts { animation: none; }
+}
