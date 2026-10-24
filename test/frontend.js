@@ -87,6 +87,12 @@ const { decide } = require('../game/ai');
       entry('EVIL', { hostName: xssName }),
     ];
     const listButton = code => page.locator(`#roomList button[data-room-code="${code}"]`);
+    // 首页一屏放不下全部房间时分页：先翻回第一页，再往后翻到目标房间所在页
+    const showRoom = async code => {
+      for (let i = 0; i < 30 && await page.locator('#roomPager [data-pg="-1"]:not([disabled])').count(); i++) await page.locator('#roomPager [data-pg="-1"]').click();
+      for (let i = 0; i < 30 && !(await listButton(code).isVisible()) && await page.locator('#roomPager [data-pg="1"]:not([disabled])').count(); i++) await page.locator('#roomPager [data-pg="1"]').click();
+      return listButton(code);
+    };
     const publishDirectory = () => emit({ type: 'roomList', rooms: directoryRows });
     await emit({ type: 'roomList', rooms: [...directoryRows, entry('WAIT'), entry('BAD'), entry('TOOLONG'), entry('"<x>'), entry('bad!'), entry('BADM', { mode: '<img>' }), entry('BADS', { status: '<img>' }), null] });
     assert.equal(await page.locator('#roomList button[data-room-code]').count(), 7, '仅渲染合法且不重复的四位房间码');
@@ -111,17 +117,17 @@ const { decide } = require('../game/ai');
       const geometry = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight, viewportHeight: innerHeight, boxes: Array.from(document.querySelectorAll('.room-directory, #roomList, .room-list-item, .room-list-action, #roomList button, #refreshRooms')).map(e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, height: r.height, button: e.tagName === 'BUTTON' }; }) }));
       assert(geometry.scroll <= geometry.width + 1, `${width}x${height} 首页目录不得横向溢出：${JSON.stringify(geometry)}`);
       assert(geometry.boxes.every(r => r.left >= -1 && r.right <= geometry.width + 1), `${width}x${height} 目录控件越界`);
-      assert(geometry.boxes.filter(r => r.button).every(r => r.height >= 44), '房间与刷新按钮点击高度至少 44px');
-      assert(geometry.scrollHeight > geometry.viewportHeight, '首页扩展应允许纵向滚动');
-      await listButton('EVIL').scrollIntoViewIfNeeded();
-      assert.equal(await listButton('EVIL').isVisible(), true);
+      assert(geometry.boxes.filter(r => r.button && r.height > 0).every(r => r.height >= 44), '房间与刷新按钮点击高度至少 44px');
+      assert(geometry.scrollHeight <= geometry.viewportHeight + 1, `${width}x${height} 首页必须一屏放下，房间多了分页而不是纵向滚动`);
+      assert(await page.locator('#roomPager').isVisible(), `${width}x${height} 房间放不下时必须显示分页`);
+      assert.equal(await (await showRoom('EVIL')).isVisible(), true);
       if (process.env.HUNAO_FRONTEND_SCREENSHOTS) await page.screenshot({ path: `/tmp/hunao-room-directory-${width}.png`, fullPage: true });
     }
     await page.setViewportSize({ width: 390, height: 844 });
     const ordinaryAi = await page.locator('#aiCount .on').getAttribute('data-v');
     const watchAi = await page.locator('#watchCount .on').getAttribute('data-v');
     await page.locator('#nameInput').fill('大厅昵称');
-    await listButton('WAIT').click();
+    await (await showRoom('WAIT')).click();
     assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').at(-1)), { type: 'join', code: 'WAIT' });
     assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'setName').at(-1).name), '大厅昵称');
     assert.equal(await page.locator('#aiCount .on').getAttribute('data-v'), ordinaryAi);
@@ -132,9 +138,9 @@ const { decide } = require('../game/ai');
     assert.equal(await listRequests(), beforeJoinError + 1);
     assert.match(await page.locator('#roomListStatus').textContent(), /加载/);
     await publishDirectory();
-    await listButton('VIEW').click();
+    await (await showRoom('VIEW')).click();
     assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').at(-1)), { type: 'join', code: 'VIEW' });
-    await listButton('BACK').click();
+    await (await showRoom('BACK')).click();
     assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').at(-1)), { type: 'join', code: 'BACK' });
     const beforeDisabledJoin = await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').length);
     await listButton('BUSY').evaluate(b => b.click());
