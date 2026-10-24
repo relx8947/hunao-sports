@@ -1233,3 +1233,4 @@ body { overflow: hidden; }
 @media (min-aspect-ratio: 5/4) and (max-height: 620px) {
   .logo-text { font-size: clamp(28px, min(11dvh, 5.4vw), 64px); }
 }
+.room-directory-head h2 .ico { flex: none; }
