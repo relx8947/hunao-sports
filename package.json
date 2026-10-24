@@ -14,7 +14,8 @@
     "test:music": "node test/music.js",
     "test:browser-helper": "node test/browser-helper-test.js",
     "test:layout": "node test/layout-fit.js",
-    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi && npm run test:spectator && npm run test:directory && npm run test:music && npm run test:layout"
+    "test:sfx": "node test/sfx.js",
+    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi && npm run test:spectator && npm run test:directory && npm run test:music && npm run test:layout && npm run test:sfx"
   },
   "engines": {
     "node": ">=20"
