@@ -1266,6 +1266,26 @@
     });
   }
   function skipHold() { if (holdRelease) holdRelease(); }
+  // 结算浮层的「继续」（WP-C 的 #ovNext）：提前结束停留，让下一场接着播；「看看赛道」不放行，棋盘留着给人看
+  document.addEventListener('click', (ev) => { if (ev.target.closest && ev.target.closest('#ovNext')) skipHold(); });
+  // 等结算浮层真正收起（停留期内被推迟的收起 + 退场动画）再播下一场开场，横幅不会压在结果上
+  function overlayGone(epoch) {
+    if (epoch !== animationEpoch) return Promise.reject(CANCELLED);
+    const ov = $('#overlay');
+    const busy = () => overlayKind === 'results' || (!ov.hidden && ov.classList.contains('out'));
+    if (fast || !busy()) return Promise.resolve();
+    const end = performance.now() + Timing.FIXED.raceEnd + 800;
+    return new Promise((resolve, reject) => {
+      const w = { reject, timer: null };
+      const tick = () => {
+        if (epoch !== animationEpoch) { pendingWaits.delete(w); reject(CANCELLED); return; }
+        if (fast || !busy() || performance.now() > end) { pendingWaits.delete(w); resolve(); return; }
+        w.timer = setTimeout(tick, 60);
+      };
+      pendingWaits.add(w);
+      w.timer = setTimeout(tick, 60);
+    });
+  }
   async function pump() {
     if (playing) return;
     const epoch = animationEpoch;
@@ -1380,6 +1400,8 @@
         break;
       case 'raceIntro': {
         hideOverlay();
+        // 结算浮层还在停留或正在退场：等它收起，再清棋盘、上横幅
+        await overlayGone(epoch);
         vs.phase = 'pick';
         vs.raceNo = e.race;
         vs.track = e.track;
@@ -1488,6 +1510,7 @@
         r.pos = e.to;
         if (e.kind === 'arrow') pulseCell(e.to);
         layoutTokens();
+        if (e.kind === 'main') buzz('land', e.rid);
         await pause(e.ai ? 90 : 140);
         break;
       }
@@ -1745,7 +1768,13 @@
     animationLater(() => el.classList.remove(cls), ms);
   }
   function spotlight(rid) { if (!fast) restartClass(tokenOf(rid), 'spot', 900); }
-  function knock(rid) { if (!fast) restartClass(tokenOf(rid), 'sk-hit', 560); }
+  function knock(rid) { if (!fast) { restartClass(tokenOf(rid), 'sk-hit', 560); buzz('hit', rid); } }
+  // 震动反馈（WP-C 提供 haptic）：只给自己的棋子，快进时不震；没有 haptic 时什么都不做
+  function buzz(kind, rid) {
+    if (fast || typeof haptic !== 'function') return;
+    const r = rid && vs ? vr(rid) : null;
+    if (r && r.seat === you) haptic(kind);
+  }
   // 挂在 #floaters 上的 SVG 弧线层（坐标与赛道 viewBox 一致）
   function arcLayer() {
     let svg = $('#floaters .sk-arcs');
@@ -1822,7 +1851,7 @@
       if (vr(t) && R[t]) tnames.push(R[t].name);
       if (!tel || !el || t === rid) continue;
       drawArc(tokenPt(el), tokenPt(tel), 'power', Math.max(700, 1100 / speed), col);
-      animationLater(() => restartClass(tel, 'sk-hit', 560), reducedMotion.matches ? 0 : 380 / Math.min(speed, 1.5));
+      animationLater(() => { restartClass(tel, 'sk-hit', 560); buzz('hit', t); }, reducedMotion.matches ? 0 : 380 / Math.min(speed, 1.5));
     }
     commentary(`${who} 发动「${info.skill}」${tnames.length ? `：${tnames.join('、')}` : ''}`);
   }
