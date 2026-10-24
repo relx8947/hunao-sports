@@ -1306,9 +1306,18 @@
   }
   const aheadText = (n) => (n === 0 ? '轮到你了' : n === 1 ? '下一个就是你' : `再过 ${n} 位轮到你`);
   // 窄屏玩家卡：卡片太窄时把名字放到头像下面一行；名字还放不下就缩字号，最后只保留前几个字（不加省略号）
+  // 名字、标签和视口都没变时直接套用上次量好的字号，不再强制布局
+  let fitMemo = null;
   function fitPlayerNames() {
     const box = $('#players');
     if (!box) return;
+    const all = $$('.prow .pnm', box);
+    const key = `${innerWidth}x${innerHeight}|${document.fonts ? document.fonts.status : ''}|${all.map((nm) => nm.parentElement.textContent).join('|')}`;
+    if (fitMemo && fitMemo.key === key) {
+      box.classList.toggle('pf-stack', fitMemo.narrow);
+      all.forEach((nm, i) => { nm.style.fontSize = fitMemo.fs[i]; nm.classList.toggle('clip', fitMemo.clip[i]); });
+      return;
+    }
     const first = $('.prow', box);
     const fw = first ? first.getBoundingClientRect().width : 0;
     // 3 人局的手机卡片约 119–131px 宽，横排时名字只剩 40px 左右（「选手100」会被截成「选手1…」），也改成名字单独一行
@@ -1324,6 +1333,7 @@
       over = over.filter((nm) => nm.scrollWidth > nm.clientWidth + 1);
     }
     for (const nm of over) nm.classList.add('clip');
+    fitMemo = { key, narrow, fs: names.map((nm) => nm.style.fontSize), clip: names.map((nm) => nm.classList.contains('clip')) };
   }
 
   // 每批事件收尾会连着调好几次 renderPlayers：内容没变就不重建 DOM、不重新量名字（省掉强制布局）
