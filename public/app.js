@@ -523,19 +523,23 @@
   }
   function showJoinProblem(code, raw, via) {
     const p = joinProblem(code, raw, via);
-    if (via === 'input') { homeNotice = null; showCodeError(p); }
-    else { clearCodeError(); homeNotice = { ...p, via }; }
-    Sound.click();
-    renderRoomDirectory();
+    if (via === 'list') { toast(`${p.title}，${p.next}`, true); return; } // 目录随后自动刷新
+    showCodeError(p, via);
   }
-  function showCodeError(p) {
+  // 错码 / 失效链接的行内说明：在「加入」那一行正下方，占掉分隔线的位置；改房间码或点叉收起
+  function showCodeError(p, via = 'input') {
     const input = $('#codeInput'), box = $('#codeError');
     if (!input || !box) return;
-    input.setAttribute('aria-invalid', 'true');
-    input.classList.remove('wpd-shake'); void input.offsetWidth; input.classList.add('wpd-shake');
-    box.innerHTML = `<span class="ce-ico">${wpdIcon('alert')}</span><span class="ce-text"><b>${esc(p.title)}</b><small>${esc(p.next)}</small></span>`;
+    homeNotice = via === 'link' ? p : null;
+    if (via === 'input') {
+      input.setAttribute('aria-invalid', 'true');
+      input.classList.remove('wpd-shake'); void input.offsetWidth; input.classList.add('wpd-shake');
+    } else input.removeAttribute('aria-invalid');
+    box.dataset.via = via;
+    box.innerHTML = `<span class="ce-ico">${wpdIcon('alert')}</span><span class="ce-text"><b>${esc(p.title)}</b><small>${esc(p.next)}</small></span><button type="button" class="ce-close" aria-label="知道了">${icon('close')}</button>`;
     box.hidden = false;
     $('.home-card')?.classList.add('wpd-err');
+    renderRoomDirectory();
   }
   function clearCodeError() {
     const input = $('#codeInput'), box = $('#codeError');
@@ -543,8 +547,9 @@
     input?.removeAttribute('aria-invalid');
     input?.classList.remove('wpd-shake');
     box.hidden = true; box.innerHTML = '';
+    homeNotice = null;
     $('.home-card')?.classList.remove('wpd-err');
-    fitRooms();
+    renderRoomDirectory();
   }
 
   /* ================= 屏幕 ================= */
@@ -600,24 +605,15 @@
     if (!list || !status) return;
     const online = connection === 'ready' && greeted;
     const usable = online && roomsFresh;
-    const note = $('#roomNotice');
-    if (note) {
-      const key = homeNotice ? `${homeNotice.title}|${homeNotice.via}` : '';
-      if (note.dataset.key !== key) {
-        note.dataset.key = key;
-        note.hidden = !homeNotice;
-        note.innerHTML = homeNotice ? `<span class="rn-ico">${wpdIcon('alert')}</span><span class="rn-text"><b>${esc(homeNotice.title)}</b><small>${esc(homeNotice.next)}</small></span>`
-          + `<span class="rn-acts">${homeNotice.via === 'link' ? `<button type="button" class="btn small primary" data-notice="create" data-network>${icon('plus')}开个房间</button>` : ''}<button type="button" class="rn-close" data-notice="close" aria-label="知道了">${icon('close')}</button></span>` : '';
-      }
-      const create = $('[data-notice="create"]', note);
-      if (create) create.disabled = !online;
-    }
     list.setAttribute('aria-busy', String(online && roomsLoading));
     status.textContent = !online
       ? (connection === 'offline' ? '已离线' : '正在连接服务器…') + (roomsReceived ? ' · 以下为上次列表，重连后更新' : ' · 连接后显示公开房间')
       : roomsLoading ? '正在加载公开房间…'
       : !roomsFresh ? '房间列表尚未更新，请点击刷新'
-      : roomRows.length ? `当前 ${roomRows.length} 个公开房间 · 实时更新` : '暂无在线房间，创建一个邀请大家吧';
+      // 刚打开失效链接时，状态行顺带指一条出路（不额外占高度）
+      : roomRows.length ? `当前 ${roomRows.length} 个公开房间 · ${homeNotice ? '点「加入」就能直接进' : '实时更新'}`
+      : homeNotice ? '暂无在线房间，可以点「创建房间」自己开一局' : '暂无在线房间，创建一个邀请大家吧';
+    status.classList.toggle('wpd-hint', !!homeNotice && online && roomsFresh);
     list.innerHTML = roomRows.map((r) => {
       const watch = r.mode === 'spectator';
       const state = r.status === 'lobby' ? '等待开赛' : r.status === 'playing' ? '进行中' : '已结束';
@@ -703,23 +699,16 @@
     $('#createBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'create' }); };
     const join = () => {
       const code = $('#codeInput').value.trim().toUpperCase();
-      if (!/^[A-Z0-9]{4}$/.test(code)) { showCodeError(joinProblem(code, '格式', 'input')); fitRooms(); return; }
+      if (!/^[A-Z0-9]{4}$/.test(code)) { showCodeError(joinProblem(code, '格式', 'input')); return; }
       Sound.click(); ensureName();
-      if (send({ type: 'join', code })) { joinTry = { code, via: 'input' }; homeNotice = null; renderRoomDirectory(); }
+      if (send({ type: 'join', code })) joinTry = { code, via: 'input' };
     };
     $('#joinBtn').onclick = join;
     $('#codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
     // 改了房间码就收起错误提示
     $('#codeInput').addEventListener('input', clearCodeError);
     $('#refreshRooms').onclick = () => { Sound.click(); requestRooms(); };
-    $('#roomNotice')?.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-notice]');
-      if (!b || b.disabled) return;
-      Sound.click();
-      if (b.dataset.notice === 'create') { ensureName(); send({ type: 'create' }); }
-      homeNotice = null;
-      renderRoomDirectory();
-    });
+    $('#codeError').addEventListener('click', (e) => { if (e.target.closest('.ce-close')) { Sound.click(); clearCodeError(); } });
     $('#roomList').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-room-code]');
       if (!b || b.disabled || $('#home').hidden || connection !== 'ready' || !roomsFresh) return;
@@ -744,7 +733,7 @@
     $('#inviteLinkInput').value = `${location.origin}${location.pathname}?room=${room.code}`;
     const host = room.host === me.id;
     // 进了房间，首页的错误提示就过时了
-    homeNotice = null; clearCodeError();
+    clearCodeError();
     const unnamed = !isNamed();
     const cards = room.seats.map((s, i) => {
       const c = PCOL[i % 6];

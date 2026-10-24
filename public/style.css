@@ -1294,32 +1294,15 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 .code-error .ce-ico .icon { width: 100%; height: 100%; }
 .code-error b { font-weight: 900; margin-right: 6px; }
 .code-error small { font-size: 12px; font-weight: 700; color: var(--ink2); }
+.code-error .ce-text { flex: 1; min-width: 0; }
+.code-error .ce-close { flex: none; align-self: center; width: 30px; height: 30px; margin: -4px -4px -4px 0; padding: 7px; display: flex; border: 0; border-radius: 9px; background: transparent; color: var(--ink2); cursor: pointer; }
+.code-error .ce-close:hover { background: rgba(242, 85, 60, .14); color: var(--ink); }
+.code-error .ce-close .icon { width: 100%; height: 100%; }
+.code-error[data-via="link"] { border-color: var(--ink); background: #FFF6DC; box-shadow: var(--shadow-sm); }
 @keyframes wpdDrop { from { opacity: 0; transform: translateY(-6px); } }
 
-/* 打开失效链接 / 目录里房间刚关闭：公开房间上方的行内说明卡，有出路按钮 */
-.room-notice:not([hidden]) {
-  display: flex; align-items: center; gap: 10px; flex: none; margin-top: 10px; padding: 9px 10px 9px 12px;
-  border: 2.5px solid var(--ink); border-radius: 14px; background: #FFF6DC; box-shadow: var(--shadow-sm);
-  animation: wpdDrop .35s var(--ease) both;
-}
-.room-notice .rn-ico { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--ink); background: var(--red); color: #fff; padding: 4px; display: flex; transform: rotate(-6deg); }
-.room-notice .rn-ico .icon { width: 100%; height: 100%; }
-.room-notice .rn-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
-.room-notice .rn-text b { font-size: 14px; font-weight: 900; }
-.room-notice .rn-text small { font-size: 12px; font-weight: 700; color: var(--ink2); }
-.room-notice .rn-acts { flex: none; display: flex; align-items: center; gap: 6px; }
-.room-notice .rn-acts .btn { white-space: nowrap; }
-.room-notice .rn-acts .btn .icon { width: 16px; height: 16px; }
-.room-notice .rn-close { width: 36px; height: 36px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); padding: 7px; display: flex; cursor: pointer; }
-.room-notice .rn-close .icon { width: 100%; height: 100%; }
-@media (max-width: 560px) {
-  .room-notice:not([hidden]) { flex-wrap: wrap; row-gap: 6px; padding: 8px 8px 8px 10px; }
-  .room-notice .rn-text { flex-basis: calc(100% - 86px); }
-  .room-notice .rn-acts .btn { min-height: 36px; padding: 6px 10px; font-size: 13px; }
-  .room-notice .rn-close { width: 40px; height: 40px; }
-}
-#home[data-tight="3"] .room-notice:not([hidden]), #home[data-tight="4"] .room-notice:not([hidden]) { margin-top: 6px; padding-top: 6px; padding-bottom: 6px; }
-#home[data-tight="4"] .room-notice .rn-text small { display: none; }
+/* 失效链接：状态行顺带指出路 */
+.room-list-status.wpd-hint { color: #B4410E; font-weight: 900; }
 
 /* 房间：自己的座位高亮；受邀者在座位上直接起名，改过名的人点铅笔随时再改 */
 .seat.wpd-me { background: #FFFBEF; }
@@ -1359,6 +1342,6 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .connection-status, .toast.wpd-toast, .code-error, .room-notice, #codeInput.wpd-shake, .seat.wpd-unnamed { animation: none !important; transition: none !important; }
+  .connection-status, .toast.wpd-toast, .code-error, #codeInput.wpd-shake, .seat.wpd-unnamed { animation: none !important; transition: none !important; }
   .connection-status .cs-ico, .connection-status .cs-ico .icon { animation: none !important; }
 }
