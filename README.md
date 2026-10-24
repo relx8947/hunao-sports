@@ -6,7 +6,7 @@
 
 ## 访问
 
-**http://dev-host:18160/**
+- 开发机：**http://dev-host:18160/**
 
 ## 部署（本机统一 nginx）
 
@@ -57,6 +57,25 @@ location /hunao/ {
     add_header Cache-Control "no-cache";
 }
 ```
+
+
+
+```
+             ├─ /hunao/ws            ─┐
+             ├─ /hunao/racers-data.js ├─► Node 127.0.0.1:18161（系统级 hunao-sports.service，用户 hunao）
+             └─ /hunao/healthz       ─┘
+```
+
+| 文件 | 部署位置 |
+| --- | --- |
+
+发布 = 把要上线的提交推到服务器裸仓库的 `main`：
+
+```bash
+```
+
+
+nginx 在该站点对 `index.html` 做了两处替换：隐藏只对桌游大厅挂载有意义的「返回大厅」，并在首页页脚下方加上 ICP 备案号。
 
 ## 本地开发
 
