@@ -2099,7 +2099,12 @@
     if (d.simul) {
       showPickOverlay(d);
       const mine = d.seats.includes(you) && !d.done.includes(you);
-      dock.innerHTML = promptHtml({ seat: you, mine, title: mine ? '选择本场出战的运动员' : '等待所有人出牌', sub: mine ? '在上方卡牌中点选' : '所有人选好后同时亮牌' });
+      // 其他人每选好一张都会重排底栏：内容没变就不重建，避免提示条反复弹入
+      const key = `simul:${gameId}:${d.id}:${mine}`;
+      if ($('.prompt', dock)?.dataset.k !== key) {
+        dock.innerHTML = promptHtml({ seat: you, mine, title: mine ? '选择本场出战的运动员' : '等待所有人出牌', sub: mine ? '在上方卡牌中点选' : '所有人选好后同时亮牌' });
+        $('.prompt', dock).dataset.k = key;
+      }
       if (mine) { yourTurnPing(d.id); addTimer(); }
       return;
     }
