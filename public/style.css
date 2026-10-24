@@ -1383,3 +1383,33 @@ body { overflow: hidden; }
   .wpc-row, .wpc-frow, .fx-c, .wpc-pod .who, .wpc-pod .blk, .wpc-pod .nm, .wpc-pod .rn, .wpc-fpod .who, .wpc-fpod .blk, .wpc-fpod .nm, .wpc-fpod .crown, .wpc-row .gain.pos { animation-delay: 0s !important; }
   .prompt.wpc-done.boost { animation: none; }
 }
+/* WP-C：手机上终局按钮一行放下，领奖台按人数与屏高收紧 */
+@media (max-width: 520px) {
+  .wpc-final .ov-actions, .wpc-results .ov-actions { flex-wrap: nowrap; gap: 6px; }
+  .wpc-final .ov-actions .btn { padding: 10px 11px; font-size: 14px; gap: 5px; }
+  .wpc-final .ov-actions .btn.big { padding: 11px 14px; font-size: 15px; }
+  .wpc-final .ov-actions #toHome .ico, .wpc-final .ov-actions #ovClose .ico { display: none; }
+  .wpc-final .pod.p1 .blk { height: 78px; font-size: 32px; }
+  .wpc-final .pod.p2 .blk { height: 56px; font-size: 26px; }
+  .wpc-final .pod.p3 .blk { height: 40px; font-size: 20px; }
+  .wpc-final .pod .nm { margin-top: 4px; font-size: 14px; }
+  .wpc-final .pod .blk { margin-top: 4px; }
+  .wpc-final .podium, .wpc-results .podium { margin-top: 18px; }
+  .wpc-final .st-row, .wpc-results .st-row { padding-top: 5px; padding-bottom: 5px; }
+}
+@media (max-height: 620px) {
+  .wpc-final .sub { display: none; }
+  .wpc-final .podium, .wpc-results .podium { margin-top: 14px; }
+  .wpc-final .pod .blk, .wpc-results .pod .blk { flex-direction: row; align-items: baseline; gap: 4px; }
+  .wpc-final .pod.p1 .blk { height: 40px; font-size: 22px; }
+  .wpc-final .pod.p2 .blk { height: 30px; font-size: 18px; }
+  .wpc-final .pod.p3 .blk { height: 24px; font-size: 16px; }
+  .wpc-results .pod.p1 .blk { height: 40px; font-size: 22px; }
+  .wpc-results .pod.p2 .blk { height: 30px; font-size: 18px; }
+  .wpc-fpod .who, .wpc-fpod.p1 .who, .wpc-pod .who { width: 38px; height: 38px; }
+  .wpc-final .pod .nm, .wpc-results .pod .nm { margin-top: 2px; font-size: 12px; }
+  .wpc-final .st-row, .wpc-results .st-row { padding-top: 2px; padding-bottom: 2px; }
+  .wpc-final .standings, .wpc-results .standings { gap: 3px; margin-top: 8px; }
+  .wpc-final .st-row .rk, .wpc-results .st-row .rk { width: 20px; height: 20px; font-size: 11px; }
+  .wpc-final .ov-actions, .wpc-results .ov-actions { margin-top: 8px; }
+}
