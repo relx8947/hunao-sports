@@ -1271,17 +1271,19 @@
     const epoch = animationEpoch;
     playing = true;
     clearPromptLive();
-    let skipped = 0, before = null;
     try {
       while (queue.length && epoch === animationEpoch) {
         const b = queue.shift();
         fast = document.hidden || queue.length > 3;
-        if (fast && !before) before = tokenSpots();
         const evs = causalOrder(b.events);
         for (let i = 0; i < evs.length; i++) {
           const e = evs[i];
           if (epoch !== animationEpoch) return;
-          if (fast && MOTION_EVENTS.has(e.t)) skipped++;
+          if (fast && MOTION_EVENTS.has(e.t)) {
+            // fast 也可能在批次中途被切回前台打开，这里按需建账
+            if (!syncAcc || syncAcc.epoch !== epoch) syncAcc = { n: 0, before: tokenSpots(), epoch };
+            syncAcc.n++;
+          }
           playAhead = { list: evs, i };
           try { await playEvent(e, epoch); } catch (err) {
             if (err === CANCELLED || epoch !== animationEpoch) return;
@@ -1302,7 +1304,7 @@
       if (epoch === animationEpoch) {
         fast = false; playing = false; playAhead = null;
         renderPlayers(); renderPrompt(); syncFinalActions();
-        if (skipped >= 4) syncHint(before, skipped);
+        flushSync();
       }
     }
   }
@@ -1934,20 +1936,16 @@
     if (vs && vs.racers) for (const r of vs.racers) m.set(r.rid, `${r.pos}|${r.finished}|${r.out}`);
     return m;
   }
-  let syncPending = false;
+  // 后台标签页里服务端一批一批推送，每批各自 pump 一次：跳过的步数跨 pump 累计，回到前台再统一提示
+  let syncAcc = null;
+  function flushSync() {
+    if (!syncAcc || document.hidden) return;
+    const { n, before, epoch } = syncAcc;
+    syncAcc = null;
+    if (epoch === animationEpoch && n >= 4) syncHint(before, n);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !playing) flushSync(); });
   function syncHint(before, n) {
-    if (document.hidden) {
-      if (syncPending) return;
-      syncPending = true;
-      const epoch = animationEpoch;
-      document.addEventListener('visibilitychange', function once() {
-        if (document.hidden) return;
-        document.removeEventListener('visibilitychange', once);
-        syncPending = false;
-        if (epoch === animationEpoch && !playing) syncHint(before, n);
-      });
-      return;
-    }
     if (!vs || $('#game').hidden) return;
     const fl = $('#floaters');
     for (const old of $$('.sync-hint', fl)) old.remove();
