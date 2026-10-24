@@ -206,14 +206,38 @@ test('香蕉：只有超过才绊倒，停在同格不算', () => {
   run(g, g.move(R(g, 'legs'), 4, 'main'));
   assert.strictEqual(R(g, 'legs').tripped, false);
 });
-test('狂野荒原：箭头、石头、星星', () => {
+test('狂野荒原（实物布局）：箭头、石头、星星', () => {
   const g = setup([['legs', 0], ['hare', 0], ['coach', 0]], 'wild');
-  run(g, g.move(R(g, 'legs'), 4, 'main')); // 4 → 箭头 +2 → 6
-  assert.strictEqual(R(g, 'legs').pos, 6);
-  run(g, g.move(R(g, 'hare'), 9, 'main'));
+  run(g, g.move(R(g, 'legs'), 7, 'main')); // 7 → 箭头 +3 → 10
+  assert.strictEqual(R(g, 'legs').pos, 10);
+  run(g, g.move(R(g, 'hare'), 5, 'main')); // 5 石头
   assert.strictEqual(R(g, 'hare').tripped, true);
-  run(g, g.move(R(g, 'coach'), 7, 'main'));
+  run(g, g.move(R(g, 'coach'), 13, 'main')); // 13 星星
   assert.strictEqual(g.score(2), 1);
+});
+test('狂野荒原（实物布局）：逐格核对 10 个特殊格', () => {
+  const { TRACKS } = require('../game/tracks');
+  assert.deepStrictEqual(TRACKS.wild.spaces, {
+    1: { type: 'star' }, 5: { type: 'rock' }, 7: { type: 'arrow', n: 3 }, 11: { type: 'arrow', n: 1 },
+    13: { type: 'star' }, 16: { type: 'arrow', n: -4 }, 17: { type: 'rock' },
+    23: { type: 'arrow', n: 2 }, 24: { type: 'arrow', n: -2 }, 26: { type: 'rock' },
+  });
+  // 1 号星星：第一步就能拿铜牌
+  let g = setup([['legs', 0], ['hare', 20]], 'wild');
+  run(g, g.move(R(g, 'legs'), 1, 'main'));
+  assert.strictEqual(g.score(0), 1);
+  // 11 → +1 → 12；16 → -4 → 12；23 → +2 → 25；24 → -2 → 22；17、26 石头
+  const cases = [[11, 12, false], [16, 12, false], [23, 25, false], [24, 22, false], [17, 17, true], [26, 26, true]];
+  for (const [to, end, trip] of cases) {
+    g = setup([['legs', 0], ['hare', 29]], 'wild');
+    run(g, g.move(R(g, 'legs'), to, 'main'));
+    assert.strictEqual(R(g, 'legs').pos, end, `落在 ${to} 应停在 ${end}`);
+    assert.strictEqual(R(g, 'legs').tripped, trip);
+  }
+  // 箭头是独立的一次移动：16 后退到 12 不会连锁到 11 的箭头
+  g = setup([['legs', 10], ['hare', 29]], 'wild');
+  run(g, g.move(R(g, 'legs'), 6, 'main'));
+  assert.deepStrictEqual(g.drain().filter(e => e.t === 'move').map(e => [e.from, e.to, e.kind]), [[10, 16, 'main'], [16, 12, 'arrow']]);
 });
 test('模仿猫拿到领跑者技能', () => {
   const g = setup([['copycat', 0], ['legs', 10], ['hare', 3]]);
@@ -428,27 +452,29 @@ test('第三人重掷时所有有效骰子贩子均按回合顺序奖励一格',
 });
 test('巨婴挤人落点仍受另一巨婴约束，不能停在猫的格子或误触星星', () => {
   for (const track of ['mild', 'wild']) {
-    const g = setup([['hugebaby', 0], ['copycat', 14], ['legs', 15], ['hare', 1]], track);
+    // 狂野荒原实物布局的星星在 13：猫站在星星格上，被挤的大长腿校正到 12，不能误触星星
+    const g = setup([['hugebaby', 0], ['copycat', 13], ['legs', 14], ['hare', 2]], track);
     let copies = 0;
-    run(g, g.move(R(g, 'hugebaby'), 15, 'main'), { copycat: () => {
+    run(g, g.move(R(g, 'hugebaby'), 14, 'main'), { copycat: () => {
       copies++;
       assert.strictEqual(copies, 1);
       return 'hugebaby';
     }});
-    assert.strictEqual(R(g, 'legs').pos, 13);
-    assert.strictEqual(R(g, 'hugebaby').pos, 15);
-    assert.strictEqual(R(g, 'copycat').pos, 14);
+    assert.strictEqual(R(g, 'legs').pos, 12);
+    assert.strictEqual(R(g, 'hugebaby').pos, 14);
+    assert.strictEqual(R(g, 'copycat').pos, 13);
     assert.strictEqual(g.power(R(g, 'copycat')), 'hugebaby');
-    assert.strictEqual(g.score(2), 0, '校正后的落点不是第 14 格星星');
+    assert.strictEqual(g.score(2), 0, '校正后的落点不是第 13 格星星');
     const events = g.drain();
-    assert.deepStrictEqual(events.filter(e => e.t === 'warp').map(e => [e.rid, e.from, e.to]), [['legs', 15, 13]]);
+    assert.deepStrictEqual(events.filter(e => e.t === 'warp').map(e => [e.rid, e.from, e.to]), [['legs', 14, 12]]);
     assert(!events.some(e => e.t === 'space' && e.rid === 'legs'));
     assert.strictEqual(g.refreshCopies().next().done, true, '校正后不重复询问同一组领跑者');
   }
 });
 test('模仿猫切成巨婴时排斥已有同格对手，并执行实际落点的停格连锁', () => {
   for (const track of ['mild', 'wild']) {
-    const g = setup([['copycat', 5], ['hare', 5], ['legs', 15], ['hugebaby', 10]], track);
+    // 狂野荒原实物布局：兔子被挤到 7 号箭头，再前进 3 到 10
+    const g = setup([['copycat', 8], ['hare', 8], ['legs', 15], ['hugebaby', 10]], track);
     const cat = R(g, 'copycat');
     run(g, g.refreshCopies());
     assert.strictEqual(g.power(cat), 'legs');
@@ -458,12 +484,12 @@ test('模仿猫切成巨婴时排斥已有同格对手，并执行实际落点�
       assert.strictEqual(copies, 1, '停格连锁不应无限重问复制选择');
       return 'hugebaby';
     }});
-    assert.strictEqual(R(g, 'hare').pos, track === 'wild' ? 6 : 4);
-    assert.strictEqual(cat.pos, 5);
+    assert.strictEqual(R(g, 'hare').pos, track === 'wild' ? 10 : 7);
+    assert.strictEqual(cat.pos, 8);
     assert.strictEqual(g.power(cat), 'hugebaby');
     const events = g.drain();
-    assert.deepStrictEqual(events.filter(e => e.t === 'warp' && e.rid === 'hare').map(e => [e.rid, e.from, e.to]), [['hare', 5, 4]]);
-    assert.deepStrictEqual(events.filter(e => e.t === 'move' && e.rid === 'hare').map(e => [e.from, e.to]), track === 'wild' ? [[4, 6]] : []);
+    assert.deepStrictEqual(events.filter(e => e.t === 'warp' && e.rid === 'hare').map(e => [e.rid, e.from, e.to]), [['hare', 8, 7]]);
+    assert.deepStrictEqual(events.filter(e => e.t === 'move' && e.rid === 'hare').map(e => [e.from, e.to]), track === 'wild' ? [[7, 10]] : []);
     assert.strictEqual(g.refreshCopies().next().done, true);
     const positions = g.racers.map(r => r.pos);
     for (let i = 0; i < 3; i++) {
