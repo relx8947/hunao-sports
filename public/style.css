@@ -1316,7 +1316,7 @@ body { overflow: hidden; }
 .commentary .com-skill .cs-eff::before { content: "→ "; color: var(--ink3); }
 /* 换行时别把效果的最后一两个字甩到第二行：短效果整体不断行，长效果交给 text-wrap: pretty */
 .commentary .com-skill { text-wrap: pretty; }
-.commentary .com-skill .cs-eff.nw { white-space: nowrap; }
+.commentary .com-skill .cs-eff.nw, .commentary .com-skill .cs-name, .commentary .com-skill .cs-who { white-space: nowrap; }
 
 /* 选秀顺位条：一行完整可见；当前那手展开成名字 */
 .draft-order { overflow: hidden; max-width: 100%; gap: 6px; }

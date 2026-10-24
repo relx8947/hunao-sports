@@ -1311,7 +1311,8 @@
     if (!box) return;
     const first = $('.prow', box);
     const fw = first ? first.getBoundingClientRect().width : 0;
-    const narrow = fw > 0 && fw < 118 && matchMedia('(max-width: 1000px) and (orientation: portrait)').matches;
+    // 3 人局的手机卡片约 119–131px 宽，横排时名字只剩 40px 左右（「选手100」会被截成「选手1…」），也改成名字单独一行
+    const narrow = fw > 0 && fw < 134 && matchMedia('(max-width: 1000px) and (orientation: portrait)').matches;
     box.classList.toggle('pf-stack', narrow);
     // 先统一写、再统一读：每一档字号只触发一次布局，不再逐个名字读写交替（布局抖动）
     const names = $$('.prow .pnm', box);
