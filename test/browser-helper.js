@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const { FINISH, SCHEDULE } = require('../game/tracks');
-const { RACER_IDS } = require('../game/racers');
+const { FINISH, EDITIONS, DEFAULT_EDITION } = require('../game/tracks');
+const { RACER_IDS, RACER_IDS_V2 } = require('../game/racers');
 const localUrl = value => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(value).hostname);
 
 async function launch() {
@@ -255,17 +255,24 @@ async function snapshot(page, out, name) {
 
 function assertResults(snap) {
   const n = snap.players.length;
+  // 模式决定赛程与卡池：一代 36 名、二代 36 名、混合 72 名
+  const edition = snap.edition || DEFAULT_EDITION;
+  assert(EDITIONS[edition], `未知模式 ${edition}`);
+  const pool = edition === 'v1' ? RACER_IDS : edition === 'v2' ? RACER_IDS_V2 : RACER_IDS.concat(RACER_IDS_V2);
   assert.equal(snap.results.length, 4, '必须有四场成绩');
   for (const [index, result] of snap.results.entries()) {
     assert.equal(result.race, index + 1, '场次顺序必须正确');
-    assert.equal(result.track, SCHEDULE[index], '赛道顺序必须正确');
+    assert.equal(result.track, EDITIONS[edition].schedule[index], '赛道顺序必须正确');
     assert.equal(result.scores.length, n);
     assert(result.scores.every(score => Number.isSafeInteger(score) && score >= 0), '每场累计比分必须有效');
-    assert.equal(result.standings.length, n);
-    assert.deepEqual(result.standings.map(r => r.seat).sort((a, b) => a - b), Array.from({ length: n }, (_, seat) => seat));
-    assert.equal(new Set(result.standings.map(r => r.rid)).size, n);
+    // 二代变数卡「时间小鬼」会让额外运动员上场、「调包精」会交换控制权：只要求常规运动员每席派出一名、席位合法、运动员不重复
+    const regular = edition === 'v1' ? result.standings : result.standings.filter(r => !r.extra);
+    assert.equal(regular.length, n);
+    if (edition === 'v1') assert.deepEqual(regular.map(r => r.seat).sort((a, b) => a - b), Array.from({ length: n }, (_, seat) => seat));
+    else assert(result.standings.every(r => Number.isInteger(r.seat) && r.seat >= 0 && r.seat < n), '席位必须合法');
+    assert.equal(new Set(result.standings.map(r => r.rid)).size, result.standings.length);
     for (const racer of result.standings) {
-      assert(RACER_IDS.includes(racer.rid));
+      assert(pool.includes(racer.rid), `${racer.rid} 不属于 ${edition} 卡池`);
       assert(Number.isInteger(racer.pos) && racer.pos >= 0 && racer.pos <= FINISH);
       assert(Number.isInteger(racer.finished) && racer.finished >= 0 && racer.finished <= 2);
       assert.equal(typeof racer.out, 'boolean');

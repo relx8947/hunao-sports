@@ -13,8 +13,10 @@
 
   const PCOL = ['#FF6B57', '#3B9EFF', '#22B573', '#FFB020', '#8B6CF0', '#F25CA2'];
   const RACERS = window.RACERS;
-  const R = Object.fromEntries(RACERS.map((r) => [r.id, r]));
-  const TRACKS = window.TRACKS;
+  // 二代/混合模式的运动员 id 也要查得到：R 与赛道表用全部模式的数据（RACERS 仍是一代 36 名）
+  const RACERS_ALL = window.RACERS_ALL || RACERS;
+  const R = Object.fromEntries(RACERS_ALL.map((r) => [r.id, r]));
+  const TRACKS = window.TRACKS_ALL || window.TRACKS;
   const FIN = window.FINISH;
   const GOLD = window.GOLD, SILVER = window.SILVER, SCHEDULE = window.SCHEDULE;
   const EMOTES = ['哈哈哈', '离谱！', '好耶', '救命', '666', '等等我'];
@@ -587,7 +589,7 @@
       if (!r || !validRoomCode(r.code) || !['play', 'spectator'].includes(r.mode) || !['lobby', 'playing', 'over'].includes(r.status) || seen.has(r.code)) return false;
       seen.add(r.code); return true;
     }).map((r) => ({
-      code: r.code, mode: r.mode, status: r.status,
+      code: r.code, mode: r.mode, status: r.status, edition: editionOf(r.edition),
       hostName: typeof r.hostName === 'string' ? r.hostName : '未命名房主',
       playerCount: count(r.playerCount, 6), aiCount: count(r.aiCount, 6), humanCount: count(r.humanCount, 6),
       onlineCount: count(r.onlineCount, 6), maxPlayers: 6,
@@ -627,26 +629,106 @@
       return `<li class="room-list-item${watch ? ' watch-room' : ''}">
         <span class="room-list-icon ico" aria-hidden="true">${icon(watch ? 'eye' : 'users')}</span>
         <div class="room-list-info">
-          <div class="room-list-title"><span class="room-list-host" title="${esc(r.hostName)}">${esc(r.hostName)}</span><span class="room-list-code">${esc(r.code)}</span></div>
+          <div class="room-list-title"><span class="room-list-host" title="${esc(r.hostName)}">${esc(r.hostName)}</span><span class="room-list-code">${esc(r.code)}</span>${edBadge(r.edition, 'room-list-ed')}</div>
           <p class="room-list-state"><span class="room-state ${esc(r.status)}">${watch ? 'AI 观战 · ' : ''}${esc(state)}</span></p>
           <p class="room-list-meta">${esc(people)}</p><p class="room-list-meta">${esc(presence)}</p>
         </div>
-        <div class="room-list-action"><button class="btn small${watch ? '' : ' primary'}" data-room-code="${esc(r.code)}" aria-label="${esc(`${label}：${r.hostName}，房间 ${r.code}`)}"${!usable || !r.canJoin ? ' disabled' : ''}>${esc(label)}</button><span class="room-list-note">${esc(note)}</span></div>
+        <div class="room-list-action"><button class="btn small${watch ? '' : ' primary'}" data-room-code="${esc(r.code)}" aria-label="${esc(`${label}：${r.hostName}，房间 ${r.code}，${edName(r.edition)}模式`)}"${!usable || !r.canJoin ? ' disabled' : ''}>${esc(label)}</button><span class="room-list-note">${esc(note)}</span></div>
       </li>`;
     }).join('');
     fitRooms();
   }
   // 首页一屏：公开房间至少要放下一间，放不下就逐级收起装饰（徽章、游行队伍、标语、缩小标志）
   function fitRooms() {
-    const home = $('#home'), inner = $('.home-inner', home), list = $('#roomList');
+    const home = $('#home'), inner = $('.home-inner', home), list = $('#roomList'), dir = $('.room-directory', home);
     if (home.hidden) return;
     for (let level = 0; level <= 4; level++) {
       home.dataset.tight = level;
       paginate('rooms', list, () => $$('#roomList .room-list-item'), $('#roomPager'));
-      if (list.scrollHeight <= list.clientHeight + 1 && inner.scrollHeight <= inner.clientHeight + 1) break;
+      // 房间卡片本身也要放得下（列表为空时提示文字在列表外，卡片被压扁会盖住它）
+      if (list.scrollHeight <= list.clientHeight + 1 && inner.scrollHeight <= inner.clientHeight + 1 && (!dir || dir.scrollHeight <= dir.clientHeight + 1)) break;
     }
     // 房间列表被挤压时要连同首页收紧级别一起重算，单独重排分页会和收紧级别打架
     pagers.rooms.refit = fitRooms;
+  }
+
+  /* ---------- 模式：一代 / 二代 / 混合 ---------- */
+  // 首页选的模式随 create/quick/watch 发给服务端；房间、目录、对局都以服务端下发的 edition 为准。
+  const EDITIONS = window.EDITIONS || { v1: { key: 'v1', name: '一代', desc: '', schedule: SCHEDULE, pools: [1], twists: false } };
+  const DEFAULT_EDITION = EDITIONS[window.DEFAULT_EDITION] ? window.DEFAULT_EDITION : Object.keys(EDITIONS)[0];
+  // 分段选择器下面那一句说明（比服务端 desc 短，手机上两行内放得下）
+  const EDITION_HINT = { v1: '经典 36 名运动员 · 温和与狂野赛道', v2: '续作 36 名新运动员 · 新赛道 + 变数卡', mix: '72 名运动员同池选秀 · 四条赛道各一场' };
+  const TRACK_SHORT = { mild: '温和', wild: '狂野', twisty: '扭扭', whirly: '漩涡' };
+  function validEdition(e) { return typeof e === 'string' && Object.prototype.hasOwnProperty.call(EDITIONS, e); }
+  function editionOf(e) { return validEdition(e) ? e : DEFAULT_EDITION; }
+  function edName(e) { return EDITIONS[editionOf(e)].name; }
+  function edHint(e) { const k = editionOf(e); return EDITION_HINT[k] || EDITIONS[k].desc || ''; }
+  function edBadge(e, cls = '') { const k = editionOf(e); return `<span class="ed-badge ed-${k}${cls ? ` ${cls}` : ''}" title="${esc(`${edName(k)}模式`)}">${esc(edName(k))}</span>`; }
+  let homeEdition = editionOf(store.get('hn_edition', DEFAULT_EDITION));
+  // 当前语境的模式：首页看自己的选择；房间/对局看服务端（对局快照优先）
+  function curEdition() {
+    if (document.body.dataset.screen === 'home' || (!room && !snap)) return homeEdition;
+    if (snap && validEdition(snap.edition)) return snap.edition;
+    if (room && validEdition(room.edition)) return room.edition;
+    return homeEdition;
+  }
+  // 本局四场的赛道顺序：对局快照带 schedule，没有就按模式表
+  function raceSchedule() {
+    const s = (vs && vs.schedule) || (snap && snap.schedule);
+    if (Array.isArray(s) && s.length && s.every((k) => TRACKS[k])) return s;
+    return EDITIONS[curEdition()].schedule || SCHEDULE;
+  }
+  function trackShort(k) { return TRACK_SHORT[k] || (TRACKS[k] ? TRACKS[k].name.slice(0, 2) : ''); }
+  // 三选一分段按钮（首页、房间共用）：点按、方向键切换；disabled 时只读显示当前模式
+  function syncEditionSeg(seg, ed, { disabled = false } = {}) {
+    if (!seg) return;
+    seg.toggleAttribute('aria-disabled', disabled);
+    seg.classList.toggle('readonly', disabled);
+    for (const b of $$('button[data-ed]', seg)) {
+      const on = b.dataset.ed === ed;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+      b.disabled = disabled && !on;
+    }
+  }
+  function bindEditionSeg(seg, pick) {
+    seg.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-ed]');
+      if (!b || b.disabled || seg.classList.contains('readonly') || !validEdition(b.dataset.ed)) return;
+      pick(b.dataset.ed, b);
+    });
+    seg.addEventListener('keydown', (e) => {
+      const b = e.target.closest('button[data-ed]');
+      if (!b || seg.classList.contains('readonly') || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+      e.preventDefault();
+      const buttons = $$('button[data-ed]', seg), i = buttons.indexOf(b);
+      const next = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (i + (['ArrowRight', 'ArrowDown'].includes(e.key) ? 1 : -1) + buttons.length) % buttons.length;
+      pick(buttons[next].dataset.ed, buttons[next]);
+      buttons[next].focus();
+    });
+  }
+  function setHomeEdition(ed) {
+    homeEdition = editionOf(ed);
+    store.set('hn_edition', homeEdition);
+    syncEditionSeg($('#editionSeg'), homeEdition);
+    const hint = $('#editionHint');
+    if (hint) { hint.textContent = edHint(homeEdition); hint.title = EDITIONS[homeEdition].desc || ''; hint.dataset.ed = homeEdition; }
+    $('#modePick')?.setAttribute('data-ed', homeEdition);
+  }
+  // 房间里的模式：房主可切换（开局后、观战房、断线时锁定），其他人只读
+  function renderLobbyEdition() {
+    if (!room) return;
+    const ed = editionOf(room.edition);
+    const host = room.host === me.id;
+    const canSwitch = host && room.status === 'lobby' && (room.mode || 'play') === 'play' && connection === 'ready';
+    const seg = $('#lobbyEdition');
+    syncEditionSeg(seg, ed, { disabled: !canSwitch });
+    if (seg) seg.title = canSwitch ? '点击切换本房间的模式' : host ? '开局后不能切换模式' : '模式由房主选择';
+    $('#lobbyMode').dataset.ed = ed;
+    const hint = $('#lobbyEditionHint');
+    const text = `${host ? '' : '房主已选 · '}${edHint(ed)}`;
+    if (hint && hint.textContent !== text) { hint.textContent = text; hint.title = `${edName(ed)}：${EDITIONS[ed].desc || edHint(ed)}`; }
   }
 
   /* ---------- 首页 ---------- */
@@ -695,9 +777,11 @@
       const next = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (i + (['ArrowRight', 'ArrowDown'].includes(e.key) ? 1 : -1) + buttons.length) % buttons.length;
       selectWatch(buttons[next]); buttons[next].focus();
     });
-    $('#watchBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'watch', ai: watchN }); };
-    $('#quickBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'quick', ai: aiN }); };
-    $('#createBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'create' }); };
+    setHomeEdition(homeEdition);
+    bindEditionSeg($('#editionSeg'), (ed) => { if (ed !== homeEdition) { setHomeEdition(ed); Sound.click(); } });
+    $('#watchBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'watch', ai: watchN, edition: homeEdition }); };
+    $('#quickBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'quick', ai: aiN, edition: homeEdition }); };
+    $('#createBtn').onclick = () => { Sound.click(); ensureName(); send({ type: 'create', edition: homeEdition }); };
     const join = () => {
       const code = $('#codeInput').value.trim().toUpperCase();
       if (!/^[A-Z0-9]{4}$/.test(code)) { denyCue(); showCodeError(joinProblem(code, '格式', 'input')); return; }
@@ -779,6 +863,7 @@
       : '等待房主开始比赛…';
     if ($('#lobbyTip').textContent !== tip) $('#lobbyTip').textContent = tip;
     renderInviteButton();
+    renderLobbyEdition();
   }
   const RANDOM_NAME = /^选手\d{3}$/;
   // 名字是否由用户自己起过：本机标记过，或者不是服务端发的随机名
@@ -835,6 +920,11 @@
       if (e.target.id !== 'lobbyName') return;
       const input = e.target;
       setTimeout(() => { if (input.isConnected && document.activeElement !== input) commitLobbyName(input); }, 0);
+    });
+    bindEditionSeg($('#lobbyEdition'), (ed) => {
+      if (!room || room.host !== me.id || room.status !== 'lobby' || ed === editionOf(room.edition)) return;
+      Sound.click();
+      if (send({ type: 'edition', edition: ed })) setHomeEdition(ed); // 房主的选择也记成下次首页默认；房间以服务端广播为准
     });
     $('#addAI').onclick = () => { Sound.click(); send({ type: 'addAI' }); };
     $('#startBtn').onclick = () => { Sound.click(); send({ type: 'start' }); };
@@ -1206,10 +1296,11 @@
   function syncMeta() { renderPlayers(); renderTitle(); }
 
   function renderPills() {
-    $('#races').innerHTML = SCHEDULE.map((t, i) => {
+    // 本局模式的小标签放在场次条最前面，不另占一块区域
+    $('#races').innerHTML = edBadge(curEdition(), 'race-ed') + raceSchedule().map((t, i) => {
       const n = i + 1;
-      const cls = [t === 'wild' ? 'wild' : '', vs.raceNo === n && vs.phase !== 'draft' ? 'cur' : '', vs.raceNo > n || (vs.raceNo === n && (vs.phase === 'between' || vs.phase === 'over')) ? 'done' : ''].join(' ');
-      return `<div class="race-pill ${cls}" title="${TRACKS[t].name}"><span class="no">${n}</span><span class="tn">${t === 'wild' ? '狂野' : '温和'}</span><span class="pts">金${GOLD[i]}·银${SILVER[i]}</span></div>`;
+      const cls = [t === 'wild' ? 'wild' : '', `tk-${t}`, vs.raceNo === n && vs.phase !== 'draft' ? 'cur' : '', vs.raceNo > n || (vs.raceNo === n && (vs.phase === 'between' || vs.phase === 'over')) ? 'done' : ''].join(' ');
+      return `<div class="race-pill ${cls}" title="${esc(TRACKS[t] ? TRACKS[t].name : t)}"><span class="no">${n}</span><span class="tn">${esc(trackShort(t))}</span><span class="pts">金${GOLD[i]}·银${SILVER[i]}</span></div>`;
     }).join('');
   }
   // 顶栏标题只讲「现在是什么局面」：场次 + 轮到谁 + 离你还有几位（手机上场次名会让位给后两项）
@@ -1236,10 +1327,13 @@
       if (p) el.style.setProperty('--c', PCOL[p.seat % 6]);
     } else if (vs.phase === 'between') { plain = `第 ${vs.raceNo} 场结束`; html = esc(plain); }
     else if (vs.phase === 'over') { plain = '比赛结束'; html = esc(plain); }
-    if (el.dataset.plain === plain) return;
+    // 手机竖屏的场次条放不下模式徽标，改由标题行开头显示（CSS 二选一显示）
+    const ed = curEdition();
+    if (el.dataset.plain === plain && el.dataset.ed === ed) return;
     el.dataset.plain = plain;
-    el.innerHTML = html;
-    el.title = plain;
+    el.dataset.ed = ed;
+    el.innerHTML = edBadge(ed, 'tt-ed') + html;
+    el.title = `${edName(ed)} · ${plain}`;
   }
   function renderSpectatorStatus() {
     const show = isSpectator() && !$('#game').hidden;
@@ -3345,26 +3439,103 @@
   /* ================= 弹窗：规则 / 图鉴 ================= */
   function openModal(kind) {
     const m = $('#modal');
-    let title, body;
+    let title, body, tools = '';
     if (kind === 'gallery') {
-      title = '运动员图鉴 · 36 名';
-      const save = vs; if (!vs) vs = { players: [] };
-      body = `<div class="gallery" data-fit>${RACERS.map((r) => rcard(r.id)).join('')}</div>`;
-      vs = save;
+      // 默认筛选跟着当前语境的模式：一代 → 一代，二代 → 二代，混合 → 全部
+      const ed = curEdition();
+      galleryFilter = ed === 'v1' ? 'v1' : ed === 'v2' ? 'v2' : 'all';
+      title = `运动员图鉴<span class="mh-n" id="galCount"> · ${galleryRacers().length} 名</span>`;
+      tools = galleryFilterHtml('gf-head');
+      body = `${galleryFilterHtml('gf-body')}<div class="gallery" data-fit>${galleryCards()}</div>`;
     } else if (kind === 'tracks') {
-      title = '地图图鉴 · 2 条赛道';
+      tgEdition = curEdition();
+      title = `地图图鉴<span class="mh-n" id="tgCount"> · ${tgTracks().length} 条赛道</span>`;
+      tools = `<div class="seg mode-seg tg-eds" id="tgEds" role="radiogroup" aria-label="按模式查看赛道">${Object.keys(EDITIONS).map((k) => `<button type="button" role="radio" data-ed="${k}">${esc(edName(k))}</button>`).join('')}</div>`;
       body = '<div class="tguide" id="tguide"></div>';
     } else {
       title = '玩法说明';
-      body = `<div class="rules" data-fit>
-        <section class="rule-sec"><h4>当前试玩版</h4><p>支持 <span class="kw">3-6 名选手</span>（含 AI）。两位朋友可以加 1 名 AI 开赛，单人可以直接挑战 AI。狂野赛道采用自定义布局；奖牌分值使用下方的递增设置。双人各操控两名运动员的变体尚未加入。</p></section>
+      body = `<div class="rules" data-fit>${rulesHtml()}</div>`;
+    }
+    m.innerHTML = `<div class="modal-box card modal-${kind === 'gallery' || kind === 'tracks' ? kind : 'rules'}"><div class="modal-head"><h3>${title}</h3>${tools}<div class="pager" id="mPager" hidden></div><button class="icon-btn" id="mClose" aria-label="关闭"><span class="ico">${icon('close')}</span></button></div><div class="modal-body">${body}</div></div>`;
+    m.hidden = false;
+    modalKind = kind;
+    const close = () => { m.hidden = true; modalKind = null; };
+    $('#mClose').onclick = close;
+    m.onclick = (e) => { if (e.target === m) close(); };
+    if (kind === 'gallery') {
+      syncGalleryFilter();
+      m.querySelector('.modal-box').addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-gf]');
+        if (!b || b.dataset.gf === galleryFilter) return;
+        Sound.click();
+        setGalleryFilter(b.dataset.gf);
+      });
+    } else if (kind === 'tracks') {
+      const seg = $('#tgEds');
+      syncEditionSeg(seg, tgEdition);
+      bindEditionSeg(seg, (ed) => {
+        if (ed === tgEdition) return;
+        Sound.click();
+        tgEdition = ed;
+        syncEditionSeg(seg, ed);
+        $('#tgCount').textContent = ` · ${tgTracks().length} 条赛道`;
+        renderTrackGuide(tgTracks().includes(tgKey) ? tgKey : tgTracks()[0]);
+      });
+    }
+    fitModal(true);
+  }
+
+  /* ---------- 图鉴筛选：全部 / 一代 / 二代 ---------- */
+  let galleryFilter = 'v1';
+  const GALLERY_FILTERS = [['all', '全部'], ['v1', '一代'], ['v2', '二代']];
+  function galleryRacers() {
+    if (galleryFilter === 'all') return RACERS_ALL;
+    const n = galleryFilter === 'v2' ? 2 : 1;
+    return RACERS_ALL.filter((r) => (r.edition || 1) === n);
+  }
+  function galleryCards() {
+    const save = vs; if (!vs) vs = { players: [] };
+    try { return galleryRacers().map((r) => rcard(r.id)).join(''); } finally { vs = save; }
+  }
+  // 筛选标签：宽屏放在弹窗标题栏，窄屏放在图鉴上方（两份同步，CSS 只显示其中一份）
+  function galleryFilterHtml(cls) {
+    return `<div class="seg mode-seg gal-filter ${cls}" role="radiogroup" aria-label="按模式筛选运动员">${GALLERY_FILTERS.map(([k, t]) => `<button type="button" role="radio" data-gf="${k}">${t}</button>`).join('')}</div>`;
+  }
+  function syncGalleryFilter() {
+    for (const b of $$('#modal button[data-gf]')) {
+      const on = b.dataset.gf === galleryFilter;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', String(on));
+    }
+  }
+  function setGalleryFilter(k) {
+    if (!GALLERY_FILTERS.some(([x]) => x === k)) return;
+    galleryFilter = k;
+    syncGalleryFilter();
+    const m = $('#modal'), box = $('.gallery', m);
+    if (!box) return;
+    box.innerHTML = galleryCards();
+    const n = $('#galCount'); if (n) n.textContent = ` · ${galleryRacers().length} 名`;
+    if (pagers.gallery) { pagers.gallery.anchor = 0; pagers.gallery.dir = 0; }
+    paginate('gallery', box, () => $$('.gallery .rcard', m), $('#mPager'));
+  }
+
+  /* ---------- 玩法说明（含二代赛道与变数卡） ---------- */
+  function rulesHtml() {
+    const sched = (k) => (EDITIONS[k] ? EDITIONS[k].schedule.map((t) => (TRACKS[t] ? TRACKS[t].name : t)).join(' → ') : '');
+    const modes = Object.keys(EDITIONS).map((k) => `<li>${edBadge(k)} ${esc(EDITIONS[k].desc || edHint(k))}<br><small class="rule-sched">赛程：${esc(sched(k))}</small></li>`).join('');
+    const twists = (window.TWISTS || []).map((t) => `<section class="rule-sec tw-card"><p><span class="tw-name">${esc(t.name)}</span>${esc(t.text)}</p></section>`).join('');
+    const twistAt = TRACKS.twisty && TRACKS.twisty.twistAt;
+    const whirls = TRACKS.whirly && TRACKS.whirly.whirls ? TRACKS.whirly.whirls.map(([a, b]) => `${a}↔${b}`).join('、') : '';
+    return `<section class="rule-sec"><h4>当前试玩版</h4><p>支持 <span class="kw">3-6 名选手</span>（含 AI）。两位朋友可以加 1 名 AI 开赛，单人可以直接挑战 AI。开房前可选<span class="kw">一代 / 二代 / 混合</span>三种模式。狂野赛道采用自定义布局；奖牌分值使用下方的递增设置。双人各操控两名运动员的变体尚未加入。</p></section>
+        <section class="rule-sec"><h4>三种模式</h4><ul class="rule-modes">${modes}</ul></section>
         <section class="rule-sec"><h4>目标</h4><p>一共比 <span class="kw">4 场</span>赛跑，每场前两名冲线的拿分：冠军拿金杯、亚军拿银牌，越往后的比赛分越高（金 ${GOLD.join('/')}，银 ${SILVER.join('/')}）。四场结束总分最高者获胜，并列就一起庆祝！</p></section>
-        <section class="rule-sec"><h4>组建队伍</h4><p>开局掷骰决定顺序，进行两轮<span class="kw">蛇形选秀</span>：翻开人数×2 张运动员卡，按 1→N 再 N→1 的顺序每人挑一张，两轮后每人 4 名运动员。</p></section>
+        <section class="rule-sec"><h4>组建队伍</h4><p>开局掷骰决定顺序，进行两轮<span class="kw">蛇形选秀</span>：翻开人数×2 张运动员卡，按 1→N 再 N→1 的顺序每人挑一张，两轮后每人 4 名运动员。混合模式从 72 名运动员里一起选。</p></section>
         <section class="rule-sec"><h4>比赛</h4><ul>
           <li>每场所有人<span class="kw">同时暗选</span>一名还没上过场的运动员，一起亮牌，放到起点。</li>
           <li>轮到你时掷骰，走对应格数，这叫<span class="kw">主移动</span>。很多技能只对主移动生效。</li>
           <li>有两名运动员冲过终点，比赛立刻结束。下一场由上一场最落后（或最先被淘汰）的人先手。</li>
-          <li>赛道交替：温和一英里 → 狂野荒原 → 温和一英里 → 狂野荒原。</li>
+          <li>赛道顺序由模式决定，见上面的「三种模式」。</li>
         </ul></section>
         <section class="rule-sec"><h4>技能</h4><ul>
           <li>写着「可以」的技能是可选的，其他技能都是强制生效。</li>
@@ -3380,19 +3551,17 @@
           <li><span class="kw">石头</span>：停上去就摔倒。</li>
           <li><span class="kw">星星</span>：停上去拿 1 分铜牌。</li>
         </ul></section>
+        <section class="rule-sec"><h4>二代赛道</h4><ul>
+          <li><span class="kw">扭扭糖果</span>：没有特殊格，第 ${twistAt ? `${twistAt - 1}、${twistAt}` : '13、14'} 格之间立着变数招牌，本场第一个移动到或经过第 ${twistAt || 14} 格的运动员翻开一张变数卡（每场一次）。</li>
+          <li><span class="kw">漩涡乐园</span>：${whirls ? `漩涡两两相连（${esc(whirls)}），` : ''}停在一端就瞬移到另一端，不算移动。</li>
+        </ul></section>
+        <section class="rule-sec"><h4>二代 · 变数卡</h4><p>二代和混合模式启用，共 ${(window.TWISTS || []).length} 张，翻开后立刻结算；写着「本场之后」的效果持续到本场结束。</p></section>
+        ${twists}
         <section class="rule-sec"><h4>联机小贴士</h4><ul>
           <li>把房间码或邀请链接发给朋友；人不够可以加 AI。</li>
           <li>掉线或超时会自动托管，回来点一下「托管」即可接管。</li>
           ${hasKeyboard.matches ? '<li>空格键可以直接掷骰。</li>' : ''}
-        </ul></section></div>`;
-    }
-    m.innerHTML = `<div class="modal-box card modal-${kind === 'gallery' || kind === 'tracks' ? kind : 'rules'}"><div class="modal-head"><h3>${title}</h3><div class="pager" id="mPager" hidden></div><button class="icon-btn" id="mClose" aria-label="关闭"><span class="ico">${icon('close')}</span></button></div><div class="modal-body">${body}</div></div>`;
-    m.hidden = false;
-    modalKind = kind;
-    const close = () => { m.hidden = true; modalKind = null; };
-    $('#mClose').onclick = close;
-    m.onclick = (e) => { if (e.target === m) close(); };
-    fitModal(true);
+        </ul></section>`;
   }
   let modalKind = null;
   function fitModal(fresh) {
@@ -3401,7 +3570,7 @@
     if (fresh) for (const k of ['gallery', 'rules']) if (pagers[k]) pagers[k].anchor = 0;
     if (modalKind === 'records') return;
     if (modalKind === 'gallery') paginate('gallery', $('.gallery', m), () => $$('.gallery .rcard', m), $('#mPager'));
-    else if (modalKind === 'tracks') renderTrackGuide(fresh ? SCHEDULE[0] : tgKey);
+    else if (modalKind === 'tracks') renderTrackGuide(fresh || !tgTracks().includes(tgKey) ? tgTracks()[0] : tgKey);
     else paginate('rules', $('.rules', m), () => $$('.rules .rule-sec', m), $('#mPager'));
   }
 
@@ -3439,22 +3608,57 @@
   const TRACK_INTRO = {
     mild: '平平无奇的一圈跑道，没有任何机关，快慢全看运动员技能怎么搞事。',
     wild: '遍地箭头、石头和星星，落点决定命运，一步踩错就前功尽弃。',
+    twisty: '二代的糖果跑道，格子上没有机关，但半路立着变数招牌，谁先经过谁翻出一张变数卡。',
+    whirly: '十二个漩涡两两相连，停在一端就被吸到另一端，可能一步登天也可能倒退一大截。',
+  };
+  const TRACK_TINT = { mild: 'var(--green)', wild: 'var(--red)', twisty: 'var(--pink)', whirly: 'var(--blue)' };
+  // 地图图鉴里二代格子的说明图标（棋盘画法还没提供时的简化版）
+  const GUIDE_GLYPH = {
+    whirl: `<circle r="20" fill="#4D9DF7" stroke="${INK}" stroke-width="2.5"/><path d="M0 0 m-1 -2 a3 3 0 1 1 3 4 a7 7 0 1 1 -8 -8 a11 11 0 1 1 13 11" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`,
+    twist: `<rect x="-18" y="-17" width="36" height="26" rx="6" fill="#F27AB8" stroke="${INK}" stroke-width="2.5"/><path d="M0 9 v10" stroke="${INK}" stroke-width="3" stroke-linecap="round"/><text y="3" font-size="17" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3" paint-order="stroke">?</text>`,
   };
   let tgKey = 'mild';
+  let tgEdition = 'v1';
+  // 地图图鉴按模式列赛道：赛程里出现过的赛道，按首次出场顺序
+  function tgTracks() { return [...new Set((EDITIONS[editionOf(tgEdition)].schedule || SCHEDULE).filter((k) => TRACKS[k]))]; }
+  // 缩略图接口：trackThumbMarkup(key, lay) 返回 <svg viewBox="0 0 W H"> 内部的标记，W×H 取 GEO[lay].vb。
+  // 默认复用对局棋盘的 trackSvgMarkup（二代赛道的专门画法补进 trackSvgMarkup 后这里自动生效）；
+  // 也可以由别的脚本提供 window.TrackThumbs[key](lay) 单独绘制地图图鉴缩略图，返回空值时退回默认画法。
+  function trackThumbMarkup(key, lay) {
+    const custom = window.TrackThumbs && typeof window.TrackThumbs[key] === 'function' ? window.TrackThumbs[key](lay) : '';
+    return custom || trackSvgMarkup(key, lay);
+  }
+  let tgLay = null, tgResizeBound = false;
   function renderTrackGuide(key, dir = 0) {
     const box = $('#tguide');
     if (!box) return;
     tgKey = key;
+    // 横竖屏切换后按新方向重画缩略图（只绑定一次）
+    if (!tgResizeBound) {
+      tgResizeBound = true;
+      window.addEventListener('resize', () => {
+        if (modalKind === 'tracks' && tgLay && tgLay !== (innerHeight > innerWidth * 1.05 && innerWidth < 900 ? 'tall' : 'wide')) renderTrackGuide(tgKey);
+      });
+    }
     const t = TRACKS[key];
     const lay = innerHeight > innerWidth * 1.05 && innerWidth < 900 ? 'tall' : 'wide';
-    const races = SCHEDULE.map((k, i) => (k === key ? `<li><b>第 ${i + 1} 场</b><span class="tg-medal g">金 ${GOLD[i]}</span><span class="tg-medal s">银 ${SILVER[i]}</span></li>` : '')).join('');
+    tgLay = lay;
+    const schedule = EDITIONS[editionOf(tgEdition)].schedule || SCHEDULE;
+    const races = schedule.map((k, i) => (k === key ? `<li><b>第 ${i + 1} 场</b><span class="tg-medal g">金 ${GOLD[i]}</span><span class="tg-medal s">银 ${SILVER[i]}</span></li>` : '')).join('');
     const at = (pred) => Object.entries(t.spaces).filter(([, sp]) => pred(sp)).map(([p, sp]) => ({ p: Number(p), sp }));
     const fwd = at((sp) => sp.type === 'arrow' && sp.n > 0), back = at((sp) => sp.type === 'arrow' && sp.n < 0);
     const rocks = at((sp) => sp.type === 'rock'), stars = at((sp) => sp.type === 'star');
     const cells = (arr, fmt = (p) => `${p}`) => arr.map(({ p, sp }) => fmt(p, sp)).join('、');
-    const glyph = (type, n) => `<svg viewBox="-24 -24 48 48" aria-hidden="true">${spaceGlyph(type, n, 0, 0, 1)}</svg>`;
+    const glyph = (type, n) => `<svg viewBox="-24 -24 48 48" aria-hidden="true">${spaceGlyph(type, n, 0, 0, 1) || GUIDE_GLYPH[type] || ''}</svg>`;
     const item = (g, name, where, text) => `<li>${g}<div><b>${name}<em>${where}</em></b><p>${text}</p></div></li>`;
-    const legend = Object.keys(t.spaces).length ? `<ul class="tg-legend">
+    const whirlPairs = Array.isArray(t.whirls) ? t.whirls : [];
+    const legend = whirlPairs.length ? `<ul class="tg-legend">
+        ${item(glyph('whirl', 0), '漩涡', `${whirlPairs.length} 对 · ${whirlPairs.map(([a, b]) => `${a}↔${b}`).join('、')}`, '停在漩涡一端立刻瞬移到相连的另一端，不算移动、不会超过别人；路过不触发。')}
+      </ul><p class="tg-note">只看最后停在哪格：掷骰、技能移动落到漩涡都会被传送；瞬移到另一端后不再连环传送。</p>`
+      : t.twistAt ? `<ul class="tg-legend">
+        ${item(glyph('twist', 0), '变数招牌', `第 ${t.twistAt - 1}、${t.twistAt} 格之间`, `本场第一个移动到或经过第 ${t.twistAt} 格的运动员翻开一张变数卡，每场只翻一次；13 张变数卡见玩法说明。`)}
+      </ul><p class="tg-note">格子本身没有机关，起点后 ${FIN - 1} 格赛道，第 ${FIN} 步冲线。</p>`
+      : Object.keys(t.spaces).length ? `<ul class="tg-legend">
         ${fwd.length ? item(glyph('arrow', 2), '前进箭头', `第 ${cells(fwd, (p, sp) => `${p} 格 +${sp.n}`)}`, '停在这格立刻再前进对应格数，算一次独立移动，落到别的特殊格接着结算。') : ''}
         ${back.length ? item(glyph('arrow', -3), '后退箭头', `第 ${cells(back, (p, sp) => `${p} 格 −${Math.abs(sp.n)}`)}`, '停在这格立刻后退对应格数（最多退回起点），同样算一次独立移动。') : ''}
         ${rocks.length ? item(glyph('rock', 0), '石头', `第 ${cells(rocks)} 格`, '停上去就摔倒：下回合跳过主移动不掷骰，技能照常生效。') : ''}
@@ -3462,11 +3666,12 @@
       </ul><p class="tg-note">只看最后停在哪格：掷骰、技能移动、瞬移落到这里都触发，路过不算；赛道格效果先于所有技能结算。</p>`
       : `<p class="tg-note tg-plain">没有特殊格。起点后 ${FIN - 1} 格赛道，第 ${FIN} 步冲线，比的就是技能和运气。</p>`;
     const [W, H] = GEO[lay].vb;
-    box.innerHTML = `<div class="tg-tabs" role="tablist" aria-label="选择赛道">${Object.values(TRACKS).map((x) => `<button role="tab" data-tg="${x.key}" aria-selected="${x.key === key}" class="${x.key === key ? 'on' : ''}${x.key === 'wild' ? ' wild' : ''}">${icon(x.key === 'wild' ? 'rock' : 'flag')}${esc(x.name)}</button>`).join('')}</div>
+    const list = tgTracks();
+    box.innerHTML = `<div class="tg-tabs n${list.length}" role="tablist" aria-label="选择赛道">${list.map((k) => TRACKS[k]).map((x) => `<button role="tab" data-tg="${x.key}" aria-selected="${x.key === key}" class="${x.key === key ? 'on' : ''}${x.key === 'wild' ? ' wild' : ''} tk-${x.key}">${icon(x.key === 'wild' ? 'rock' : x.key === 'whirly' ? 'swirl' : 'flag')}<span class="tg-full">${esc(x.name)}</span><span class="tg-short">${esc(trackShort(x.key))}</span></button>`).join('')}</div>
       <div class="tg-page tg-${lay}${dir ? (dir > 0 ? ' pg-in-next' : ' pg-in-prev') : ''}" data-fit>
-        <div class="tg-map"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(t.name)}赛道缩略图">${trackSvgMarkup(key, lay)}</svg></div>
+        <div class="tg-map" data-track="${esc(key)}"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(t.name)}赛道缩略图">${trackThumbMarkup(key, lay)}</svg></div>
         <div class="tg-info">
-          <p class="tg-intro"><b style="--c:${key === 'wild' ? 'var(--red)' : 'var(--green)'}">${esc(t.name)}</b>${esc(TRACK_INTRO[key] || '')}</p>
+          <p class="tg-intro"><b style="--c:${TRACK_TINT[key] || 'var(--green)'}">${esc(t.name)}</b>${esc(TRACK_INTRO[key] || '')}</p>
           <div class="tg-facts"><div class="tg-fact"><span>总格数</span><b>${FIN}</b><small>起点后 ${FIN - 1} 格，第 ${FIN} 步冲线</small></div><div class="tg-fact tg-races"><span>出场与奖牌</span><ul>${races}</ul></div></div>
           ${legend}
         </div>
@@ -3475,7 +3680,7 @@
     box.querySelector('.tg-tabs').onclick = (e) => {
       const b = e.target.closest('[data-tg]');
       if (!b || b.dataset.tg === tgKey) return;
-      const keys = Object.keys(TRACKS);
+      const keys = tgTracks();
       Sound.click();
       renderTrackGuide(b.dataset.tg, keys.indexOf(b.dataset.tg) > keys.indexOf(tgKey) ? 1 : -1);
     };
@@ -3485,7 +3690,7 @@
     page.addEventListener('pointerup', (e) => {
       const dx = e.clientX - sx, dy = e.clientY - sy;
       if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-      const keys = Object.keys(TRACKS), i = keys.indexOf(tgKey) + (dx < 0 ? 1 : -1);
+      const keys = tgTracks(), i = keys.indexOf(tgKey) + (dx < 0 ? 1 : -1);
       if (i >= 0 && i < keys.length) { Sound.click(); renderTrackGuide(keys[i], dx < 0 ? 1 : -1); }
     });
   }
@@ -3593,7 +3798,7 @@
     });
   }
 
-  window.__hn = () => ({ pending: snap && snap.pending, phase: vs && vs.phase, playing, queue: queue.length, overlayKind, you, locked, mode: gameMode, gameId, navigationPending });
+  window.__hn = () => ({ pending: snap && snap.pending, phase: vs && vs.phase, playing, queue: queue.length, overlayKind, you, locked, mode: gameMode, gameId, navigationPending, edition: curEdition() });
 
   /* ================= 启动 ================= */
   // 同源挂在桌游大厅的 /hunao/ 下时才显示「返回大厅」，指向大厅首页；18160 原入口在根路径，保持隐藏。

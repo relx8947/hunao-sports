@@ -1928,3 +1928,114 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 #races .race-pill { cursor: pointer; }
 @media (max-width: 600px) and (orientation: portrait) { #recordsBtn { display: none; } }
 
+/* ================= 模式：一代 / 二代 / 混合 ================= */
+/* 模式小徽标：目录、对局场次条、规则书共用；三种模式三种底色 */
+.ed-badge { display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 1px 7px; border: 2px solid var(--ink); border-radius: 99px; background: var(--paper); color: var(--ink); font-size: 11px; font-weight: 900; line-height: 1.35; letter-spacing: .04em; white-space: nowrap; }
+.ed-badge.ed-v1 { background: #CFEFC4; }
+.ed-badge.ed-v2 { background: #FFD3EA; }
+.ed-badge.ed-mix { background: linear-gradient(135deg, #CFEFC4 0 48%, #FFD3EA 52% 100%); }
+/* 分段选择器（首页、房间、地图图鉴、图鉴筛选）：按钮按文字撑开，悬停/按下有反馈 */
+.seg.mode-seg button { width: auto; min-width: 0; padding: 0 13px; font-size: 15px; white-space: nowrap; transition: background .15s, color .15s, transform .12s; }
+.seg.mode-seg .seg-label + button, .seg.mode-seg button:first-child { border-left: 0; }
+.seg.mode-seg .seg-label { border-right: 2px solid var(--ink); align-self: stretch; display: inline-flex; align-items: center; }
+.seg.mode-seg button:not(.on):not(:disabled):hover { background: var(--yellow); }
+.seg.mode-seg button:not(.on):not(:disabled):active { transform: translateY(1px); background: #FFB300; }
+.seg.mode-seg button.on { background: var(--ink); color: #fff; }
+.seg.mode-seg button[data-ed="v2"].on { background: #C2387E; }
+.seg.mode-seg button[data-ed="mix"].on { background: var(--purple); }
+.seg.mode-seg button:focus-visible { outline: 3px solid var(--blue); outline-offset: -4px; }
+.seg.mode-seg.readonly { box-shadow: none; }
+.seg.mode-seg.readonly button { cursor: default; }
+.seg.mode-seg.readonly button:disabled { color: var(--ink3); opacity: 1; cursor: not-allowed; }
+/* 首页：选择器 + 一句话说明同一行 */
+.mode-pick { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mode-pick .seg { flex: none; }
+.home-card .seg.mode-seg button { width: auto; min-width: 0; padding: 0 13px; }
+.mode-hint { margin: 0; flex: 1 1 0; min-width: 0; font-size: 12.5px; font-weight: 700; line-height: 1.4; color: var(--ink2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 560px) {
+  .mode-pick { gap: 8px; }
+  .home-card .seg.mode-seg .seg-label { display: none; }
+  .home-card .seg.mode-seg button { padding: 0 11px; font-size: 14px; }
+  .mode-hint { font-size: 12px; line-height: 1.35; }
+}
+@media (max-width: 380px) { .home-card .seg.mode-seg button { padding: 0 9px; } }
+@media (min-aspect-ratio: 5/4) and (max-height: 620px) {
+  .home-card .seg.mode-seg button { min-height: 40px; padding: 0 11px; font-size: 14px; }
+  .mode-hint { font-size: 12px; line-height: 1.3; }
+}
+#home[data-tight="4"] .home-card .seg.mode-seg button { min-height: 40px; }
+/* 房间：模式行（房主可切换，其他人只读） */
+.lobby-mode { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 4px; max-width: min(520px, 100%); }
+.lobby-mode .seg { flex: none; }
+.lobby-mode .seg button { min-height: 40px; }
+.lobby-mode .mode-hint { text-align: left; max-width: 260px; }
+@media (max-width: 520px) { .lobby-mode .seg.mode-seg .seg-label { display: none; } .lobby-mode .seg.mode-seg button { padding: 0 11px; font-size: 14px; } }
+@media (max-height: 700px) { .lobby-mode { margin-top: 0; } .lobby-mode .seg button { min-height: 36px; } }
+@media (min-aspect-ratio: 5/4) and (max-height: 620px) {
+  .lobby-mode { flex-direction: column; gap: 4px; }
+  .lobby-mode .mode-hint { flex: none; text-align: center; font-size: 11.5px; -webkit-line-clamp: 2; }
+  .lobby-mode .seg.mode-seg .seg-label { display: none; }
+}
+/* 公开房间：房间码后面的模式徽标 */
+.room-list-title .room-list-ed { font-size: 11px; }
+/* 对局：场次条最前面的本局模式 */
+.races { align-items: center; }
+.race-ed { align-self: center; }
+.race-pill.tk-twisty .no { background: #C2387E; }
+.race-pill.tk-whirly .no { background: var(--blue); }
+.top-title .tt-ed { display: none; margin-right: 6px; vertical-align: 2px; }
+/* 手机竖屏：赛程胶囊和按钮已占满一行，模式徽标挪到下面的标题行开头（观战时标题隐藏，场次条独占一行，仍放在场次条里） */
+@media (max-width: 480px) and (orientation: portrait) {
+  #game:not([data-mode="spectator"]) .race-ed { display: none; }
+  #game:not([data-mode="spectator"]) .top-title .tt-ed { display: inline-flex; }
+}
+/* 弹窗标题栏里的计数在窄屏收起，给筛选/模式按钮让位 */
+.modal-head .mh-n { font-weight: 800; }
+.modal-head .mode-seg { flex: none; }
+.modal-head .mode-seg button { min-height: 40px; padding: 0 12px; font-size: 14px; }
+@media (max-width: 420px) { .modal-head .mh-n { display: none; } .modal-head .mode-seg button { padding: 0 10px; } }
+/* 图鉴筛选：宽屏在标题栏，窄屏在卡片上方 */
+.gal-filter.gf-head { display: none; }
+.gal-filter.gf-body { flex: none; align-self: center; margin-bottom: 10px; }
+.gal-filter.gf-body button { min-height: 38px; padding: 0 18px; font-size: 14px; }
+@media (min-width: 600px) { .gal-filter.gf-head { display: inline-flex; } .gal-filter.gf-body { display: none; } }
+/* 地图图鉴：二代赛道配色；四条赛道（混合）在窄屏用短名 */
+.tg-tabs .tg-short { display: none; }
+.tg-tabs button.tk-twisty.on { background: #C2387E; }
+.tg-tabs button.tk-whirly.on { background: var(--blue); }
+@media (max-width: 760px) {
+  .tg-tabs.n4 { gap: 6px; }
+  .tg-tabs.n4 button { padding: 6px 6px; gap: 4px; }
+  .tg-tabs.n4 .tg-full { display: none; }
+  .tg-tabs.n4 .tg-short { display: inline; }
+}
+@media (max-width: 420px) { .tg-tabs.n4 button svg { display: none; } }
+/* 规则书：模式列表与 13 张变数卡（每张一节，分页时整张换页） */
+.rules .rule-modes li { margin-bottom: 4px; }
+.rules .rule-modes .ed-badge { vertical-align: 1px; margin-right: 2px; }
+.rules .rule-sched { color: var(--ink2); font-weight: 700; }
+.rules .tw-card { margin-bottom: 6px; padding: 6px 10px; border: 2px dashed #F2A7CE; border-radius: 12px; background: #FFF4FA; }
+.rules .tw-card p { margin: 0; font-size: 13px; line-height: 1.5; }
+.rules .tw-name { display: inline-block; margin-right: 6px; padding: 0 7px; border: 2px solid var(--ink); border-radius: 8px; background: var(--pink); color: #fff; font-size: 12.5px; font-weight: 900; line-height: 1.5; }
+/* 矮横屏图鉴：两列横排卡片（左图右字），长技能说明也能一页放下好几张 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .modal-gallery .gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-items: stretch; align-items: start; gap: 8px; }
+  .modal-gallery .gallery .rcard { --w: 100%; width: 100%; display: grid; grid-template-columns: 70px minmax(0, 1fr); }
+  .modal-gallery .gallery .rcard .art { height: auto; min-height: 70px; border-bottom: 0; border-right: 2.5px solid var(--ink); align-items: center; }
+  .modal-gallery .gallery .rcard .art svg { width: 92%; height: auto; }
+  .modal-gallery .gallery .rcard .art .nm { display: none; }
+  .modal-gallery .gallery .rcard .nm2 { display: inline; margin-right: 6px; font-size: 14px; font-weight: 900; vertical-align: middle; }
+  .modal-gallery .gallery .rcard .sk { vertical-align: middle; margin-bottom: 2px; }
+  .modal-gallery .gallery .rcard .txt { min-height: 0; padding: 5px 9px 6px; }
+  .modal-gallery .gallery .rcard .tx { font-size: 12px; line-height: 1.4; }
+  .modal-gallery .gallery .rcard .nt { margin-top: 2px; }
+}
+/* 矮竖屏大厅：多了模式行，房间码区收紧间距 */
+@media (max-height: 620px) and (orientation: portrait) { .room-head { gap: 4px; } }
+/* 矮一些的电脑屏（1366×768、1280×720）：开局卡片多了模式行，昵称标签放到输入框左边，让左栏公开房间放得下 */
+@media (min-aspect-ratio: 5/4) and (min-width: 640px) and (max-height: 820px) {
+  .home-card .field { flex-direction: row; align-items: center; gap: 10px; }
+  .home-card .field input { flex: 1; min-width: 0; }
+}
+/* 大屏手机竖屏（430×932）：多了模式行后角色游行放不下，先收起游行、保留顶部徽章 */
+@media (max-height: 940px) and (max-width: 440px) and (orientation: portrait) { .parade { display: none; } }
