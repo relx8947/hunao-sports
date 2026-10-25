@@ -618,5 +618,13 @@
     return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" class="${cls}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
   }
 
-  return { racer, color, die, icon, ids: Object.keys(DRAW), INK };
+  // 扩展钩子：art2.js 等通过 register 追加运动员画法与主色，kit 暴露同一套基础图元
+  const ids = Object.keys(DRAW);
+  function register(id, fn, col) {
+    if (!DRAW[id]) ids.push(id);
+    DRAW[id] = fn;
+    if (col) COLORS[id] = col;
+  }
+  const kit = { INK, SKIN, C, E, P, R, L, dot, TL, shadow, eye, lid, sleepy, spiralEye, heart, star, smile, openMouth, teethGrin, dieInner };
+  return { racer, color, die, icon, ids, INK, register, kit };
 });
