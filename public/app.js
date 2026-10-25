@@ -13,8 +13,9 @@
 
   const PCOL = ['#FF6B57', '#3B9EFF', '#22B573', '#FFB020', '#8B6CF0', '#F25CA2'];
   const RACERS = window.RACERS;
-  const R = Object.fromEntries(RACERS.map((r) => [r.id, r]));
-  const TRACKS = window.TRACKS;
+  // 运动员与赛道查表含二代（RACERS 仍是一代图鉴列表）；赛程按对局快照 snap.schedule
+  const R = Object.fromEntries((window.RACERS_ALL || RACERS).map((r) => [r.id, r]));
+  const TRACKS = window.TRACKS_ALL || window.TRACKS;
   const FIN = window.FINISH;
   const GOLD = window.GOLD, SILVER = window.SILVER, SCHEDULE = window.SCHEDULE;
   const EMOTES = ['哈哈哈', '离谱！', '好耶', '救命', '666', '等等我'];
@@ -1000,6 +1001,7 @@
     const pd = G.pod;
     const pcx = pd.x + pd.w / 2, pcy = pd.y + pd.h / 2 + 10;
     s += `<g transform="translate(${pcx} ${pcy})"><ellipse cx="0" cy="40" rx="66" ry="7" fill="${INK}" opacity=".12"/><rect x="-58" y="6" width="38" height="30" rx="4" fill="#A7B0BE" stroke="${INK}" stroke-width="2.5"/><rect x="-19" y="-10" width="38" height="46" rx="4" fill="#E9A91B" stroke="${INK}" stroke-width="2.5"/><rect x="20" y="16" width="38" height="20" rx="4" fill="#fff" stroke="${INK}" stroke-width="2.5"/><text x="0" y="18" font-size="20" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">1</text><text x="-39" y="29" font-size="17" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">2</text><text x="0" y="62" font-size="13" font-weight="900" text-anchor="middle" fill="${INK}" opacity=".55">领奖台</text></g>`;
+    s += trackV2Layer(trackKey, lay); // 二代赛道：糖果格、扭扭招牌、漩涡与管道
     return s;
   }
 
@@ -1027,6 +1029,7 @@
       : '<small>一条平平无奇的跑道 · 全靠技能搞事</small>';
     $('#centerTrack').innerHTML = `<b>${t.name}</b>${legend}`;
     $('#centerTrack').style.setProperty('--c', wild ? '#F2553C' : '#33B679');
+    v2BoardBuilt(trackKey);
   }
 
   /* ================= 棋子 ================= */
@@ -1202,14 +1205,15 @@
       renderTurnCard();
     }
     if (vs.phase !== 'race' && vs.phase !== 'between') renderStandings();
+    renderV2();
   }
   function syncMeta() { renderPlayers(); renderTitle(); }
 
   function renderPills() {
-    $('#races').innerHTML = SCHEDULE.map((t, i) => {
+    $('#races').innerHTML = ((vs && vs.schedule) || SCHEDULE).map((t, i) => {
       const n = i + 1;
-      const cls = [t === 'wild' ? 'wild' : '', vs.raceNo === n && vs.phase !== 'draft' ? 'cur' : '', vs.raceNo > n || (vs.raceNo === n && (vs.phase === 'between' || vs.phase === 'over')) ? 'done' : ''].join(' ');
-      return `<div class="race-pill ${cls}" title="${TRACKS[t].name}"><span class="no">${n}</span><span class="tn">${t === 'wild' ? '狂野' : '温和'}</span><span class="pts">金${GOLD[i]}·银${SILVER[i]}</span></div>`;
+      const cls = [t === 'wild' ? 'wild' : '', TRACK_SHORT[t] && t !== 'mild' && t !== 'wild' ? `v2 ${t}` : '', vs.raceNo === n && vs.phase !== 'draft' ? 'cur' : '', vs.raceNo > n || (vs.raceNo === n && (vs.phase === 'between' || vs.phase === 'over')) ? 'done' : ''].join(' ');
+      return `<div class="race-pill ${cls}" title="${TRACKS[t].name}"><span class="no">${n}</span><span class="tn">${TRACK_SHORT[t] || '温和'}</span><span class="pts">金${GOLD[i]}·银${SILVER[i]}</span></div>`;
     }).join('');
   }
   // 顶栏标题只讲「现在是什么局面」：场次 + 轮到谁 + 离你还有几位（手机上场次名会让位给后两项）
@@ -1859,6 +1863,7 @@
       const r0 = vr(e.rid) || vr(e.a);
       addFeed(e.text, FEED_CLS[e.t] || '', e.seat != null ? e.seat : r0 ? r0.seat : undefined);
     }
+    if (await playV2Event(e, epoch, pause)) return; // 二代新事件与特殊格
     switch (e.t) {
       case 'rollOff': {
         const who = e.reason === 'draft' ? '选秀顺序' : '第一场先手';
@@ -2913,6 +2918,7 @@
   }
 
   function showPickOverlay(d) {
+    if (d.kind === 'swapmeet') return showSwapMeetOverlay(d);
     const mineOpts = d.optionsBySeat[you];
     const answered = d.done.includes(you);
     const sending = !!(submitted && submitted.id === d.id);
@@ -3088,6 +3094,7 @@
       let title = 'AI 对局正在进行', sub = '选秀、出战、掷骰与技能均由 AI 自动完成';
       let seat = -1;
       if (connection !== 'ready') { title = '观战连接已断开，正在重新同步'; sub = '重连后继续观看，不会要求你选卡或接管 AI'; }
+      else if (d?.simul && d.kind === 'swapmeet') { title = `跳蚤市场 · ${(d.done || []).length}/${(d.seats || []).length} 已决定`; sub = '每位玩家暗中决定要不要换运动员'; }
       else if (d?.simul) {
         const done = (d.done || []).length, total = (d.seats || vs.players).length;
         title = `AI 正在暗选出战 · ${done}/${total} 已选好`;
@@ -3132,6 +3139,7 @@
     if (d.simul) {
       showPickOverlay(d);
       const mine = d.seats.includes(you) && !d.done.includes(you);
+      if (d.kind === 'swapmeet') { renderSwapMeetDock(dock, d, mine); return; }
       // 其他人每选好一张都会重排底栏：内容没变就不重建，避免提示条反复弹入
       const key = `simul:${gameId}:${d.id}:${mine}`;
       if ($('.prompt', dock)?.dataset.k !== key) {
@@ -3216,6 +3224,16 @@
         sub = '也可以直接点赛道上闪烁的格子';
         break;
       }
+      // 二代：选一名运动员的决策直接点棋子；其余保留按钮，补一句看得懂的说明
+      case 'soulmate': case 'understudy': case 'diva': case 'athleteWarp': case 'kingtripper': case 'switcharoo':
+        ({ opts, sub } = v2TokenPrompt(d));
+        break;
+      case 'tail': case 'kraken': case 'critic': case 'nemesis': case 'showoff': case 'diceguy':
+        ({ opts, sub } = v2ButtonPrompt(d));
+        break;
+      case 'cheatahSet': case 'cheatahGuess':
+        ({ opts, sub } = v2NumberPrompt(d));
+        break;
       default:
         opts = d.options.map((o, k) => `<button class="btn ${k === 0 ? 'primary' : ''}" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
     }
@@ -3513,6 +3531,824 @@
       const b = $('#dock .roll-btn');
       if (b && !b.disabled) { e.preventDefault(); b.click(); }
     });
+  }
+
+  /* ================= 二代：赛道、变数卡、新事件与新决策 ================= */
+  // 美术全部原创：糖果条纹格、扭扭招牌、漩涡格与管道均为本文件内的 SVG 几何。
+  const TRACK_SHORT = { mild: '温和', wild: '狂野', twisty: '扭扭', whirly: '漩涡' };
+  const TWIST_BY = Object.fromEntries((window.TWISTS || []).map((t) => [t.id, t]));
+  // 引擎里「本场持续生效」的变数卡（其余一次性结算，或在棋盘上另有标识）
+  const TWIST_LASTING = new Set(['bonkbug', 'cursewands', 'conveyor', 'scrying']);
+  // 漩涡六对：Okabe–Ito 色盲友好色，同时用字母 A–F 与不同形状角标区分
+  const WHIRL_COLS = ['#D55E00', '#0072B2', '#009E73', '#E6B800', '#56B4E9', '#CC79A7'];
+  const WHIRL_MARK = ['A', 'B', 'C', 'D', 'E', 'F'];
+  // 糖果格：粉、薄荷、柠檬、蓝莓四色循环，逢 5 的格子是樱桃红
+  const CANDY = ['#FF8FC7', '#5FD9B0', '#FFD34D', '#9B8CFF'];
+  const CANDY_FIVE = '#F2553C';
+  const V2_EVENT_TYPES = new Set(['twist', 'coins', 'coin', 'monster', 'curse', 'fixedRoll', 'finale', 'cancel', 'voided', 'rolls', 'cheat', 'wolf', 'stack', 'hog', 'mate', 'control', 'whirl', 'bonkbug']);
+  const OUT_FLOAT = { doppel: '被顶包！', bitemark: '被咬了！', monster: '被狼人怪追上！', icarus: '翅膀融化！', speeddemon: '冲出赛道！', scrying: '被水晶球看穿！', timeimp: '穿越到下一场！' };
+  let v2uid = 0;
+  let whirlRide = null; // 正在坐漩涡管道的运动员：紧接着的瞬移不再画普通弧线
+  const f1 = (n) => (Math.round(n * 10) / 10).toString();
+  const pct = (v, total) => `${(v / total * 100).toFixed(3)}%`;
+  function mixHex(a, b, t) {
+    const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const x = p(a), y = p(b);
+    return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
+  }
+  // 阿基米德螺线
+  function spiralD(cx, cy, rMax, turns = 2.4, start = 0) {
+    const pts = [];
+    const N = Math.round(turns * 26);
+    for (let i = 0; i <= N; i++) {
+      const f = i / N, a = start + f * turns * Math.PI * 2, r = 1.2 + f * rMax;
+      pts.push(`${f1(cx + r * Math.cos(a))} ${f1(cy + r * Math.sin(a))}`);
+    }
+    return `M${pts.join(' L')}`;
+  }
+  // 配对角标的形状：圆、方、三角、菱形、六边形、星
+  function markShape(k, cx, cy, r, fill) {
+    const st = `fill="${fill}" stroke="${INK}" stroke-width="${f1(r * 0.24)}" stroke-linejoin="round"`;
+    const poly = (n, rot, rr = r) => Array.from({ length: n }, (_, i) => { const a = rot + i * Math.PI * 2 / n; return `${f1(cx + rr * Math.cos(a))},${f1(cy + rr * Math.sin(a))}`; }).join(' ');
+    switch (k % 6) {
+      case 0: return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(r)}" ${st}/>`;
+      case 1: return `<rect x="${f1(cx - r * 0.86)}" y="${f1(cy - r * 0.86)}" width="${f1(r * 1.72)}" height="${f1(r * 1.72)}" rx="${f1(r * 0.25)}" ${st}/>`;
+      case 2: return `<polygon points="${poly(3, -Math.PI / 2, r * 1.18)}" ${st}/>`;
+      case 3: return `<polygon points="${poly(4, -Math.PI / 2, r * 1.15)}" ${st}/>`;
+      case 4: return `<polygon points="${poly(6, 0, r * 1.02)}" ${st}/>`;
+      default: return `<polygon points="${starPts(cx, cy, r * 1.22, r * 0.58)}" ${st}/>`;
+    }
+  }
+  // 漩涡图标（图例、角标、徽标共用）
+  function twirlGlyph(k, cx, cy, s = 1) {
+    const col = WHIRL_COLS[k % 6];
+    return `<g transform="translate(${f1(cx)} ${f1(cy)}) scale(${s})"><circle r="19" fill="${mixHex(col, '#ffffff', 0.72)}" stroke="${INK}" stroke-width="2.5"/>`
+      + `<path d="${spiralD(0, 0, 14, 2.2)}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round"/>`
+      + `<path d="${spiralD(0, 0, 14, 2.2, Math.PI)}" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".9"/></g>`;
+  }
+  function whirlMark(k, cx, cy, r) {
+    return `<g class="twl-mark">${markShape(k, cx, cy, r, WHIRL_COLS[k % 6])}<text x="${f1(cx)}" y="${f1(cy + r * 0.42)}" font-size="${f1(r * 1.2)}" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="${f1(r * 0.32)}" paint-order="stroke">${WHIRL_MARK[k % 6]}</text></g>`;
+  }
+
+  /* ---------- 漩涡管道：沿内场边缘的「车道」走，避开格子、数字与中央面板 ---------- */
+  // 格子朝内场的一侧（拐角格取朝内的那个角）
+  function cellPort(G, p) {
+    const r = G.rect(p), f = G.inf;
+    const above = r.y + r.h <= f.y + 1, below = r.y >= f.y + f.h - 1, left = r.x + r.w <= f.x + 1, right = r.x >= f.x + f.w - 1;
+    const nx = left ? 1 : right ? -1 : 0, ny = above ? 1 : below ? -1 : 0;
+    return { x: nx > 0 ? r.x + r.w : nx < 0 ? r.x : r.x + r.w / 2, y: ny > 0 ? r.y + r.h : ny < 0 ? r.y : r.y + r.h / 2, nx, ny };
+  }
+  const pipeCache = {};
+  function whirlPipes(lay) {
+    if (pipeCache[lay]) return pipeCache[lay];
+    const G = GEO[lay], f = G.inf;
+    const pairs = (TRACKS.whirly && TRACKS.whirly.whirls) || [];
+    const gutter = lay === 'wide' ? -3 : -2, step = lay === 'wide' ? 12 : 11;
+    const lane = (L) => ({ x0: f.x + L, x1: f.x + f.w - L, y0: f.y + L, y1: f.y + f.h - L });
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const onLane = (pt, q) => ({ x: pt.nx > 0 ? q.x0 : pt.nx < 0 ? q.x1 : clamp(pt.x, q.x0, q.x1), y: pt.ny > 0 ? q.y0 : pt.ny < 0 ? q.y1 : clamp(pt.y, q.y0, q.y1) });
+    const per = (q) => { const W = q.x1 - q.x0, H = q.y1 - q.y0; return { W, H, P: 2 * W + 2 * H }; };
+    const tOf = (pt, q) => {
+      const { W, H } = per(q);
+      if (Math.abs(pt.y - q.y0) < 0.5) return pt.x - q.x0;
+      if (Math.abs(pt.x - q.x1) < 0.5) return W + (pt.y - q.y0);
+      if (Math.abs(pt.y - q.y1) < 0.5) return W + H + (q.x1 - pt.x);
+      return 2 * W + H + (q.y1 - pt.y);
+    };
+    // 先在最外圈（格子与内场之间的缝）算每对的走向与区间，再给区间重叠的管道分到更里面的车道
+    const base = lane(gutter);
+    const info = pairs.map(([a, b], k) => {
+      const pa = cellPort(G, a), pb = cellPort(G, b);
+      const ta = tOf(onLane(pa, base), base), tb = tOf(onLane(pb, base), base);
+      const { P } = per(base);
+      const fw = (tb - ta + P) % P;
+      const fwd = fw <= P - fw;
+      const s = fwd ? ta : tb, len = fwd ? fw : P - fw;
+      return { k, a, b, pa, pb, fwd, s, e: s + len, len };
+    });
+    const P0 = per(base).P;
+    const overlap = (x, y) => [-P0, 0, P0].some((sh) => x.s < y.e + sh + 16 && y.s + sh < x.e + 16);
+    const lanes = [];
+    for (const x of info.slice().sort((m, n) => m.len - n.len)) {
+      let L = 0;
+      while ((lanes[L] || []).some((y) => overlap(x, y))) L++;
+      (lanes[L] ||= []).push(x);
+      x.lane = L;
+    }
+    const out = info.map((x) => {
+      const q = lane(gutter + x.lane * step);
+      const A = onLane(x.pa, q), B = onLane(x.pb, q);
+      const { W, H, P } = per(q);
+      const corners = [[0, q.x0, q.y0], [W, q.x1, q.y0], [W + H, q.x1, q.y1], [2 * W + H, q.x0, q.y1]];
+      const ta = tOf(A, q), tb = tOf(B, q);
+      const pts = [{ x: x.pa.x, y: x.pa.y }, A];
+      if (x.fwd) {
+        const d = (tb - ta + P) % P;
+        for (let i = 0; i < 8; i++) {
+          const [ct, cx, cy] = corners[i % 4];
+          const rel = (ct - ta + P) % P;
+          if (rel > 0.5 && rel < d - 0.5 && !pts.some((p) => p.x === cx && p.y === cy)) pts.push({ x: cx, y: cy, rel });
+        }
+      } else {
+        const d = (ta - tb + P) % P;
+        for (let i = 0; i < 8; i++) {
+          const [ct, cx, cy] = corners[i % 4];
+          const rel = (ta - ct + P) % P;
+          if (rel > 0.5 && rel < d - 0.5 && !pts.some((p) => p.x === cx && p.y === cy)) pts.push({ x: cx, y: cy, rel });
+        }
+      }
+      const mid = pts.slice(2).sort((m, n) => m.rel - n.rel);
+      const all = [pts[0], pts[1], ...mid, B, { x: x.pb.x, y: x.pb.y }];
+      return { k: x.k, a: x.a, b: x.b, lane: x.lane, d: roundPath(all, lay === 'wide' ? 16 : 13) };
+    });
+    pipeCache[lay] = out;
+    return out;
+  }
+  function roundPath(raw, rad) {
+    const pts = raw.filter((p, i) => i === 0 || Math.hypot(p.x - raw[i - 1].x, p.y - raw[i - 1].y) > 0.5);
+    let d = `M${f1(pts[0].x)} ${f1(pts[0].y)}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = pts[i - 1], p = pts[i], b = pts[i + 1];
+      const la = Math.hypot(p.x - a.x, p.y - a.y), lb = Math.hypot(b.x - p.x, b.y - p.y);
+      const r = Math.min(rad, la / 2, lb / 2);
+      if (r < 0.8) { d += ` L${f1(p.x)} ${f1(p.y)}`; continue; }
+      const p1 = { x: p.x + (a.x - p.x) / la * r, y: p.y + (a.y - p.y) / la * r }, p2 = { x: p.x + (b.x - p.x) / lb * r, y: p.y + (b.y - p.y) / lb * r };
+      d += ` L${f1(p1.x)} ${f1(p1.y)} Q${f1(p.x)} ${f1(p.y)} ${f1(p2.x)} ${f1(p2.y)}`;
+    }
+    const z = pts[pts.length - 1];
+    return `${d} L${f1(z.x)} ${f1(z.y)}`;
+  }
+
+  // 二代赛道图层：由 trackSvgMarkup 末尾一行调用，不改动既有绘制；格子底色用本图层自带的样式覆盖（:has 作用域，按实例 id 区分）
+  function trackV2Layer(trackKey, lay) {
+    const t = TRACKS[trackKey];
+    if (!t || (trackKey !== 'twisty' && trackKey !== 'whirly')) return '';
+    const G = GEO[lay], u = ++v2uid, scope = `svg:has(.twl-u${u})`;
+    const { bed } = G;
+    let defs = '', css = '', s = '';
+    if (trackKey === 'twisty') {
+      CANDY.concat([CANDY_FIVE]).forEach((c, k) => {
+        defs += `<pattern id="hnC${u}_${k}" patternUnits="userSpaceOnUse" width="18" height="18" patternTransform="rotate(38)"><rect width="18" height="18" fill="${c}"/><rect width="7" height="18" fill="#fff" opacity="${k === 4 ? 0.22 : 0.34}"/></pattern>`;
+      });
+      for (let p = 1; p < FIN; p++) css += `${scope} .cell[data-p="${p}"]>rect:first-child{fill:url(#hnC${u}_${p % 5 === 0 ? 4 : (p - 1) % 4})}`;
+      css += `${scope}>rect:nth-of-type(2){fill:#FFE4F0}`;
+      // 糖果棒外框
+      s += `<rect x="${bed.x + 2.5}" y="${bed.y + 2.5}" width="${bed.w - 5}" height="${bed.h - 5}" rx="${bed.rx - 2}" fill="none" stroke="#FF8FC7" stroke-width="3" stroke-dasharray="11 9" opacity=".95"/>`;
+      s += twistSignMarkup(G, lay);
+    } else {
+      WHIRL_COLS.forEach((c, k) => {
+        defs += `<pattern id="hnW${u}_${k}" patternUnits="objectBoundingBox" width="1" height="1" viewBox="0 0 60 60" preserveAspectRatio="xMidYMid slice"><rect width="60" height="60" fill="${mixHex(c, '#ffffff', 0.7)}"/>`
+          + `<path d="${spiralD(30, 30, 25, 2.3)}" fill="none" stroke="${c}" stroke-width="5.5" stroke-linecap="round"/>`
+          + `<path d="${spiralD(30, 30, 25, 2.3, Math.PI)}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".85"/></pattern>`;
+      });
+      for (const [p, sp] of Object.entries(t.spaces)) if (sp.type === 'whirl') css += `${scope} .cell[data-p="${p}"]>rect:first-child{fill:url(#hnW${u}_${sp.pair})}`;
+      css += `${scope}>rect:nth-of-type(2){fill:#D4F1FA}`;
+      s += `<rect x="${bed.x + 2.5}" y="${bed.y + 2.5}" width="${bed.w - 5}" height="${bed.h - 5}" rx="${bed.rx - 2}" fill="none" stroke="#7FD6F0" stroke-width="3" stroke-dasharray="4 7" stroke-linecap="round" opacity=".95"/>`;
+      // 管道：先画里圈车道，最外圈压在最上面，交叉处像立交
+      const pipes = whirlPipes(lay).slice().sort((a, b) => b.lane - a.lane);
+      const w = lay === 'wide' ? 1 : 0.9;
+      for (const pp of pipes) {
+        const col = WHIRL_COLS[pp.k];
+        s += `<g class="twl-pipe" data-p="${pp.a} ${pp.b}" data-k="${pp.k}" style="--pc:${col}"><path class="twl-under" d="${pp.d}" fill="none" stroke="${INK}" stroke-width="${f1(8 * w)}" stroke-linecap="round" stroke-linejoin="round"/>`
+          + `<path class="twl-core" d="${pp.d}" fill="none" stroke="${col}" stroke-width="${f1(4.6 * w)}" stroke-linecap="round" stroke-linejoin="round"/>`
+          + `<path class="twl-shine" d="${pp.d}" fill="none" stroke="#fff" stroke-width="${f1(1.4 * w)}" stroke-dasharray="2 7" stroke-linecap="round" opacity=".75"/></g>`;
+      }
+      // 每个漩涡格：管道接口 + 右上角配对角标
+      for (const [p, sp] of Object.entries(t.spaces)) {
+        if (sp.type !== 'whirl') continue;
+        const r = G.rect(Number(p)), port = cellPort(G, Number(p));
+        const col = WHIRL_COLS[sp.pair % 6];
+        s += `<circle class="twl-port" cx="${f1(port.x)}" cy="${f1(port.y)}" r="${lay === 'wide' ? 4.6 : 4}" fill="${col}" stroke="${INK}" stroke-width="2"/>`;
+        const mr = lay === 'wide' ? 8.5 : 8;
+        s += whirlMark(sp.pair, r.x + r.w - mr - 3, r.y + mr + 3, mr);
+      }
+    }
+    return `<g class="twl twl-u${u} twl-${trackKey}" aria-hidden="true"><defs>${defs}</defs><style>${css}</style>${s}</g>`;
+  }
+  // 扭扭招牌：立在第 13、14 格之间，跨着跑道
+  function twistSignMarkup(G, lay) {
+    const t = TRACKS.twisty, at = (t && t.twistAt) || 14;
+    const a = G.rect(at - 1), b = G.rect(at);
+    let cx, cy, vertical;
+    if (b.y >= a.y + a.h - 1 || a.y >= b.y + b.h - 1) { cx = (a.x + a.w / 2 + b.x + b.w / 2) / 2; cy = a.y < b.y ? (a.y + a.h + b.y) / 2 : (b.y + b.h + a.y) / 2; vertical = true; }
+    else { cx = a.x < b.x ? (a.x + a.w + b.x) / 2 : (b.x + b.w + a.x) / 2; cy = (a.y + a.h / 2 + b.y + b.h / 2) / 2; vertical = false; }
+    const w = lay === 'wide' ? 68 : 62, h = lay === 'wide' ? 24 : 21;
+    const rot = vertical ? -6 : 84;
+    const post = (x) => `<rect x="${f1(x - 3.5)}" y="${f1(-h / 2 - 6)}" width="7" height="${f1(h + 12)}" rx="3.5" fill="#fff" stroke="${INK}" stroke-width="2"/><path d="M${f1(x - 3.5)} ${f1(-h / 2 - 1)} l7 -5 M${f1(x - 3.5)} ${f1(-h / 2 + 7)} l7 -5 M${f1(x - 3.5)} ${f1(h / 2 - 1)} l7 -5 M${f1(x - 3.5)} ${f1(h / 2 + 7)} l7 -5" stroke="#F2553C" stroke-width="3"/>`;
+    return `<g class="twist-sign" transform="translate(${f1(cx)} ${f1(cy)}) rotate(${rot})">`
+      + `<rect class="tw-glow" x="${f1(-w / 2 - 8)}" y="${f1(-h / 2 - 8)}" width="${w + 16}" height="${h + 16}" rx="14" fill="#FFF3B0"/>`
+      + `<rect x="${f1(-w / 2 + 2)}" y="${f1(-h / 2 + 3)}" width="${w}" height="${h}" rx="7" fill="${INK}"/>`
+      + `<rect x="${f1(-w / 2)}" y="${f1(-h / 2)}" width="${w}" height="${h}" rx="7" fill="#FFC53D" stroke="${INK}" stroke-width="2.5"/>`
+      + post(-w / 2 + 2) + post(w / 2 - 2)
+      + `<path d="${spiralD(-w / 2 + 15, 0, 5.5, 1.6)}" fill="none" stroke="#F25CA2" stroke-width="2.4" stroke-linecap="round"/>`
+      + `<text x="${f1(5)}" y="${f1(h * 0.2)}" font-size="${lay === 'wide' ? 13 : 12}" font-weight="900" text-anchor="middle" fill="${INK}" letter-spacing="1">TWIST</text></g>`;
+  }
+  // 地图册 / 首页用的赛道缩略图（另一处 renderTrackGuide 可直接调用）
+  function trackThumbSvg(key, lay = 'wide') {
+    const G = GEO[lay] || GEO.wide;
+    const t = TRACKS[key];
+    if (!t) return '';
+    return `<svg class="track-thumb" viewBox="0 0 ${G.vb[0]} ${G.vb[1]}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(t.name)}赛道缩略图">${trackSvgMarkup(key, lay)}</svg>`;
+  }
+  window.HN_trackThumbSvg = trackThumbSvg;
+
+  // buildBoard 末尾一行调用：二代赛道的中央说明
+  function v2BoardBuilt(trackKey) {
+    // 横竖屏切换会重建棋盘：金币、狼人怪、变数徽标要按新坐标重新摆
+    if (vs && vs.v2) renderV2();
+    const t = TRACKS[trackKey];
+    if (!t || (trackKey !== 'twisty' && trackKey !== 'whirly')) return;
+    const ct = $('#centerTrack');
+    if (trackKey === 'twisty') {
+      ct.innerHTML = `<b>${esc(t.name)}</b><small>第 13、14 格之间立着变数招牌 · 本场第一个跑过的人翻变数卡</small>`;
+      ct.style.setProperty('--c', '#F25CA2');
+    } else {
+      ct.innerHTML = `<b>${esc(t.name)}</b><div class="legend"><span><svg viewBox="-24 -24 48 48">${twirlGlyph(1, 0, 0, 1)}</svg>漩涡：停上去，从同色同字母的另一头冒出来</span></div>`;
+      ct.style.setProperty('--c', '#0072B2');
+    }
+  }
+
+  /* ---------- 棋盘上的二代状态：皮纳塔金币、狼人怪、变数徽标、运动员小标签 ---------- */
+  function v2Of() {
+    if (!vs) return null;
+    if (!vs.v2) vs.v2 = { twistDeckCount: 0, twistDone: false, twistDrawn: [], twistActive: [], coins: [], monster: null, fixedRoll: null, mirrored: false, finale: null, extras: [] };
+    return vs.v2;
+  }
+  function freshRaceV2(st) {
+    return { ...st, twistDone: false, twistDrawn: [], twistActive: [], coins: [], monster: null, fixedRoll: null, mirrored: false, finale: null };
+  }
+  function v2Layers() {
+    const board = $('#board');
+    let layer = $('#v2Layer'), badges = $('#v2Badges');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'v2Layer'; layer.className = 'v2-layer'; layer.setAttribute('aria-hidden', 'true');
+      board.insertBefore(layer, $('#floaters'));
+    }
+    if (!badges) {
+      badges = document.createElement('div');
+      badges.id = 'v2Badges'; badges.className = 'v2-badges'; badges.hidden = true;
+      badges.addEventListener('click', onV2BadgeClick);
+      badges.addEventListener('pointerleave', () => { if (matchMedia('(hover: hover)').matches) closeV2Pop(); });
+      board.insertBefore(badges, $('#floaters'));
+    }
+    return { layer, badges };
+  }
+  const MONSTER_ART = `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 22 L16 6 L25 17 Q32 13 39 17 L48 6 L52 22 Q60 34 54 46 Q46 60 32 60 Q18 60 10 46 Q4 34 12 22 Z" fill="#6B4FA8" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/><path d="M14 40 l-6 4 M50 40 l6 4 M16 30 l-7 0 M48 30 l7 0" stroke="${INK}" stroke-width="3" stroke-linecap="round"/><ellipse cx="23" cy="31" rx="6" ry="6.5" fill="#FFE27A" stroke="${INK}" stroke-width="2.5"/><ellipse cx="41" cy="31" rx="6" ry="6.5" fill="#FFE27A" stroke="${INK}" stroke-width="2.5"/><circle cx="24" cy="32" r="2.6" fill="${INK}"/><circle cx="40" cy="32" r="2.6" fill="${INK}"/><path d="M20 45 Q32 53 44 45 Q32 49 20 45 Z" fill="#fff" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/><path d="M25 46 l2 4 l2 -3.4 M35 46.5 l2 3.4 l2 -4" fill="#fff" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  const TWIST_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="3.5" fill="#FFC53D" stroke="${INK}" stroke-width="2"/><path d="${spiralD(12, 12, 5.2, 1.7)}" fill="none" stroke="#F25CA2" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+  function v2Chips(st) {
+    const out = [];
+    const tw = (id, note = '') => { const t = TWIST_BY[id]; if (t && !out.some((c) => c.id === id)) out.push({ id, name: t.name, text: t.text + note }); };
+    for (const id of st.twistActive || []) tw(id);
+    if (st.mirrored) tw('mirror', '（赛道已反向）');
+    if (st.fixedRoll && vs.players) tw('noluck', ` 本场固定点数：${Object.entries(st.fixedRoll).map(([seat, v]) => `${pname(vs.players[seat])} ${v}`).join('、')}`);
+    if (st.finale) tw('finale', st.finale === 'running' ? '（决战进行中）' : '（前两名冲线后开打）');
+    if (st.coins && st.coins.length) tw('pinata', `（还剩 ${st.coins.length} 分）`);
+    if (st.monster != null) tw('alchemylab', `（狼人怪在第 ${st.monster} 格）`);
+    return out;
+  }
+  // 由 renderAll / 事件播放调用；only 用于新卡飞来前先把徽标位置留出来
+  function renderV2(incoming) {
+    if (!vs || !$('#board')) return;
+    const st = vs.v2;
+    const { layer, badges } = v2Layers();
+    const on = !!(st && vs.phase !== 'draft' && vs.track && vs.racers && vs.racers.length);
+    if (!on) {
+      layer.innerHTML = ''; badges.innerHTML = ''; badges.hidden = true;
+      $('#board').classList.remove('v2-mirror');
+      return;
+    }
+    const [W, H] = VB();
+    // 皮纳塔金币：贴在格子右上角，不压棋子中心
+    const coins = new Set(st.coins || []);
+    for (const c of $$('.v2-coin', layer)) if (!coins.has(Number(c.dataset.p))) c.remove();
+    for (const p of coins) {
+      let c = $(`.v2-coin[data-p="${p}"]`, layer);
+      if (!c) { c = document.createElement('i'); c.className = 'v2-coin'; c.dataset.p = p; c.textContent = '1'; layer.appendChild(c); }
+      const r = cellRect(p);
+      c.style.left = pct(r.x + r.w - 11, W); c.style.top = pct(r.y + 11, H);
+    }
+    // 狼人怪
+    let m = $('#v2Monster', layer);
+    if (st.monster != null) {
+      if (!m) { m = document.createElement('div'); m.id = 'v2Monster'; m.className = 'v2-monster'; m.innerHTML = MONSTER_ART; layer.appendChild(m); }
+      const r = cellRect(Math.min(FIN, Math.max(0, st.monster)));
+      m.style.left = pct(r.x + 14, W); m.style.top = pct(r.y + 14, H);
+    } else if (m) m.remove();
+    // 招牌：已经有人翻过卡就暗下去
+    const sign = $('#trackSvg .twist-sign');
+    if (sign) sign.classList.toggle('used', !!st.twistDone);
+    $('#board').classList.toggle('v2-mirror', !!st.mirrored);
+    // 变数徽标：生效中的变数卡，点一下 / 悬停看效果
+    const chips = v2Chips(st);
+    const key = chips.map((c) => `${c.id}:${c.text}`).join('|') + `|${layout}|${incoming || ''}`;
+    if (badges.dataset.k !== key) {
+      badges.dataset.k = key;
+      const open = badges.dataset.open;
+      badges.innerHTML = chips.map((c) => `<button type="button" class="v2-chip ${c.id === incoming ? 'incoming' : ''}" data-tw="${c.id}" title="${esc(`${c.name}：${c.text}`)}" aria-label="${esc(`变数卡 ${c.name}：${c.text}`)}"><span class="v2-ci">${TWIST_ICON}</span><b>${esc(c.name)}</b></button>`).join('')
+        + (open && chips.some((c) => c.id === open) ? v2PopHtml(chips.find((c) => c.id === open)) : '');
+      if (open && !chips.some((c) => c.id === open)) delete badges.dataset.open;
+    }
+    badges.hidden = !chips.length;
+    const tall = layout === 'tall';
+    badges.classList.toggle('tall', tall);
+    Object.assign(badges.style, tall
+      ? { left: '', right: pct(W - 386, W), top: pct(78, H), maxWidth: pct(118, W) }
+      : { right: '', left: pct(68, W), top: pct(121, H), maxWidth: pct(552, W) });
+    // 运动员小标签：狼人、野猪、灵魂伴侣
+    for (const r of vs.racers) {
+      const el = tokenOf(r.rid);
+      if (!el) continue;
+      el.classList.toggle('v2-wolf', !!r.wolf);
+      const tags = [];
+      if (r.hogs) tags.push(`<i class="v2-hog" title="野猪 ${r.hogs} 头">猪${r.hogs > 1 ? r.hogs : ''}</i>`);
+      if (r.mate) tags.push(`<i class="v2-mate" title="灵魂伴侣：${esc(rname(r.mate))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 C4 15 2 11 2 8 a5 5 0 0 1 10 -1.5 A5 5 0 0 1 22 8 c0 3 -2 7 -10 13 Z" fill="#F25CA2" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/></svg></i>`);
+      let box = $('.v2-tags', el);
+      if (!tags.length) { if (box) box.remove(); continue; }
+      if (!box) { box = document.createElement('div'); box.className = 'v2-tags'; el.appendChild(box); }
+      const html = tags.join('');
+      if (box.innerHTML !== html) box.innerHTML = html;
+    }
+  }
+  function v2PopHtml(c) { return `<div class="v2-pop" role="tooltip"><b>${esc(c.name)}</b><p>${esc(c.text)}</p></div>`; }
+  let v2PopTimer = null;
+  function closeV2Pop() {
+    const badges = $('#v2Badges');
+    if (!badges) return;
+    delete badges.dataset.open;
+    for (const p of $$('.v2-pop', badges)) p.remove();
+    clearTimeout(v2PopTimer);
+  }
+  function onV2BadgeClick(ev) {
+    const b = ev.target.closest('.v2-chip');
+    const badges = $('#v2Badges');
+    if (!b || !badges) return;
+    const id = b.dataset.tw;
+    const was = badges.dataset.open;
+    closeV2Pop();
+    if (was === id) return;
+    const c = vs && vs.v2 ? v2Chips(vs.v2).find((x) => x.id === id) : null;
+    if (!c) return;
+    badges.dataset.open = id;
+    badges.insertAdjacentHTML('beforeend', v2PopHtml(c));
+    Sound.click();
+    v2PopTimer = setTimeout(closeV2Pop, 5000);
+  }
+  function cellFloat(p, text, cls = '') {
+    const c = cellCenter(p), [W, H] = VB();
+    const f = document.createElement('div');
+    f.className = `floater ${cls}`;
+    f.textContent = text;
+    f.style.left = pct(c.x, W); f.style.top = pct(c.y, H);
+    $('#floaters').appendChild(f);
+    setTimeout(() => f.remove(), 1400);
+  }
+  const seatRacer = (seat) => vs && vs.racers && (vs.racers.find((x) => x.seat === seat && !x.finished && !x.out) || vs.racers.find((x) => x.seat === seat));
+
+  /* ---------- 变数卡：招牌闪光 → 翻牌放大 → 飞进徽标 ---------- */
+  function twistCardEl(tw, e) {
+    const card = document.createElement('div');
+    card.className = 'twist-card';
+    card.setAttribute('role', 'status');
+    const r = e.rid ? vr(e.rid) : null;
+    const who = r ? `${pname(vs.players[r.seat])}的${R[r.rid] ? R[r.rid].name : ''}跑过招牌` : '变数招牌';
+    card.innerHTML = `<div class="tw-face"><div class="tw-art" aria-hidden="true"><svg viewBox="0 0 120 64">${[0, 1, 2].map((i) => `<path d="${spiralD(24 + i * 36, 32, 14 + (i === 1 ? 6 : 0), 2.1, i)}" fill="none" stroke="${['#F25CA2', '#FFC53D', '#4D9DF7'][i]}" stroke-width="${i === 1 ? 6 : 4.5}" stroke-linecap="round"/>`).join('')}</svg></div>`
+      + `<span class="tw-kicker">变数卡</span><b class="tw-name">${esc(tw.name)}</b>${tw.en ? `<em class="tw-en">${esc(tw.en)}</em>` : ''}<p class="tw-text">${esc(tw.text || '')}</p><span class="tw-who">${esc(who)}</span></div>`;
+    return card;
+  }
+  async function playTwist(e, pause) {
+    const st = v2Of();
+    const tw = TWIST_BY[e.id] || { id: e.id, name: '变数卡', text: '' };
+    st.twistDone = true;
+    (st.twistDrawn ||= []).push(e.id);
+    if (TWIST_LASTING.has(e.id) && !(st.twistActive ||= []).includes(e.id)) st.twistActive.push(e.id);
+    if (e.id === 'mirror') st.mirrored = !st.mirrored;
+    if (e.id === 'finale' && !st.finale) st.finale = 'armed';
+    commentary(`变数卡「${tw.name}」：${tw.text}`);
+    const sign = $('#trackSvg .twist-sign');
+    if (e.rid) spotlight(e.rid);
+    if (fast || reducedMotion.matches) { renderV2(); await pause(400); return; }
+    if (sign) restartClass(sign, 'tw-flash', 1200);
+    if (!playSfx('twist')) Sound.reveal();
+    await pause(420);
+    const card = twistCardEl(tw, e);
+    document.body.appendChild(card);
+    const kill = setTimeout(() => card.remove(), 12000);
+    try {
+      const face = card.firstElementChild;
+      const from = (sign || $('#board')).getBoundingClientRect(), c = face.getBoundingClientRect();
+      const dx = from.left + from.width / 2 - (c.left + c.width / 2), dy = from.top + from.height / 2 - (c.top + c.height / 2);
+      face.animate([
+        { transform: `translate(${dx}px, ${dy}px) scale(.16) rotateY(180deg)`, opacity: 0.4 },
+        { transform: 'translate(0, 0) scale(1.06) rotateY(0deg)', opacity: 1, offset: 0.72 },
+        { transform: 'none', opacity: 1 },
+      ], { duration: 640 / speed, easing: 'cubic-bezier(.2, .8, .3, 1)', fill: 'both' });
+      await pause(640);
+      playSfx('cardLand');
+      await pause(1700);
+      // 先把徽标位置排好（新卡位置透明），再让卡片飞进去
+      renderV2(e.id);
+      const target = $(`#v2Badges [data-tw="${e.id}"]`);
+      const tb = target && !$('#v2Badges').hidden ? target.getBoundingClientRect() : null;
+      const now = face.getBoundingClientRect();
+      if (tb && tb.width) {
+        const s = Math.max(0.08, Math.min(0.5, tb.width / now.width));
+        face.animate([
+          { transform: 'none', opacity: 1 },
+          { transform: `translate(${tb.left + tb.width / 2 - (now.left + now.width / 2)}px, ${tb.top + tb.height / 2 - (now.top + now.height / 2)}px) scale(${s}) rotate(-8deg)`, opacity: 0.25 },
+        ], { duration: 460 / speed, easing: 'cubic-bezier(.5, 0, .3, 1)', fill: 'forwards' });
+        if (!playSfx('swish')) Sound.card();
+        await pause(460);
+        target.classList.remove('incoming');
+        restartClass(target, 'v2-land', 600);
+      } else {
+        face.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(.9)' }], { duration: 260 / speed, fill: 'forwards' });
+        await pause(260);
+      }
+    } finally {
+      clearTimeout(kill);
+      card.remove();
+      if (vs) renderV2();
+    }
+  }
+
+  /* ---------- 二代事件播放：由 playEvent 一行调用，返回 true 表示已处理 ---------- */
+  const v2Played = {};
+  window.__hnV2 = () => ({ played: { ...v2Played }, twistCards: document.querySelectorAll('.twist-card').length, state: vs && vs.v2 ? clone(vs.v2) : null, track: vs && vs.track, built: builtTrack });
+  async function playV2Event(e, epoch, pause) {
+    if (!vs) return false;
+    const pk = e.t === 'space' ? e.space : e.t;
+    if (V2_EVENT_TYPES.has(pk)) v2Played[pk] = (v2Played[pk] || 0) + 1;
+    switch (e.t) {
+      case 'raceIntro':
+        if (vs.v2) vs.v2 = freshRaceV2(vs.v2);
+        return false;
+      case 'reveal':
+        // 额外运动员（返场王、时间小鬼）随本场一起上场：并入亮牌与棋子
+        if (Array.isArray(e.extras) && e.extras.length) e.picks = e.picks.concat(e.extras.filter((x) => !e.picks.some((p) => p.rid === x.rid)));
+        return false;
+      case 'twist':
+        await playTwist(e, pause);
+        return true;
+      case 'coins': {
+        const st = v2Of();
+        st.coins = (e.coins || []).slice();
+        renderV2();
+        if (!fast) $$('#v2Layer .v2-coin').forEach((c, i) => { c.style.animationDelay = `${Math.min(i * 30, 480)}ms`; restartClass(c, 'pop', 900); });
+        Sound.chip();
+        commentary(e.text);
+        await pause(1000);
+        return true;
+      }
+      case 'coin': {
+        const st = v2Of();
+        const c = $(`#v2Layer .v2-coin[data-p="${e.pos}"]`);
+        if (c && !fast) c.classList.add('take');
+        Sound.pop();
+        await pause(260);
+        st.coins = (st.coins || []).filter((p) => p !== e.pos);
+        renderV2();
+        return true;
+      }
+      case 'monster': {
+        const st = v2Of();
+        if (e.from == null) {
+          st.monster = e.to;
+          renderV2();
+          restartClass($('#v2Monster'), 'pop', 600);
+          cellFloat(e.to, '狼人怪出发！', 'bad');
+          Sound.chomp();
+          commentary(e.text);
+          await pause(1000);
+          return true;
+        }
+        setDice(`<div class="die land v2-mdie">${die(e.value)}<div class="die-cap">狼人怪</div></div>`, `狼人怪掷出 ${e.value}`);
+        Sound.dice();
+        await pause(420);
+        let i = 0;
+        for (let p = e.from + 1; p <= Math.min(e.to, FIN); p++) {
+          st.monster = p;
+          renderV2();
+          restartClass($('#v2Monster'), 'hop', 200);
+          Sound.hop(i++);
+          await pause(130);
+        }
+        st.monster = e.to >= FIN ? null : e.to;
+        await pause(160);
+        renderV2();
+        return true;
+      }
+      case 'curse': {
+        const r = seatRacer(e.seat);
+        setDice(`<div class="die land v2-curse">${die(e.value)}<div class="die-cap">诅咒魔杖</div></div>`, `诅咒魔杖掷出 ${e.value}`);
+        Sound.dice();
+        if (r) floater(r.rid, `跳过 ${e.value} 人`, 'bad');
+        commentary(e.text);
+        await pause(900);
+        return true;
+      }
+      case 'fixedRoll': {
+        const st = v2Of();
+        (st.fixedRoll ||= {})[e.seat] = e.value;
+        const r = seatRacer(e.seat);
+        setDice(`<div class="die land v2-fixed">${die(e.value)}<div class="die-cap">${esc(pname(vs.players[e.seat]))} 定格</div></div>`, `骰子定格 ${e.value}`);
+        Sound.dice();
+        if (r) floater(r.rid, `骰子定格 ${e.value}`);
+        renderV2();
+        await pause(650);
+        return true;
+      }
+      case 'finale': {
+        const st = v2Of();
+        const rids = e.rids || [];
+        for (const r of vs.racers) {
+          if (rids.includes(r.rid)) { r.finished = 0; r.pos = e.pos; r.tripped = false; r.out = false; }
+          else if (!r.out && !r.finished) { r.out = true; r.benched = true; }
+        }
+        st.finale = 'running';
+        layoutTokens();
+        renderV2(); renderTurnCard(); renderStandings();
+        banner('季终决战！', `${rids.map((rid) => R[rid] ? R[rid].name : '').join(' 对 ')} · 第 ${e.pos} 格再跑一次，胜者通吃`, true);
+        Sound.reveal();
+        for (const rid of rids) spotlight(rid);
+        commentary(e.text);
+        await pause(1900);
+        return true;
+      }
+      case 'cancel':
+        banner('本场取消', `${rname(e.rid)}：不玩了！`, true);
+        floater(e.rid, '不玩了！', 'bad');
+        knock(e.rid);
+        Sound.blocked();
+        commentary(e.text);
+        await pause(1500);
+        return true;
+      case 'voided':
+        setDice(`<div class="die land v2-void">${die(e.value || 6)}<i aria-hidden="true"></i><div class="die-cap">作废</div></div>`, `${e.value || 6} 点作废`);
+        if (e.rid) floater(e.rid, `${e.value || 6} 点作废，重掷`, 'bad');
+        Sound.blocked();
+        await pause(750);
+        return true;
+      case 'rolls': {
+        const dice = Array.isArray(e.dice) ? e.dice : [];
+        const counts = {};
+        for (const v of dice) counts[v] = (counts[v] || 0) + 1;
+        setDice(`<div class="v2-rolls n${dice.length}">${dice.map((v, i) => `<div class="die land ${counts[v] > 1 ? 'dup' : ''}" style="--k:${i}">${die(v)}</div>`).join('')}</div>`, `掷出 ${dice.join(' ')}`);
+        Sound.dice();
+        commentary(e.text);
+        await pause(1100);
+        return true;
+      }
+      case 'cheat': {
+        const guesser = vs.players[e.seat];
+        setDice(`<div class="v2-cheat ${e.hit ? 'hit' : 'miss'}"><div><span>暗定</span><b>${esc(e.set)}</b></div><i>${e.hit ? '=' : '≠'}</i><div><span>${esc(pname(guesser))} 猜</span><b>${esc(e.guess)}</b></div></div>`, e.hit ? '猜中了' : '猜错了');
+        if (e.rid) floater(e.rid, e.hit ? '被猜中，原地不动' : `没猜中！走 ${e.set} 格`, e.hit ? 'bad' : 'good');
+        Sound.duel();
+        commentary(e.text);
+        await pause(1300);
+        return true;
+      }
+      case 'wolf': {
+        const r = vr(e.rid);
+        if (r) r.wolf = true;
+        renderV2();
+        restartClass(tokenOf(e.rid), 'v2-howl', 1000);
+        floater(e.rid, '变身狼人！', 'bad');
+        Sound.chomp();
+        commentary(e.text);
+        await pause(950);
+        return true;
+      }
+      case 'stack': {
+        const r = vr(e.rid);
+        const powers = (e.powers || []).filter((k) => R[k]);
+        if (r) r.stack = (r.stack || []).concat(powers);
+        floater(e.rid, `长出「${powers.map((k) => R[k].skill).join('」「')}」`, 'good');
+        restartClass(tokenOf(e.rid), 'sk-cast', 900);
+        Sound.warp();
+        commentary(e.text);
+        renderTurnCard();
+        await pause(1100);
+        return true;
+      }
+      case 'hog': {
+        const to = vr(e.to);
+        if (to) to.hogs = (to.hogs || 0) + (e.n || 1);
+        if (e.from) {
+          const fr = vr(e.from);
+          if (fr) fr.hogs = 0;
+          const a = tokenOf(e.from), b = tokenOf(e.to);
+          if (a && b) drawArc(tokenPt(a), tokenPt(b), 'power', 800, '#C9763B');
+        }
+        renderV2();
+        floater(e.to, e.from ? '抢到野猪！' : '骑上野猪', 'good');
+        Sound.pop();
+        await pause(e.from ? 800 : 650);
+        return true;
+      }
+      case 'mate': {
+        const r = vr(e.rid);
+        if (r) r.mate = e.target;
+        const a = tokenOf(e.rid), b = tokenOf(e.target);
+        if (a && b) drawArc(tokenPt(a), tokenPt(b), 'power', 900, '#F25CA2');
+        renderV2();
+        floater(e.rid, '灵魂伴侣', 'good');
+        Sound.pop();
+        commentary(e.text);
+        await pause(900);
+        return true;
+      }
+      case 'control': {
+        const a = vr(e.a), b = vr(e.b);
+        if (a && e.seatA != null) a.seat = e.seatA;
+        if (b && e.seatB != null) b.seat = e.seatB;
+        for (const r of [a, b]) {
+          const el = r && tokenOf(r.rid);
+          if (!el) continue;
+          el.style.setProperty('--c', PCOL[r.seat % 6]);
+          const tag = $('.seat-dot', el);
+          if (tag && vs.players[r.seat]) tag.textContent = pname(vs.players[r.seat]);
+        }
+        const ea = a && tokenOf(a.rid), eb = b && tokenOf(b.rid);
+        if (ea && eb) { drawArc(tokenPt(ea), tokenPt(eb), 'swap', 900, PCOL[a.seat % 6]); drawArc(tokenPt(eb), tokenPt(ea), 'swap2', 900, PCOL[b.seat % 6]); }
+        if (a) floater(a.rid, '换主人！', 'good');
+        Sound.warp();
+        commentary(e.text);
+        renderPlayers(); renderTurnCard(); layoutTokens();
+        await pause(1100);
+        return true;
+      }
+      case 'space':
+        if (e.space === 'whirl') { await playWhirl(e, pause); return true; }
+        if (e.space === 'bonkbug') {
+          pulseCell(e.pos);
+          knock(e.rid);
+          floater(e.rid, '撞头虫！后退 5 格', 'bad');
+          Sound.trip();
+          await pause(500);
+          return true;
+        }
+        return false;
+      case 'warp': {
+        // 漩涡传送：棋子已经顺着管道滑过去了，直接在出口冒出来
+        if (!whirlRide || whirlRide.rid !== e.rid) return false;
+        whirlRide = null;
+        const r = vr(e.rid);
+        if (!r) return true;
+        const el = tokenEl(r);
+        r.pos = e.to;
+        layoutTokens(true);
+        el.classList.remove('warp-out');
+        restartClass(el, 'v2-popin', 450);
+        pulseCell(e.to);
+        await pause(320);
+        return true;
+      }
+      case 'out': {
+        if (!e.cause || !OUT_FLOAT[e.cause]) return false;
+        const r = vr(e.rid);
+        if (r) r.out = true;
+        Sound.chomp();
+        floater(e.rid, OUT_FLOAT[e.cause], 'bad');
+        commentary(e.text);
+        await pause(300);
+        layoutTokens();
+        await pause(650);
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+  // 漩涡：格子转一下，小球顺着同色管道滑到另一端（棋子先隐身，随后的瞬移在出口现身）
+  async function playWhirl(e, pause) {
+    whirlRide = { rid: e.rid };
+    const pipe = $(`#trackSvg .twl-pipe[data-p~="${e.pos}"]`);
+    pulseCell(e.pos);
+    if (!playSfx('whirl')) Sound.warp();
+    floater(e.rid, `漩涡 → 第 ${e.to} 格`, 'good');
+    const el = tokenOf(e.rid);
+    if (fast || reducedMotion.matches || !pipe) { await pause(300); return; }
+    restartClass(pipe, 'flow', 1100);
+    if (el) el.classList.add('warp-out');
+    const core = $('.twl-core', pipe);
+    const d = core && core.getAttribute('d');
+    const k = Number(pipe.dataset.k) || 0;
+    if (d) {
+      const svg = arcLayer();
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('class', 'v2-ball');
+      const r = vr(e.rid);
+      const ring = r ? PCOL[r.seat % 6] : '#fff';
+      g.innerHTML = `<circle r="${layout === 'wide' ? 12 : 11}" fill="${WHIRL_COLS[k]}" stroke="${ring}" stroke-width="4"/><circle r="${layout === 'wide' ? 12 : 11}" fill="none" stroke="${INK}" stroke-width="1.6"/><path d="${spiralD(0, 0, 6.5, 1.5)}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>`;
+      const am = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
+      const startsAtA = Number(pipe.dataset.p.split(' ')[0]) === e.pos;
+      am.setAttribute('dur', `${Math.round(620 / speed)}ms`);
+      am.setAttribute('path', d);
+      am.setAttribute('fill', 'freeze');
+      am.setAttribute('begin', 'indefinite');
+      am.setAttribute('calcMode', 'linear');
+      am.setAttribute('keyPoints', startsAtA ? '0;1' : '1;0');
+      am.setAttribute('keyTimes', '0;1');
+      g.appendChild(am);
+      svg.appendChild(g);
+      try { am.beginElement(); } catch (err) { /* 不支持 SMIL 时只亮管道 */ }
+      setTimeout(() => g.remove(), 620 / speed + 260);
+    }
+    await pause(640);
+  }
+
+  /* ---------- 二代决策 ---------- */
+  const V2_SUB = {
+    soulmate: '它在 5 格内时，你回合开始会瞬移到它身边',
+    understudy: '本场改用它的技能',
+    diva: '和它直接交换位置',
+    athleteWarp: '瞬移到它的格子，那格的人都会摔倒',
+    kingtripper: '被绊倒的人下回合跳过主移动',
+    switcharoo: '交换后它归你控制，你的运动员归对方',
+    kraken: '所有人瞬移到你的格子并摔倒，每场只能用一次',
+    tail: '瞬移到前方最近那名运动员身后一格',
+    critic: '它的主移动骰要重掷一次（每回合一次）',
+    nemesis: '你也掷一颗：点数相同，等它走完你也前进同样格数',
+    cheatahSet: '右手边的玩家会来猜，猜中你就原地不动；猜错按这个数走',
+    cheatahGuess: '猜中了它就走不了；猜错它按暗定的数走',
+  };
+  Object.assign(WAIT_TEXT, {
+    soulmate: '在挑灵魂伴侣', understudy: '在挑要学的技能', diva: '在挑换位对象', athleteWarp: '在挑瞬移目标',
+    kingtripper: '在考虑绊谁', switcharoo: '在考虑要不要调包', kraken: '在考虑要不要放大海怪', tail: '在考虑要不要跟上',
+    critic: '在考虑要不要差评', nemesis: '在考虑要不要跟掷', cheatahSet: '在暗定步数', cheatahGuess: '在猜步数',
+    showoff: '在考虑要不要再掷', diceguy: '在挑点数', swapmeet: '在逛跳蚤市场', copycat: '在挑要模仿谁',
+  });
+  function v2TokenPrompt(d) {
+    const map = {};
+    for (const o of d.options) if (R[o.v] && vr(o.v) && tokenOf(o.v)) map[o.v] = o.v;
+    const pick = d.options.filter((o) => map[o.v]), rest = d.options.filter((o) => !map[o.v]);
+    const opts = pick.map((o) => `<button class="btn small" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('')
+      + rest.map((o) => `<button class="btn" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+    if (pick.length) {
+      for (const rid of Object.keys(map)) tokenOf(rid).classList.add('selectable');
+      tokenPick = { map, fn: (v) => answer(d, v) };
+    }
+    const tip = V2_SUB[d.kind] || '';
+    return { opts, sub: pick.length ? `${tip ? `${tip} · ` : ''}也可以直接点赛道上闪烁的棋子` : tip };
+  }
+  function v2ButtonPrompt(d) {
+    const opts = d.options.map((o, k) => `<button class="btn ${k === 0 ? 'primary' : ''}" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+    let sub = V2_SUB[d.kind] || '';
+    if (d.kind === 'tail' && d.target != null) {
+      const c = $(`#trackSvg .cell[data-p="${d.target}"]`);
+      if (c) { $('#board').classList.add('picking-cell'); c.classList.add('pick'); c.onclick = () => answer(d, 'yes'); sub += ' · 也可以直接点闪烁的格子'; }
+    }
+    if ((d.kind === 'critic' || d.kind === 'nemesis') && typeof d.target === 'string' && R[d.target]) {
+      const el = tokenOf(d.target);
+      if (el) el.classList.add('selectable');
+      if (el) tokenPick = { map: { [d.target]: 'yes' }, fn: (v) => answer(d, v) };
+      sub = `${rname(d.target)} 掷出了 ${d.roll} · ${sub}`;
+    }
+    if (d.kind === 'showoff') sub = `已累计 ${d.sum ?? '?'} 格 · 再掷必须比 ${d.roll ?? '上一次'} 大，否则这次主移动不动`;
+    if (d.kind === 'diceguy') sub = `${Array.isArray(d.dice) ? `六颗骰子：${d.dice.join(' ')} · ` : ''}只能走出现了不止一次的点数`;
+    return { opts, sub };
+  }
+  function v2NumberPrompt(d) {
+    const opts = `<div class="num-opts">${d.options.map((o) => `<button class="btn" data-v="${esc(o.v)}" title="${esc(o.label)}">${esc(o.v)}</button>`).join('')}</div>`;
+    return { opts, sub: V2_SUB[d.kind] || '' };
+  }
+  // 跳蚤市场（同时决策）：两张卡二选一——留下场上的，或换成新抽的
+  function showSwapMeetOverlay(d) {
+    const mineOpts = d.optionsBySeat[you];
+    const answered = d.done.includes(you);
+    const sending = !!(submitted && submitted.id === d.id);
+    const key = `swap:${d.id}:${answered}:${sending}:${connection}`;
+    if (overlayKind === 'pick' && overlayDecision === key) { updatePickStatus(d); return; }
+    const canPick = !!mineOpts && !answered && !sending && connection === 'ready';
+    const me = seatRacer(you);
+    const keep = mineOpts && mineOpts.find((o) => o.v === 'keep');
+    const swap = mineOpts && mineOpts.find((o) => o.v === 'swap');
+    const curId = me ? (me.power && R[me.power] ? me.power : me.rid) : null;
+    const cards = mineOpts && !answered ? [
+      curId ? rcard(curId, { cls: canPick ? 'pickable deal' : 'dim', k: 0 }).replace('class="rcard', 'data-v="keep" class="rcard') : '',
+      swap && R[swap.card] ? rcard(swap.card, { cls: canPick ? 'pickable deal' : 'dim', k: 1 }).replace('class="rcard', 'data-v="swap" class="rcard') : '',
+    ].join('') : '';
+    const sub = sending ? '正在提交，等待服务器确认…' : connection !== 'ready' ? '断线中，重连同步后可重新选择' : canPick ? '左边留着场上的运动员，右边换成新抽到的（技能一起换）' : answered ? '你已决定，等待其他人…' : '其他玩家正在暗中决定…';
+    showOverlay(`<div class="ov-box card v2-swapmeet"><h2>变数卡 · 跳蚤市场</h2><p class="sub">${esc(sub)}</p>
+      <div class="ov-cards" id="pickCards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div>
+      ${canPick ? `<div class="ov-actions">${keep ? `<button class="btn" data-v="keep">${esc(keep.label)}</button>` : ''}${swap ? `<button class="btn primary" data-v="swap">${esc(swap.label)}</button>` : ''}</div>` : ''}
+      <div class="pick-status" id="pickStatus"></div></div>`, 'pick');
+    overlayDecision = key;
+    updatePickStatus(d);
+    fitOverlayCards(true);
+    for (const el of $$('#overlay [data-v]')) {
+      el.onclick = canPick ? () => { if (answer(d, el.dataset.v)) { Sound.card(); el.classList.add('chosen'); } } : () => { denyCue(); nudge(el); };
+    }
+    if (canPick) focusFirst('#overlay .ov-actions .btn.primary', `pick:${d.id}`);
+  }
+  function renderSwapMeetDock(dock, d, mine) {
+    const key = `swapmeet:${gameId}:${d.id}:${mine}`;
+    if ($('.prompt', dock)?.dataset.k !== key) {
+      dock.innerHTML = promptHtml({ seat: you, mine, title: mine ? '跳蚤市场：换不换运动员？' : '等待其他人逛完跳蚤市场', sub: mine ? '在上方二选一，所有人同时揭晓' : '所有人决定后同时揭晓' });
+      $('.prompt', dock).dataset.k = key;
+    }
+    if (mine) { yourTurnPing(d.id); addTimer(); }
   }
 
   window.__hn = () => ({ pending: snap && snap.pending, phase: vs && vs.phase, playing, queue: queue.length, overlayKind, you, locked, mode: gameMode, gameId, navigationPending });

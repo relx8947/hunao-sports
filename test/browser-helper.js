@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { FINISH, SCHEDULE } = require('../game/tracks');
-const { RACER_IDS } = require('../game/racers');
+const { RACER_IDS, RACER_IDS_V2 } = require('../game/racers');
+const ALL_RACER_IDS = RACER_IDS.concat(RACER_IDS_V2 || []);
 const localUrl = value => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(value).hostname);
 
 async function launch() {
@@ -126,6 +127,7 @@ async function launch() {
           window.WebSocket = class extends Original {
             constructor(...args) {
               super(...args);
+              window.__testSocket = this;
               this.addEventListener('message', event => {
                 let message;
                 try { message = JSON.parse(event.data); } catch { return; }
@@ -258,14 +260,14 @@ function assertResults(snap) {
   assert.equal(snap.results.length, 4, '必须有四场成绩');
   for (const [index, result] of snap.results.entries()) {
     assert.equal(result.race, index + 1, '场次顺序必须正确');
-    assert.equal(result.track, SCHEDULE[index], '赛道顺序必须正确');
+    assert.equal(result.track, (snap.schedule || SCHEDULE)[index], '赛道顺序必须正确');
     assert.equal(result.scores.length, n);
     assert(result.scores.every(score => Number.isSafeInteger(score) && score >= 0), '每场累计比分必须有效');
     assert.equal(result.standings.length, n);
     assert.deepEqual(result.standings.map(r => r.seat).sort((a, b) => a - b), Array.from({ length: n }, (_, seat) => seat));
     assert.equal(new Set(result.standings.map(r => r.rid)).size, n);
     for (const racer of result.standings) {
-      assert(RACER_IDS.includes(racer.rid));
+      assert(ALL_RACER_IDS.includes(racer.rid));
       assert(Number.isInteger(racer.pos) && racer.pos >= 0 && racer.pos <= FINISH);
       assert(Number.isInteger(racer.finished) && racer.finished >= 0 && racer.finished <= 2);
       assert.equal(typeof racer.out, 'boolean');
@@ -291,4 +293,11 @@ function assertFinished(st) {
   assert.equal(st.finalTitle, `总冠军：${st.game.snap.champions.map(seat => st.game.snap.players[seat].name).join('、')}`, '冠军标题必须与权威胜者一致');
 }
 
-module.exports = { launch, step, state, snapshot, assertFinished, assertResults };
+// 直接按模式开快速局（不依赖首页模式选择界面）：edition = v1 / v2 / mix
+async function quickStart(page, { ai = 2, edition } = {}) {
+  await page.waitForFunction(() => window.__testSocket && window.__testSocket.readyState === 1 && window.__testIdentity);
+  await page.evaluate(({ ai, edition }) => window.__testSocket.send(JSON.stringify({ type: 'quick', ai, ...(edition ? { edition } : {}) })), { ai, edition });
+  await page.locator('#game').waitFor({ state: 'visible' });
+}
+
+module.exports = { launch, step, state, snapshot, assertFinished, assertResults, quickStart };
