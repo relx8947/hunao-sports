@@ -3,8 +3,9 @@
   "host_project": "hunao-sports",
   "game_readme_reference_links": 8,
   "broken_readme_links": [],
-  "legacy_path_is_symlink": true,
-  "legacy_path_resolves_to_project": true,
+  "legacy_path_is_symlink": false,
+  "legacy_path_resolves_to_project": false,
   "assets_check_passed": true,
-  "browser_check_passed": true
+  "browser_check_passed": true,
+  "legacy_paths_removed": true
 }

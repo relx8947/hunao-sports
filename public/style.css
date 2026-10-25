@@ -2398,3 +2398,6 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   #game .players .prow .sc { padding-bottom: 2px; }
   #game .players .prow .pn b { padding: 2px 2px 3px; font-size: 11px; }
 }
+
+/* 手机横屏：顶栏内容再宽也不能撑宽页面（否则手机浏览器会整体缩小，点击错位） */
+@media (max-width: 1000px) { #game { grid-template-columns: minmax(0, 1fr); } #game > * { min-width: 0; } .topbar { min-width: 0; overflow: hidden; } }
