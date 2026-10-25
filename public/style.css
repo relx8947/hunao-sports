@@ -486,7 +486,7 @@ input { font: inherit; color: inherit; }
 .emotes .toggle { display: none; }
 
 /* ---------- 浮层 ---------- */
-.overlay { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(251, 246, 236, .72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fadeIn .3s ease; }
+.overlay { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(35, 31, 51, .66); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: fadeIn .3s ease; }
 @keyframes fadeIn { from { opacity: 0; } }
 .overlay.out { animation: fadeOut .3s ease forwards; }
 @keyframes fadeOut { to { opacity: 0; } }
@@ -535,7 +535,7 @@ input { font: inherit; color: inherit; }
 .st-row .tot { font-size: 20px; font-variant-numeric: tabular-nums; }
 
 /* ---------- 弹窗 ---------- */
-.modal { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(35, 31, 51, .38); animation: fadeIn .2s ease; }
+.modal { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(35, 31, 51, .6); animation: fadeIn .2s ease; }
 .modal-box { width: min(980px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; animation: rise .35s var(--ease); }
 .modal-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 2.5px solid var(--ink); }
 .modal-head h3 { margin: 0; flex: 1; font-size: 20px; font-weight: 900; }
@@ -792,7 +792,7 @@ input { font: inherit; color: inherit; }
   .prompt:has(.num-opts) { flex-wrap: wrap; }
   .prompt .p-opts .num-opts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; width: 100%; min-width: 0; }
   .prompt .p-opts .num-opts .btn { min-width: 0; padding: 4px; }
-  .board .tc-skill, .board .tc-st { display: none; }
+  .board .tc-skill, .board .tc-st, .board .tc-gap { display: none; }
   .board .tc-who b { font-size: max(12px, calc(20 * var(--u))); }
   .board .tc-player { font-size: max(10px, calc(11 * var(--u))); }
   .draft { gap: 5px; }
@@ -1889,3 +1889,42 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   .icon-btn { min-width: 33px; padding: 0 3px; }
   .icon-btn .ico { width: 17px; height: 17px; }
 }
+
+/* 行动卡：实时名次与差距（原技能整块说明腾出的位置） */
+.tc-gap { display: flex; align-items: center; gap: calc(7 * var(--u)); margin: calc(8 * var(--u)) calc(11 * var(--u)) 0; font-size: calc(12.5 * var(--u)); font-weight: 800; color: var(--ink2); min-width: 0; }
+.tc-gap i { flex: none; font-style: normal; padding: calc(1 * var(--u)) calc(8 * var(--u)); border-radius: 99px; background: var(--ink); color: #fff; font-size: calc(11.5 * var(--u)); font-weight: 900; }
+.tc-gap span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-gap.lead i { background: var(--yellow); color: var(--ink); box-shadow: 0 0 0 calc(1.5 * var(--u)) var(--ink); }
+.tc-gap.last i { background: var(--ink3); }
+/* 玩家卡：左侧色条与棋子底座同色，一眼对上场上是谁 */
+.prow { border-left: 7px solid var(--c); padding-left: 8px; }
+.prow.me { border-left-width: 7px; }
+
+/* 赛事纪录弹窗 */
+.modal-records { width: min(720px, 100%); }
+.rec-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rec-row { display: grid; grid-template-columns: auto auto 1fr; grid-template-areas: 'no track meds' 'gains gains gains'; gap: 4px 10px; align-items: center; padding: 8px 12px; border: 2px solid var(--ink); border-radius: 12px; background: var(--paper); }
+.rec-row.pending { opacity: .55; grid-template-areas: 'no track wait'; }
+.rec-no { grid-area: no; padding: 1px 9px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 900; }
+.rec-track { grid-area: track; font-weight: 900; font-size: 14px; }
+.rec-wait { grid-column: 3; justify-self: end; font-weight: 800; color: var(--ink2); font-size: 13px; }
+.rec-meds { grid-area: meds; display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: flex-end; min-width: 0; }
+.rec-med { position: relative; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.rec-med i { width: 28px; height: 28px; flex: none; border-radius: 50%; overflow: hidden; background: var(--paper); border: 2.5px solid var(--c); box-shadow: 0 0 0 1.5px var(--ink); }
+.rec-med i svg { width: 118%; height: 118%; margin: -9%; }
+.rec-med b { position: absolute; left: -4px; top: -5px; min-width: 15px; height: 15px; border-radius: 50%; background: var(--gold, #FFC53D); border: 1.5px solid var(--ink); font-size: 10px; line-height: 12px; text-align: center; font-weight: 900; }
+.rec-med.m2 b { background: var(--silver, #C7CCD6); }
+.rec-med em { font-style: normal; font-size: 12.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-gains { grid-area: gains; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; font-weight: 800; color: var(--ink2); border-top: 1.5px dashed var(--line); padding-top: 5px; }
+.rec-g i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 4px; }
+.rec-g b { margin-left: 4px; color: var(--ink); }
+.rec-g.me { color: var(--ink); }
+.rec-totals { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 12px; padding-top: 10px; border-top: 2.5px solid var(--ink); }
+.rec-tl { font-weight: 900; font-size: 13px; color: var(--ink2); }
+.rec-t { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 4px; border-radius: 99px; border: 2px solid var(--c); font-weight: 800; font-size: 13px; background: var(--paper); }
+.rec-t em { font-style: normal; width: 18px; height: 18px; border-radius: 50%; background: var(--c); color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-weight: 900; }
+.rec-t b { font-size: 15px; margin-left: 2px; }
+.rec-t.me { box-shadow: 0 0 0 1.5px var(--ink); }
+#races .race-pill { cursor: pointer; }
+@media (max-width: 600px) and (orientation: portrait) { #recordsBtn { display: none; } }
+

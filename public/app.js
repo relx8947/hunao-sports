@@ -1478,6 +1478,20 @@
 
   // 行动卡：谁在行动（头像、玩家、选手）→ 位置进度（技能点头像可看，卡里只在借用他人技能时标出） + 接下来的行动顺序；右上角标签告诉你还有几位轮到你
   let tcRid = null, tcSoonSaid = null;
+  // 本场实时名次：已冲线按名次靠前，其余按位置；返回「第几名 + 和前后一名的差距」
+  function rankInfo(r) {
+    if (!vs || vs.phase !== 'race') return null;
+    const key = (x) => (x.finished ? 1000 - x.finished : x.out ? -1 : x.pos);
+    const order = vs.racers.slice().sort((a, b) => key(b) - key(a));
+    const i = order.findIndex((x) => x.rid === r.rid);
+    if (i < 0 || order.length < 2) return null;
+    const nm = (x) => pname(vs.players[x.seat]);
+    const dist = (a, b) => Math.max(0, Math.min(FIN, key(a)) - Math.min(FIN, key(b)));
+    let text, cls = '';
+    if (i === 0) { const nx = order[1]; const d = dist(r, nx); text = d ? `领跑中 · 领先${nm(nx)} ${d} 格` : `领跑中 · 与${nm(nx)}并列`; cls = 'lead'; }
+    else { const up = order[i - 1]; const d = dist(up, r); text = d ? `落后${nm(up)} ${d} 格` : `与${nm(up)}并列`; if (i === order.length - 1) cls = 'last'; }
+    return { rank: `第${i + 1}名`, text, cls };
+  }
   function renderTurnCard() {
     const tc = $('#turnCard');
     $('#center').classList.toggle('hud-race', !!(vs && vs.phase === 'race'));
@@ -1489,9 +1503,11 @@
     const p = vs.players[r.seat];
     const ahead = turnsAhead();
     const left = FIN - r.pos;
+    const rk = rankInfo(r);
     const pos = r.tripped
       ? '<span class="tc-pos bad">摔倒中 · 本回合爬起来，不掷骰</span>'
       : `<span class="tc-pos" title="在第 ${r.pos} 格，离终点还差 ${left} 格">第 <b>${r.pos}</b> 格 · 差 <b>${left}</b> 格</span>`;
+    const gap = rk ? `<div class="tc-gap ${rk.cls}"><i>${rk.rank}</i><span>${esc(rk.text)}</span></div>` : '';
     // 行动顺序：当前行动者在最前，最多显示 4 位，你的选手标「你」
     const order = turnOrder();
     const q = order.slice(0, 4).map((x, k) => `<i class="tq ${k === 0 ? 'now' : ''} ${x.seat === you && isParticipant() ? 'me' : ''}" style="--c:${PCOL[x.seat % 6]}" title="${k === 0 ? '正在行动' : `第 ${k} 位`}：${esc(pname(vs.players[x.seat]))}的${esc(R[x.rid].name)}">${art(x.rid)}${x.seat === you && isParticipant() ? '<em>你</em>' : ''}</i>`).join('<span class="tq-arr" aria-hidden="true"></span>');
@@ -1503,6 +1519,7 @@
     tc.innerHTML = `${cue}<div class="tc-head"><div class="tc-ava">${art(r.rid)}</div><div class="tc-who"><span class="tc-player">${esc(pname(p))}${r.seat === you ? ' · 你' : p.ai ? ' · AI' : ''}</span><b>${esc(base.name)}</b></div></div>
       <div class="tc-bar" aria-hidden="true"><em style="width:${Math.round(r.pos / FIN * 100)}%"></em></div>
       ${pw ? `<div class="tc-skill"><span class="sk">借用「${esc(pw.skill)}」</span><em>来自${esc(pw.name)}</em></div>` : ''}
+      ${gap}
       <div class="tc-st ${r.tripped ? 'bad' : ''}">${pos}${order.length > 1 ? `<span class="tc-q" aria-label="行动顺序">${q}${more}</span>` : ''}</div>`;
     if (tcRid !== r.rid) { tc.classList.remove('in'); void tc.offsetWidth; tc.classList.add('in'); tcRid = r.rid; }
     // 读屏：只在「下一个就是你」时提醒一次（轮到你由出牌提示负责播报）
@@ -2905,6 +2922,8 @@
       animationLater(() => confetti(160, innerWidth / 2, innerHeight * 0.3), 1250);
       animationLater(() => haptic('champ'), 300);
     }
+    // 总冠军诞生：不论是不是你，都放一轮烟花
+    if (animOk()) animationLater(() => fireworks(youWon ? 5 : 3), 900);
     finalReadyAt = performance.now() + (now ? 0 : (window.Timing ? Timing.eventMs({ t: 'gameOver' }) : 2000) / Math.max(1, speed));
     syncFinalActions();
     $('#toHome').onclick = () => { Sound.click(); if (navigate('leave', $('#toHome'))) $('#toHome').classList.add('is-loading'); };
@@ -3380,9 +3399,38 @@
     const m = $('#modal');
     if (m.hidden || !modalKind) return;
     if (fresh) for (const k of ['gallery', 'rules']) if (pagers[k]) pagers[k].anchor = 0;
+    if (modalKind === 'records') return;
     if (modalKind === 'gallery') paginate('gallery', $('.gallery', m), () => $$('.gallery .rcard', m), $('#mPager'));
     else if (modalKind === 'tracks') renderTrackGuide(fresh ? SCHEDULE[0] : tgKey);
     else paginate('rules', $('.rules', m), () => $$('.rules .rule-sec', m), $('#mPager'));
+  }
+
+  /* ---------- 赛事纪录：本局已结束的每一场名次与累计分 ---------- */
+  function openRecords() {
+    if (!vs) return;
+    const m = $('#modal');
+    const done = raceScores();
+    const total = (window.SCHEDULE || []).length || 4;
+    const rows = [];
+    for (let i = 0; i < total; i++) {
+      const rec = done[i];
+      const res = ((snap && snap.results) || []).find((x) => x.race === i + 1);
+      const trackKey = (res && res.track) || (vs.schedule && vs.schedule[i]) || SCHEDULE[i];
+      const tname = (window.TRACKS_ALL || TRACKS)[trackKey]?.name || '';
+      if (!rec) { rows.push(`<li class="rec-row pending"><span class="rec-no">第 ${i + 1} 场</span><span class="rec-track">${esc(tname)}</span><span class="rec-wait">${vs.raceNo === i + 1 && vs.phase === 'race' ? '进行中' : '未开始'}</span></li>`); continue; }
+      const placed = rec.standings.filter((x) => x.finished).sort((a, b) => a.finished - b.finished).slice(0, 2);
+      const medals = placed.map((x) => `<span class="rec-med m${x.finished}" style="--c:${PCOL[x.seat % 6]}"><i>${art(x.rid)}</i><b>${x.finished}</b><em>${esc(pname(vs.players[x.seat]))} · ${esc(R[x.rid].name)}</em></span>`).join('');
+      const prev = i > 0 && done[i - 1] ? done[i - 1].scores : vs.players.map(() => 0);
+      const gains = vs.players.map((p) => `<span class="rec-g ${p.seat === you ? 'me' : ''}" style="--c:${PCOL[p.seat % 6]}"><i></i>${esc(pname(p))}<b>+${rec.scores[p.seat] - (prev[p.seat] || 0)}</b></span>`).join('');
+      rows.push(`<li class="rec-row"><span class="rec-no">第 ${i + 1} 场</span><span class="rec-track">${esc(tname)}</span><span class="rec-meds">${medals}</span><span class="rec-gains">${gains}</span></li>`);
+    }
+    const totals = vs.players.slice().sort((a, b) => b.score - a.score || a.seat - b.seat).map((p, k) => `<span class="rec-t ${p.seat === you ? 'me' : ''}" style="--c:${PCOL[p.seat % 6]}"><em>${k + 1}</em>${esc(pname(p))}<b>${p.score}</b></span>`).join('');
+    m.innerHTML = `<div class="modal-box card modal-records"><div class="modal-head"><h3>赛事纪录</h3><button class="icon-btn" id="mClose" aria-label="关闭"><span class="ico">${icon('close')}</span></button></div><div class="modal-body"><ol class="rec-list">${rows.join('')}</ol><div class="rec-totals"><span class="rec-tl">当前总分</span>${totals}</div></div></div>`;
+    m.hidden = false;
+    modalKind = 'records';
+    const close = () => { m.hidden = true; modalKind = null; };
+    $('#mClose').onclick = close;
+    m.onclick = (e) => { if (e.target === m) close(); };
   }
 
   /* ---------- 地图图鉴 ---------- */
@@ -3463,7 +3511,25 @@
     setTimeout(() => t.remove(), ms + 120);
   }
   const confettiState = { parts: [], raf: 0 };
-  function confetti(n = 150, x, y) {
+  // 冠军烟花：n 朵，依次在屏幕上方不同位置绽放（圆形火星 + 彩纸尾）
+  function fireworks(n = 4, color) {
+    if (fast || reducedMotion.matches) return;
+    const cols = ['#F27AB8', '#FFC53D', '#33B679', '#4D9DF7', '#F2553C', '#8B6CF0'];
+    for (let k = 0; k < n; k++) {
+      animationLater(() => {
+        const x = innerWidth * (0.18 + 0.64 * ((k * 0.61803 + 0.1) % 1)), y = innerHeight * (0.16 + 0.2 * ((k * 0.37) % 1));
+        const c1 = color || cols[(k * 2) % 6], c2 = cols[(k * 2 + 3) % 6];
+        playSfx('pop');
+        confetti(0, x, y, () => {
+          for (let i = 0; i < 46; i++) {
+            const a = (i / 46) * Math.PI * 2 + Math.random() * 0.08, sp = 3.2 + Math.random() * 3.4;
+            confettiState.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 0, vr: 0, w: 2.6, h: 0, c: i % 3 ? c1 : c2, life: 0, max: 62 + Math.random() * 22, spark: true });
+          }
+        });
+      }, k * 380);
+    }
+  }
+  function confetti(n = 150, x, y, extra) {
     if (fast || reducedMotion.matches) return;
     const cv = $('#confetti');
     const dpr = window.devicePixelRatio || 1;
@@ -3474,6 +3540,7 @@
       const a = Math.random() * Math.PI * 2, s = 3 + Math.random() * (x != null ? 6 : 10);
       confettiState.parts.push({ x: ox, y: oy, vx: Math.cos(a) * s, vy: Math.sin(a) * s - (x != null ? 4 : 7), r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.3, w: 6 + Math.random() * 6, h: 4 + Math.random() * 4, c: cols[i % 6], life: 0 });
     }
+    if (extra) extra();
     if (confettiState.raf) return;
     const ctx = cv.getContext('2d');
     const tick = () => {
@@ -3482,12 +3549,20 @@
       const ps = confettiState.parts;
       for (const p of ps) {
         p.vy += 0.22; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.life++;
+        if (p.spark) {
+          // 烟花火星：带拖尾的小圆点，越飞越暗
+          p.vy -= 0.1; p.vx *= 0.965; p.vy *= 0.965;
+          ctx.globalAlpha = Math.max(0, 1 - p.life / p.max);
+          ctx.strokeStyle = p.c; ctx.lineWidth = p.w; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(p.x - p.vx * 2.4, p.y - p.vy * 2.4); ctx.lineTo(p.x, p.y); ctx.stroke();
+          continue;
+        }
         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c;
         ctx.globalAlpha = Math.max(0, 1 - p.life / 170);
         ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.life / 6)));
         ctx.restore();
       }
-      confettiState.parts = ps.filter((p) => p.life < 170 && p.y < innerHeight + 40);
+      confettiState.parts = ps.filter((p) => p.life < (p.max || 170) && p.y < innerHeight + 40);
       if (confettiState.parts.length) confettiState.raf = requestAnimationFrame(tick);
       else { confettiState.raf = 0; ctx.clearRect(0, 0, innerWidth, innerHeight); }
     };
@@ -3497,6 +3572,9 @@
   /* ================= 对局顶栏 ================= */
   function initGameBar() {
     // 倍速循环 1 → 1.5 → 2.2 → 1（与 hub.js 的 SPEEDS 一致）：往快里切用「嗖↑」，绕回 1 倍用普通点击
+    $('#recordsBtn').onclick = () => { Sound.click(); openRecords(); };
+    // 窄屏顶栏放不下纪录按钮：点场次胶囊同样能打开
+    $('#races').onclick = (e) => { if (e.target.closest('.race-pill')) { Sound.click(); openRecords(); } };
     $('#speedBtn').onclick = () => { if (!(speed < 2.2 && playSfx('boost'))) Sound.click(); send({ type: 'speed' }); };
     $('#autoBtn').onclick = () => { Sound.click(); send({ type: 'auto', on: !autoFlags[you] }); };
     $('#soundBtn').onclick = () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); };
