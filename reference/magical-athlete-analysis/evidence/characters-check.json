@@ -1,0 +1,11 @@
+{
+  "characters": 36,
+  "canvas": [
+    256,
+    256
+  ],
+  "visible_pixels_preserved": true,
+  "package": "exports/characters.zip",
+  "package_bytes": 1107331,
+  "passed": true
+}

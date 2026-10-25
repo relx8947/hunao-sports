@@ -1,0 +1,308 @@
+[
+  {
+    "bundle": "resources",
+    "uuid": "18ad38e1-dcf9-4f19-ae9c-006b9ad7b3b0@f9941",
+    "name": "circle",
+    "sprite": {
+      "name": "circle",
+      "rect": {
+        "x": 571,
+        "y": 3,
+        "width": 255,
+        "height": 255
+      },
+      "offset": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "originalSize": {
+        "width": 256,
+        "height": 256
+      },
+      "rotated": false,
+      "capInsets": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "packable": true,
+      "pixelsToUnit": 100,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "meshType": 0
+    },
+    "dependencies": [
+      "1f13af603@6c48a"
+    ],
+    "section": 1,
+    "preview": "shared-sprites/circle--18ad38e1-dcf9-4f19-ae9c-006b9ad7b3b0.png",
+    "apk_import_member": "assets/assets/resources/import/0f/0f13af603.json"
+  },
+  {
+    "bundle": "resources",
+    "uuid": "40ad2568-076d-4a5a-9ee6-b189c17f331b@f9941",
+    "name": "focus",
+    "sprite": {
+      "name": "focus",
+      "rect": {
+        "x": 872,
+        "y": 3,
+        "width": 147,
+        "height": 146
+      },
+      "offset": {
+        "x": -0.5,
+        "y": 0
+      },
+      "originalSize": {
+        "width": 150,
+        "height": 150
+      },
+      "rotated": false,
+      "capInsets": [
+        30,
+        30,
+        30,
+        30
+      ],
+      "packable": true,
+      "pixelsToUnit": 100,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "meshType": 0
+    },
+    "dependencies": [
+      "16423c6b3@6c48a"
+    ],
+    "section": 5,
+    "preview": "shared-sprites/focus--40ad2568-076d-4a5a-9ee6-b189c17f331b.png",
+    "apk_import_member": "assets/assets/resources/import/06/06423c6b3.json"
+  },
+  {
+    "bundle": "resources",
+    "uuid": "7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941",
+    "name": "default_sprite_splash",
+    "sprite": {
+      "name": "default_sprite_splash",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 2,
+        "height": 2
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "originalSize": {
+        "width": 2,
+        "height": 2
+      },
+      "rotated": false,
+      "capInsets": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "vertices": {
+        "rawPosition": [
+          -1,
+          -1,
+          0,
+          1,
+          -1,
+          0,
+          -1,
+          1,
+          0,
+          1,
+          1,
+          0
+        ],
+        "indexes": [
+          0,
+          1,
+          2,
+          2,
+          1,
+          3
+        ],
+        "uv": [
+          0,
+          2,
+          2,
+          2,
+          0,
+          0,
+          2,
+          0
+        ],
+        "nuv": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          1,
+          1,
+          1
+        ],
+        "minPos": {
+          "x": -1,
+          "y": -1,
+          "z": 0
+        },
+        "maxPos": {
+          "x": 1,
+          "y": 1,
+          "z": 0
+        }
+      },
+      "packable": true,
+      "pixelsToUnit": 100,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "meshType": 0
+    },
+    "dependencies": [
+      "7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@6c48a"
+    ],
+    "section": 1,
+    "preview": "shared-sprites/default_sprite_splash--7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca.png",
+    "apk_import_member": "assets/assets/resources/import/06/06be5394c.json"
+  },
+  {
+    "bundle": "resources",
+    "uuid": "8cd86f2b-866d-46c7-bf01-73893d11779f@f9941",
+    "name": "radius50_background",
+    "sprite": {
+      "name": "radius50_background",
+      "rect": {
+        "x": 487,
+        "y": 957,
+        "width": 63,
+        "height": 68
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "originalSize": {
+        "width": 63,
+        "height": 68
+      },
+      "rotated": true,
+      "capInsets": [
+        16,
+        18,
+        17,
+        15
+      ],
+      "packable": true,
+      "pixelsToUnit": 100,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "meshType": 0
+    },
+    "dependencies": [
+      "16423c6b3@6c48a"
+    ],
+    "section": 14,
+    "preview": "shared-sprites/radius50_background--8cd86f2b-866d-46c7-bf01-73893d11779f.png",
+    "apk_import_member": "assets/assets/resources/import/06/06423c6b3.json"
+  },
+  {
+    "bundle": "resources",
+    "uuid": "ad7561f6-3b8e-491a-89ef-cc3d09f72664@f9941",
+    "name": "icon_offline",
+    "sprite": {
+      "name": "icon_offline",
+      "rect": {
+        "x": 661,
+        "y": 864,
+        "width": 94,
+        "height": 75
+      },
+      "offset": {
+        "x": 0,
+        "y": 3.5
+      },
+      "originalSize": {
+        "width": 96,
+        "height": 96
+      },
+      "rotated": false,
+      "capInsets": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "packable": true,
+      "pixelsToUnit": 100,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "meshType": 0
+    },
+    "dependencies": [
+      "16423c6b3@6c48a"
+    ],
+    "section": 18,
+    "preview": "shared-sprites/icon_offline--ad7561f6-3b8e-491a-89ef-cc3d09f72664.png",
+    "apk_import_member": "assets/assets/resources/import/06/06423c6b3.json"
+  },
+  {
+    "bundle": "resources",
+    "uuid": "c36221eb-5065-49f9-9730-a93a854301a5@f9941",
+    "name": "icon_yes",
+    "sprite": {
+      "name": "icon_yes",
+      "rect": {
+        "x": 872,
+        "y": 957,
+        "width": 62,
+        "height": 62
+      },
+      "offset": {
+        "x": 0,
+        "y": 0
+      },
+      "originalSize": {
+        "width": 64,
+        "height": 64
+      },
+      "rotated": false,
+      "capInsets": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "packable": true,
+      "pixelsToUnit": 100,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "meshType": 0
+    },
+    "dependencies": [
+      "16423c6b3@6c48a"
+    ],
+    "section": 20,
+    "preview": "shared-sprites/icon_yes--c36221eb-5065-49f9-9730-a93a854301a5.png",
+    "apk_import_member": "assets/assets/resources/import/06/06423c6b3.json"
+  }
+]

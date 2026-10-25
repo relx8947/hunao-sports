@@ -1,0 +1,49 @@
+{
+  "project_name": "胡闹运动会 UI 与布局分析",
+  "project_directory": "magical-athlete-analysis",
+  "thread_id": "01a16fab-c8b6-7fc1-b78f-61dd07a7e5d3",
+  "context_action": "Existing TRAE task title renamed; conversation history retained. HANDOFF.md records scope, findings, limits and path migration.",
+  "previous_directory": "zhuosiyouxiang-analysis",
+  "scope": "MagicalAthlete UI and layout only",
+  "kept": [
+    "16 Prefabs",
+    "36 roles",
+    "197 sprites",
+    "6 required shared sprites",
+    "original APK",
+    "69 original module files",
+    "source metadata",
+    "standalone report scripts",
+    "handoff documentation"
+  ],
+  "removed_categories": [
+    "whole-app report",
+    "other board-game resources and galleries",
+    "duplicate decoded APK tree",
+    "temporary partial extraction",
+    "downloaded tools and framework cache",
+    "whole-app analysis scripts"
+  ],
+  "previous_bytes": 1049480695,
+  "created_at_utc": "2026-10-25T04:21:29Z",
+  "latest_user_clarification": "人物卡片指人物插画；需要使用插画素材复刻自己的项目。",
+  "ready_to_use_illustrations": {
+    "count": 36,
+    "canvas": [
+      256,
+      256
+    ],
+    "format": "transparent PNG RGBA",
+    "directory": "assets/characters",
+    "manifest": "data/characters.json",
+    "package": "exports/characters.zip"
+  },
+  "host_project": "hunao-sports",
+  "canonical_directory": "hunao-sports/reference/magical-athlete-analysis",
+  "compatibility_paths": [
+    "magical-athlete-analysis",
+    "magical-athlete-analysis.zip",
+    "magical-athlete-analysis.zip.sha256"
+  ],
+  "latest_location_change": "Analysis directory and complete handoff archive moved into hunao-sports/reference; former workspace paths are symbolic links."
+}

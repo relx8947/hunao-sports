@@ -1,0 +1,12 @@
+{
+  "name": "magical-athlete-analysis",
+  "version": "1.0.0",
+  "description": "胡闹运动会 UI 与布局静态分析",
+  "private": true,
+  "scripts": {
+    "verify:browser": "node scripts/verify_report.cjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "25.12.0"
+  }
+}

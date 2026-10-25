@@ -4,6 +4,35 @@
 
 当前是可玩的联机试玩版，按 3-6 名选手（含 AI）开赛。两位真人玩家可以加 1 名 AI；实体版的双人双运动员变体尚未实现。狂野赛道布局和递增计分采用本试玩版设置，具体差异见文末。
 
+## UI 拆解与人物插画素材
+
+桌思游想 Android 4.26.2 中的胡闹运动会静态分析已统一放在 **[`reference/magical-athlete-analysis/`](reference/magical-athlete-analysis/README.md)**，用于本项目的界面设计参考与人物插画复用。
+
+| 入口 | 内容 |
+| --- | --- |
+| [可浏览报告](reference/magical-athlete-analysis/index.html) | 对局原图、布局标注、角色/控件检索、16 个 Prefab 参数 |
+| [完整分析](reference/magical-athlete-analysis/REPORT.md) | 色彩、赛道、玩家栏、按钮和决策弹窗设计 |
+| [36 张人物插画素材包](reference/magical-athlete-analysis/exports/characters.zip) | 256×256 透明 PNG，文件名直接使用角色名，可独立解压使用 |
+| [人物插画索引](reference/magical-athlete-analysis/data/characters.json) | 图片路径、角色名、尺寸、锚点、偏移和来源 UUID |
+| [交接说明与上下文](reference/magical-athlete-analysis/HANDOFF.md) | 已完成工作、证据边界、当前需求和路径迁移 |
+| [完整交接包](reference/magical-athlete-analysis.zip) | 包含报告、素材、原始目标资源及 APK 的可携带 ZIP |
+
+直接使用图片时，取 `reference/magical-athlete-analysis/assets/characters/` 中的 PNG。它们保留原插画像素，恢复了原始画布和偏移。`data/characters.json` 的 `asset_id` 是导出索引；游戏角色以 `game/racers.js` 的 `id` 为准，两套中文名称可能不同，需要按本项目的角色对应关系使用。
+
+分析浏览页可以直接用本地浏览器打开。重新生成与校验：
+
+```sh
+cd reference/magical-athlete-analysis
+python3 -m pip install -r requirements.txt
+python3 scripts/export_characters.py
+python3 scripts/build_report.py
+python3 scripts/verify_assets.py
+```
+
+Python/中文字体、可选浏览验证和目录细节见 [分析项目 README](reference/magical-athlete-analysis/README.md)。原始对局说明图来自 APK；弹窗静态复原已单独标明，保存坐标与模板文字不能直接视为运行时结果。
+
+参考资料的 PNG、JSON、源码和文档可纳入 Git。原始 APK 和完整交接 ZIP 体积较大，由 `.gitignore` 排除，保留在本地；跨机器完整交接使用 ZIP。只获取 Git 中的资料仍可浏览和使用人物插画，APK 原始文件校验需另行取得对应安装包。旧的工作区路径通过软链接兼容历史引用，实体资料只保存在此项目的 `reference/` 下。
+
 ## 访问
 
 - 开发机：**http://dev-host:18160/**
@@ -138,6 +167,7 @@ HTTP 页面无法自动复制时，「复制邀请链接」会显示可全选的
 ```
 deploy/              nginx 站点配置与 systemd 用户服务
 scripts/             start.sh / stop.sh / reload.sh（调用 local-nginx-sites 与 systemctl --user）
+reference/           胡闹运动会 UI 静态分析、36 张人物插画及完整交接包
 server.js            HTTP 静态资源 + WebSocket 入口，/racers-data.js 下发运动员与赛道数据
 server/hub.js        房间、座位、AI/超时/离线托管的节奏驱动、速度设置、表情
 game/engine.js       规则引擎（生成器驱动：需要决策时 yield，外部 answer 后继续；每个动作产出事件时间轴）

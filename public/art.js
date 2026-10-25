@@ -704,7 +704,11 @@
       P('M42 22 Q42 12 50 12 Q58 12 58 20 Q58 26 50 28 L50 32', 'none', 3.4) + dot(50, 38, 2.4) + smile(50, 64, 6, 2);
   }
 
+  // 一代 36 名有 APK 原画 PNG（public/img/racers/<id>.png，256×256 透明底）；页面加 ?art=svg 可切回自绘 SVG
+  const PHOTO = new Set('alchemist blimp coach babayaga centaur copycat banana cheerleader dicemonger duelist genius heckler egg gunk hugebaby flipflop hare hypnotist inchworm legs mastermind lackey loser mouth leaptoad magician partyanimal rocket sisyphus suckerfish romantic skipper thirdwheel scoocher stickler twin'.split(' '));
+  const usePhoto = !(typeof location !== 'undefined' && /[?&]art=svg\b/.test(location.search));
   function racer(id) {
+    if (usePhoto && PHOTO.has(id)) return wrap(`<image href="img/racers/${id}.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet"/>`, 'racer-svg racer-photo');
     const f = DRAW[id];
     uid++; sn = 0;
     return wrap(f ? f() : unknown());

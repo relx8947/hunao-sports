@@ -1,0 +1,11 @@
+{
+  "scope": "胡闹运动会 / MagicalAthlete",
+  "prefabs": 16,
+  "sprites": 197,
+  "shared_sprites": 6,
+  "ready_to_use_character_illustrations": 36,
+  "source_files_match_apk": 69,
+  "apk_sha256_matches_download": true,
+  "errors": [],
+  "passed": true
+}

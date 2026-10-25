@@ -5,3 +5,8 @@ node_modules/
 *.log
 coverage/
 .DS_Store
+
+# Large local reference artifacts; use the portable ZIP for full handoff.
+/reference/magical-athlete-analysis/apk/*.apk
+/reference/magical-athlete-analysis.zip
+/reference/magical-athlete-analysis.zip.sha256
