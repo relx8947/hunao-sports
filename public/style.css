@@ -2538,3 +2538,11 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 
 /* 紧凑密度下「点我选人」会盖住角色名，改为只靠呼吸光边提示 */
 #game #draftCards[data-d="c"] .rcard.tap-hint::after, #game #draftCards[data-d="d"] .rcard.tap-hint::after { display: none; }
+
+/* 实物版图中央：黑底，白色大标题（英文主、中文辅） */
+.center-track b.ct-en { font-size: calc(48 * var(--u)); letter-spacing: .02em; color: #fff; -webkit-text-stroke: 0; text-shadow: calc(2 * var(--u)) calc(3 * var(--u)) 0 var(--c, var(--green)); }
+.center-track small.ct-cn { font-size: calc(15 * var(--u)); font-weight: 900; color: rgba(255, 255, 255, .85); letter-spacing: .3em; margin-top: calc(-4 * var(--u)); }
+.center-track small { color: rgba(255, 255, 255, .75); }
+.board.tall .center-track b.ct-en { font-size: calc(36 * var(--u)); }
+/* 对局中：黑底上的英文标题只作淡淡的水印 */
+.center.hud-race .center-track b.ct-en { font-size: calc(30 * var(--u)); color: #fff; opacity: .22; -webkit-text-stroke: 0; text-shadow: none; }

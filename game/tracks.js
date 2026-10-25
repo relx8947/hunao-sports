@@ -27,6 +27,7 @@ const TRACKS = {
   mild: {
     key: 'mild',
     name: '温和一英里',
+    en: 'Mild Mile',
     edition: 1,
     firstCorner: FIRST_CORNER,
     secondCorner: SECOND_CORNER,
@@ -36,6 +37,7 @@ const TRACKS = {
   wild: {
     key: 'wild',
     name: '狂野荒原',
+    en: 'Wild Wilds',
     edition: 1,
     firstCorner: FIRST_CORNER,
     secondCorner: SECOND_CORNER,

@@ -975,12 +975,13 @@
   /* ================= 棋盘几何 ================= */
   // 横屏：上排起点 + 1..12，右侧 13、14，下排 15..29 从右往左，终点在左下；内场加高放骰子和行动卡
   function wideRect(p) {
-    if (p <= 0) return { x: 64, y: 22, w: 172, h: 88 };
-    if (p <= 12) return { x: 240 + (p - 1) * 60, y: 22, w: 56, h: 88 };
-    if (p === 13) return { x: 900, y: 116, w: 56, h: 116 };
-    if (p === 14) return { x: 900, y: 238, w: 56, h: 116 };
-    if (p <= 29) return { x: 900 - (p - 15) * 60, y: 360, w: 56, h: 88 };
-    return { x: 6, y: 360, w: 50, h: 88 };
+    // 实物版图：下排 15 格铺满底边，上排「起点箱」占 3 格宽 + 12 格，右侧 13、14 夹在两个弯道格之间
+    if (p <= 0) return { x: 12, y: 20, w: 184, h: 90 };
+    if (p <= 12) return { x: 199.5 + (p - 1) * 62.5, y: 20, w: 59, h: 90 };
+    if (p === 13) return { x: 887, y: 114, w: 59, h: 119 };
+    if (p === 14) return { x: 887, y: 237, w: 59, h: 119 };
+    if (p <= 29) return { x: 887 - (p - 15) * 62.5, y: 360, w: 59, h: 90 };
+    return { x: 18, y: 322, w: 128, h: 26 };
   }
   // 竖屏：蛇形赛道，每行 6 格来回折返（偶数行向右、奇数行向左），终点是最下面一条棋盘格带；
   // 赛道只占上半，下半整块留给行动卡、骰子和领奖台
@@ -992,9 +993,9 @@
   const GEO = {
     wide: {
       vb: [964, 470], rect: wideRect, bed: { x: 0, y: 8, w: 964, h: 454, rx: 50 },
-      inf: { x: 62, y: 116, w: 832, h: 238 }, pod: { x: 70, y: 150, w: 150, h: 150 },
-      center: { x: 236, y: 124, w: 652, h: 222 },
-      arrows: [[330, 15, 0], [570, 15, 0], [810, 15, 0], [810, 455, 180], [570, 455, 180], [330, 455, 180]],
+      inf: { x: 164, y: 116, w: 717, h: 238 }, pod: { x: 12, y: 116, w: 140, h: 238 },
+      center: { x: 170, y: 122, w: 705, h: 226 },
+      arrows: [[270, 128, 0], [520, 128, 0], [770, 128, 0], [770, 342, 180], [520, 342, 180], [270, 342, 180]],
     },
     tall: {
       vb: [460, 652], rect: tallRect, bed: { x: 0, y: 0, w: 460, h: 652, rx: 34 },
@@ -1022,7 +1023,6 @@
     }
   }
 
-  const TRACK_COLS = ['#F27AB8', '#FFC53D', '#33B679', '#4D9DF7'];
   function starPts(cx, cy, r1, r2) {
     const pts = [];
     for (let i = 0; i < 10; i++) {
@@ -1036,67 +1036,63 @@
   function spaceGlyph(type, n, cx, cy, k = 1) {
     if (type === 'star') return `<polygon points="${starPts(cx, cy, 20 * k, 8.5 * k)}" fill="#FFE27A" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/><text x="${cx}" y="${cy + 4.5 * k}" font-size="${12 * k}" font-weight="900" text-anchor="middle" fill="${INK}">1</text>`;
     if (type === 'rock') return `<g transform="translate(${cx} ${cy}) scale(${k})"><path d="M-19 11 Q-21 -6 -8 -12 Q4 -19 13 -8 Q23 0 17 11 Z" fill="#A9A2B6" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/><path d="M-7 -2 q6 -4 12 0" stroke="${INK}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M-12 5 l4 -1 M6 6 l5 0" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/></g>`;
-    if (type === 'arrow') {
-      const fwd = n > 0;
-      return `<g transform="translate(${cx} ${cy}) scale(${k})"><circle r="20" fill="${fwd ? '#33B679' : '#F2553C'}" stroke="${INK}" stroke-width="2.5"/><text y="7" font-size="19" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3" paint-order="stroke">${fwd ? '+' : '−'}${Math.abs(n)}</text></g>`;
-    }
+    if (type === 'arrow') return `<g transform="translate(${cx} ${cy}) scale(${k})">${window.BoardArt.arrowShape(n, 0)}</g>`;
     return '';
   }
 
   // 赛道 SVG：对局棋盘和地图图鉴共用同一套画法（wide = 电脑/横屏，tall = 手机竖屏）
+  // 按实物版图复原：黑底白边的体育场赛道、五色循环格、里程红格、紫框特殊格、领奖台拱门、中央场景
+  const CORNER_R = 40;
+  const WIDE_CORNERS = { 0: [CORNER_R, 7, 7, 7], 12: [7, CORNER_R, 7, 7], 15: [7, 7, CORNER_R, 7], 29: [7, 7, 7, CORNER_R] };
   function trackSvgMarkup(trackKey, lay, thumb) {
-    const wild = trackKey === 'wild';
+    const BA = window.BoardArt;
+    const wide = lay === 'wide';
     // 手机竖屏的缩略图只取蛇形赛道本身（不带下半部的内场和领奖台）
     const crop = thumb && lay === 'tall';
     const G = crop ? { ...GEO[lay], bed: { ...GEO[lay].bed, h: GEO[lay].thumb[1] } } : GEO[lay];
     const { bed, inf } = G;
-    let s = `<defs><pattern id="chk" width="12.5" height="12.5" patternUnits="userSpaceOnUse"><rect width="12.5" height="12.5" fill="#fff"/><rect width="6.25" height="6.25" fill="${INK}"/><rect x="6.25" y="6.25" width="6.25" height="6.25" fill="${INK}"/></pattern></defs>`;
-    s += `<rect x="${bed.x}" y="${bed.y}" width="${bed.w}" height="${bed.h}" rx="${bed.rx}" fill="${INK}"/>`;
-    if (!crop) s += `<rect x="${inf.x}" y="${inf.y}" width="${inf.w}" height="${inf.h}" rx="24" fill="${wild ? '#F7DDAE' : '#CFEFC4'}" stroke="#fff" stroke-width="3"/>`;
-    // 行进方向箭头（跑道外圈的小白箭头）
-    for (const [x, y, rot] of G.arrows) s += `<path d="M-5 -5 L3 0 L-5 5" transform="translate(${x} ${y}) rotate(${rot})" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>`;
-    // 内场点缀
-    let seed = wild ? 7 : 3;
-    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
-    for (let i = 0; i < (crop ? 0 : 30); i++) {
-      const x = inf.x + 18 + rnd() * (inf.w - 36), y = inf.y + 14 + rnd() * (inf.h - 28);
-      if (wild) s += `<path d="M${x} ${y} l4 -9 l4 9 z" fill="#E4B774" opacity=".7"/>`;
-      else {
-        const c = ['#F27AB8', '#FFC53D', '#fff', '#8B6CF0'][i % 4];
-        s += `<g opacity=".7"><circle cx="${x}" cy="${y}" r="4.5" fill="${c}"/><circle cx="${x}" cy="${y}" r="1.8" fill="#FFC53D"/></g>`;
-      }
-    }
+    let s = `<defs><pattern id="chk" width="12.5" height="12.5" patternUnits="userSpaceOnUse"><rect width="12.5" height="12.5" fill="#fff"/><rect width="6.25" height="6.25" fill="${INK}"/><rect x="6.25" y="6.25" width="6.25" height="6.25" fill="${INK}"/></pattern>`;
+    if (wide) for (const [p, r] of Object.entries(WIDE_CORNERS)) { const c = G.rect(Number(p)); s += `<clipPath id="cc${p}"><path d="${BA.rrect(c.x, c.y, c.w, c.h, r)}"/></clipPath>`; }
+    s += '</defs>';
+    // 注意：底板和内场必须是前两个 <rect>（二代赛道层按 nth-of-type 改内场颜色）
+    s += `<rect x="${bed.x}" y="${bed.y}" width="${bed.w}" height="${bed.h}" rx="${bed.rx}" fill="#0D0B14"/>`;
+    if (!crop) s += `<rect x="${inf.x}" y="${inf.y}" width="${inf.w}" height="${inf.h}" rx="22" fill="#0D0B14" stroke="#fff" stroke-width="3"/>`;
+    // 外圈白线
+    if (wide) s += `<path d="${BA.rrect(5, 13, 954, 444, [46, 46, 46, 46])}" fill="none" stroke="#fff" stroke-width="3"/>`;
+    // 行进方向箭头（内场边缘的小白箭头）
+    for (const [x, y, rot] of G.arrows) s += `<path d="M-5 -5 L3 0 L-5 5" transform="translate(${x} ${y}) rotate(${rot})" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".4"/>`;
+    if (wide && !crop) s += BA.scene(trackKey, inf);
+    if (wide && !crop) s += BA.arch(G.pod);
     for (let p = 0; p < FIN; p++) {
       const r = G.rect(p);
-      let fill = TRACK_COLS[(p - 1 + 4) % 4];
-      if (p > 0 && p % 5 === 0) fill = '#F2553C';
-      if (p === 0) fill = '#4D9DF7';
-      s += `<g class="cell" data-p="${p}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="9" fill="${fill}" stroke="${INK}" stroke-width="2.5"/>`;
-      s += `<rect x="${r.x + 4}" y="${r.y + 4}" width="${r.w - 8}" height="${Math.min(18, r.h * 0.28)}" rx="6" fill="#fff" opacity=".22"/>`;
-      if (p === 0) {
-        s += `<text x="${r.x + r.w / 2}" y="${r.y + r.h / 2 + (lay === 'wide' ? 12 : 7)}" font-size="${lay === 'wide' ? 34 : 19}" font-weight="900" text-anchor="middle" fill="#F2553C" stroke="${INK}" stroke-width="5" paint-order="stroke" font-style="italic" letter-spacing="2">起点</text>`;
-      } else if (p % 5 === 0) {
-        s += `<text x="${r.x + r.w / 2}" y="${r.y + r.h / 2 + 9}" font-size="25" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="4" paint-order="stroke">${p}</text>`;
-      } else {
-        // 每格角标编号，方便数位置
-        s += `<text x="${r.x + 6}" y="${r.y + r.h - 7}" font-size="12" font-weight="800" fill="${INK}" opacity=".5">${p}</text>`;
-      }
       const sp = TRACKS[trackKey].spaces[p];
-      if (sp) s += spaceGlyph(sp.type, sp.n, r.x + r.w / 2, r.y + r.h / 2 - 2);
+      const fill = p === 0 ? BA.CELL[3] : BA.cellColor(p);
+      const clip = wide && WIDE_CORNERS[p] ? ` clip-path="url(#cc${p})"` : '';
+      const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      s += `<g class="cell" data-p="${p}"><rect x="${f1(r.x)}" y="${f1(r.y)}" width="${r.w}" height="${r.h}" rx="${wide ? 7 : 8}" fill="${fill}"${clip}/>`;
+      if (p === 0) {
+        s += `<text x="${f1(cx)}" y="${f1(r.y + (wide ? 31 : r.h / 2 + 5))}" font-size="${wide ? 27 : 15}" font-weight="900" text-anchor="middle" fill="#F4432A" stroke="${INK}" stroke-width="${wide ? 5 : 3.5}" paint-order="stroke" font-style="italic" letter-spacing="1">START</text>`;
+      } else if (sp && (sp.type === 'star' || sp.type === 'rock' || sp.type === 'arrow')) {
+        // 箭头沿赛道行进方向画：前进箭头指向下一格，后退箭头反向
+        const nx = G.rect(p + 1), ang = Math.atan2(nx.y + nx.h / 2 - cy, nx.x + nx.w / 2 - cx) * 180 / Math.PI;
+        s += BA.tile(sp.type, sp.n, ang, cx, cy, Math.min(r.w, r.h) - 10);
+      } else if (p % 5 === 0 && !(sp && sp.type === 'whirl')) {
+        s += `<text x="${f1(cx)}" y="${f1(cy + (wide ? 11 : 8))}" font-size="${wide ? 32 : 23}" font-weight="900" text-anchor="middle" fill="${BA.MILE_INK[p]}">${p}</text>`;
+      } else {
+        // 每格底部淡淡的编号，方便数位置
+        s += `<text x="${f1(cx)}" y="${f1(r.y + r.h - 7)}" font-size="${wide ? 11 : 12}" font-weight="800" text-anchor="middle" fill="${INK}" opacity=".38">${p}</text>`;
+      }
       s += '</g>';
     }
-    // 终点：棋盘格 + 竖排「终点」
-    // 横屏时终点画成整列高的柱子（左列不再空着），棋子落点仍是下面那一格
+    // 终点：横屏是领奖台拱门底边的方格旗；竖屏是最下面一条棋盘格带
     const f0 = G.rect(FIN);
-    const f = lay === 'wide' ? { x: f0.x, y: G.rect(0).y, w: f0.w, h: f0.y + f0.h - G.rect(0).y } : f0;
-    s += `<g class="cell" data-p="${FIN}"><rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="8" fill="url(#chk)" stroke="${INK}" stroke-width="2.5"/>`;
-    if (lay === 'tall') s += `<rect x="${f.x + f.w / 2 - 44}" y="${f.y + f.h / 2 - 14}" width="88" height="28" rx="8" fill="${INK}"/><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 + 7}" font-size="19" font-weight="900" text-anchor="middle" fill="#fff" letter-spacing="3">终点</text>`;
-    if (lay === 'wide') s += `<rect x="${f.x + 9}" y="${f.y + f.h / 2 - 28}" width="${f.w - 18}" height="56" rx="7" fill="${INK}"/><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 - 3}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">终</text><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 + 15}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">点</text>`;
-    s += '</g>';
+    s += `<g class="cell" data-p="${FIN}"><rect x="${f0.x}" y="${f0.y}" width="${f0.w}" height="${f0.h}" rx="${wide ? 4 : 8}" fill="url(#chk)"${wide ? '' : ` stroke="${INK}" stroke-width="2.5"`}/>`;
+    const pw = wide ? 64 : 88, ph = wide ? 16 : 28;
+    s += `<rect x="${f1(f0.x + f0.w / 2 - pw / 2)}" y="${f1(f0.y + f0.h / 2 - ph / 2)}" width="${pw}" height="${ph}" rx="${ph / 3}" fill="${INK}"/><text x="${f1(f0.x + f0.w / 2)}" y="${f1(f0.y + f0.h / 2 + (wide ? 4 : 7))}" font-size="${wide ? 11 : 19}" font-weight="900" text-anchor="middle" fill="#fff" letter-spacing="${wide ? 2 : 3}">终点</text></g>`;
     // 领奖台：冲线的运动员会站上来
     const pd = G.pod;
     const pcx = pd.x + pd.w / 2, pcy = pd.y + pd.h / 2 + 10;
-    if (!crop) s += `<g transform="translate(${pcx} ${pcy})"><ellipse cx="0" cy="40" rx="66" ry="7" fill="${INK}" opacity=".12"/><rect x="-58" y="6" width="38" height="30" rx="4" fill="#A7B0BE" stroke="${INK}" stroke-width="2.5"/><rect x="-19" y="-10" width="38" height="46" rx="4" fill="#E9A91B" stroke="${INK}" stroke-width="2.5"/><rect x="20" y="16" width="38" height="20" rx="4" fill="#fff" stroke="${INK}" stroke-width="2.5"/><text x="0" y="18" font-size="20" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">1</text><text x="-39" y="29" font-size="17" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">2</text><text x="0" y="62" font-size="13" font-weight="900" text-anchor="middle" fill="${INK}" opacity=".55">领奖台</text></g>`;
+    if (!crop) s += `<g transform="translate(${pcx} ${pcy})"><ellipse cx="0" cy="40" rx="66" ry="7" fill="${wide ? '#fff' : INK}" opacity=".12"/><rect x="-58" y="6" width="38" height="30" rx="4" fill="#B8C2D0" stroke="${INK}" stroke-width="2.5"/><rect x="-19" y="-10" width="38" height="46" rx="4" fill="#F5B41A" stroke="${INK}" stroke-width="2.5"/><rect x="20" y="16" width="38" height="20" rx="4" fill="#D98E4A" stroke="${INK}" stroke-width="2.5"/><text x="0" y="18" font-size="20" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">1</text><text x="-39" y="29" font-size="17" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">2</text><text x="39" y="31" font-size="13" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3" paint-order="stroke">3</text><text x="0" y="62" font-size="13" font-weight="900" text-anchor="middle" fill="#fff" opacity=".55">领奖台</text></g>`;
     s += trackV2Layer(trackKey, lay, G.bed); // 二代赛道：糖果格、扭扭招牌、漩涡与管道
     return s;
   }
@@ -1123,7 +1119,8 @@
     const legend = wild
       ? `<div class="legend">${[['arrow', 2, '箭头：前进/后退'], ['rock', 0, '石头：摔倒'], ['star', 0, '星星：+1 分']].map(([ty, n, tx]) => `<span><svg viewBox="-24 -24 48 48">${spaceGlyph(ty, n, 0, 0, 1)}</svg>${tx}</span>`).join('')}</div>`
       : '<small>一条平平无奇的跑道 · 全靠技能搞事</small>';
-    $('#centerTrack').innerHTML = `<b>${t.name}</b>${legend}`;
+    // 实物版图中央是大块白色标题：英文名做主标题，中文名放在下面
+    $('#centerTrack').innerHTML = `<b class="ct-en">${t.en.toUpperCase()}</b><small class="ct-cn">${t.name}</small>${legend}`;
     $('#centerTrack').style.setProperty('--c', wild ? '#F2553C' : '#33B679');
     v2BoardBuilt(trackKey);
   }
