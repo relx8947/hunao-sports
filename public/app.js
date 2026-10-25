@@ -575,7 +575,8 @@
     return { scene: 'race', heat: Math.max(0, ...(vs.racers || []).map((r) => (r.finished ? FIN : r.pos || 0))) / FIN };
   }
   function showScreen(id) {
-    if (typeof closePlayerPop === 'function') closePlayerPop();
+    // 只在真正换界面时收起头像弹层；对局里每条消息都会再调一次 showScreen('game')，不能因此把它关掉
+    if (document.body.dataset.screen !== id && typeof closePlayerPop === 'function') closePlayerPop();
     for (const s of ['home', 'lobby', 'game']) $(`#${s}`).hidden = s !== id;
     document.body.dataset.screen = id;
     if (id === 'home') requestAnimationFrame(fitRooms);

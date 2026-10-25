@@ -1629,7 +1629,7 @@ class Game {
             const last = dice[dice.length - 1];
             const sum = dice.reduce((a, b) => a + b, 0);
             if (last >= 6) break;
-            const v = yield this.ask(r.seat, 'showoff', `显摆王：现在 ${dice.join('+')}=${sum}，再掷必须大于 ${last}`, [{ v: 'stop', label: `就走 ${sum} 格` }, { v: 'more', label: `再掷！（要大于 ${last}）` }], { roll: last, sum, rid: r.rid });
+            const v = yield this.ask(r.seat, 'showoff', `显摆王：${dice.length > 1 ? `现在 ${dice.join('+')}=${sum}` : `你掷出了 ${sum}`}，再掷一次必须大于 ${last}`, [{ v: 'stop', label: `就走 ${sum} 格` }, { v: 'more', label: `再掷！（要大于 ${last}）` }], { roll: last, sum, rid: r.rid });
             if (v !== 'more' || !this.active(r)) break;
             const nv = yield* this.rollFor(r);
             dice.push(nv);

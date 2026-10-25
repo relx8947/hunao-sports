@@ -623,6 +623,9 @@
   }
 
   if (typeof document !== 'undefined') {
+    // 调度循环在 AudioContext 瞬间不是 running（设备切换、iOS interrupted、标签页短暂隐藏）时会自己停下；
+    // 这里每秒兜底叫醒一次（已在跑时 wake 什么都不做），不用再靠开关音乐来重启
+    setInterval(() => { if (enabled && E && !timer) wake(); }, 1000);
     document.addEventListener('visibilitychange', () => {
       if (!E) return;
       if (document.hidden) { setVol(0, 0.12); clearTimeout(timer); timer = 0; }
