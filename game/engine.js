@@ -292,6 +292,7 @@ class Game {
       const first = (start + round) % this.n;
       const fwd = Array.from({ length: this.n }, (_, k) => (first + k) % this.n);
       const order = fwd.concat(fwd.slice().reverse());
+      this.draftDeal = { cards: this.faceUp.slice(), taken: {} };
       this.emit({ t: 'faceUp', cards: this.faceUp.slice(), round, order });
       this.draftOrder = order;
       this.draftRound = round;
@@ -301,11 +302,13 @@ class Game {
         this.curSeat = seat;
         const v = yield this.ask(seat, 'draft', '选一名运动员加入你的队伍', this.faceUp.map((id) => ({ v: id, label: BY_ID[id].name })), { pickNo: round * this.n * 2 + k + 1 });
         this.faceUp = this.faceUp.filter((id) => id !== v);
+        this.draftDeal.taken[v] = seat;
         this.players[seat].hand.push(v);
         this.emit({ t: 'drafted', seat, rid: v, text: `${this.players[seat].name} 选了 ${BY_ID[v].name}` });
       }
     }
     this.faceUp = [];
+    this.draftDeal = null;
     this.firstSeat = this.rollOff('race');
     this.emit({ t: 'firstPlayer', seat: this.firstSeat, text: `${this.players[this.firstSeat].name} 掷骰最大，第一场先手` });
   }
@@ -1879,6 +1882,8 @@ class Game {
       curSeat: this.curSeat,
       firstSeat: this.firstSeat,
       faceUp: this.faceUp,
+      // 本轮选秀的原始名单与谁选走了哪张：重连后客户端据此还原固定位置的名单
+      draftDeal: this.phase === 'draft' ? this.draftDeal || null : null,
       draft: this.phase === 'draft' && this.draftOrder ? { order: this.draftOrder, idx: this.draftIdx, round: this.draftRound } : null,
       deckCount: this.deck.length,
       winners: this.winners,

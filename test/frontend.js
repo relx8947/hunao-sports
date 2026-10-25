@@ -571,7 +571,8 @@ const { clickTop } = require('./browser-helper');
     await page.setViewportSize({ width: 390, height: 844 });
     assert.doesNotMatch(await page.locator('#draftSub').textContent(), /轮到你|点击选人/);
     await page.locator('#draftCards .rcard').first().click();
-    assert.equal(await page.locator('#tip').isVisible(), true, '观众可以读卡但不能选人');
+    assert.equal(await page.locator('#draftDetail').isVisible(), true, '观众点图标可以在技能区读卡');
+    assert.equal(await page.locator('#draftDetail .dd-btn.go').count(), 0, '观众不能选人');
     await page.evaluate(() => { document.querySelector('#autoBtn').click(); document.querySelector('#emotes button').click(); });
     for (const [width, height] of [[320, 740], [390, 844], [844, 390], [568, 320]]) {
       await page.setViewportSize({ width, height }); await noOverflow(`观战选秀 ${width}x${height}`);

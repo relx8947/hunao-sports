@@ -209,6 +209,10 @@ async function step(page) {
   try {
     const before = await page.evaluate(() => window.__testSent.filter(message => message.type === 'act').length);
     await element.click({ timeout: 1500 });
+    // 手机选秀：点图标只是查看，还要点技能栏里的「选 TA」
+    if (selector === '#draftCards .rcard.pickable' && await page.evaluate(() => !!document.querySelector('#draft.ig'))) {
+      await page.locator('#draftDetail .dd-btn.go').first().click({ timeout: 1500 });
+    }
     const after = await page.evaluate(() => window.__testSent.filter(message => message.type === 'act').length);
     return after > before;
   } catch (error) {

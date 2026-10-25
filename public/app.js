@@ -983,12 +983,13 @@
     if (p <= 29) return { x: 887 - (p - 15) * 62.5, y: 360, w: 59, h: 90 };
     return { x: 18, y: 322, w: 128, h: 26 };
   }
-  // 竖屏：蛇形赛道，每行 6 格来回折返（偶数行向右、奇数行向左），终点是最下面一条棋盘格带；
+  // 竖屏（照 APK）：7 列 × 7 行的大方格，竖着蛇形走——起点在左上，第 0 列往下（1-6），下沿横走 7-8，
+  // 第 2 列往上（9-14），顶沿 15-16，第 4 列往下（17-22），下沿 23-24，第 6 列往上（25-29），右上角是终点旗；
   // 赛道只占上半，下半整块留给行动卡、骰子和领奖台
+  const TALL_COL = (p) => p <= 0 ? [0, 0] : p <= 6 ? [0, p] : p <= 8 ? [p - 6, 6] : p <= 14 ? [2, 14 - p] : p <= 16 ? [p - 12, 0] : p <= 22 ? [4, p - 16] : p <= 24 ? [p - 18, 6] : p <= 29 ? [6, 30 - p] : [6, 0];
   function tallRect(p) {
-    if (p >= FIN) return { x: 4, y: 318, w: 452, h: 44 };
-    const q = Math.max(0, p), r = Math.floor(q / 6), i = q % 6, c = r % 2 ? 5 - i : i;
-    return { x: 4 + c * 76, y: 8 + r * 62, w: 72, h: 58 };
+    const [c, r] = TALL_COL(p);
+    return { x: 8 + c * 64, y: 6 + r * 56, w: 60, h: 52 };
   }
   const GEO = {
     wide: {
@@ -998,10 +999,10 @@
       arrows: [[270, 128, 0], [520, 128, 0], [770, 128, 0], [770, 342, 180], [520, 342, 180], [270, 342, 180]],
     },
     tall: {
-      vb: [460, 652], rect: tallRect, bed: { x: 0, y: 0, w: 460, h: 652, rx: 34 },
-      inf: { x: 8, y: 368, w: 444, h: 276 }, pod: { x: 316, y: 366, w: 130, h: 84 },
-      center: { x: 14, y: 374, w: 432, h: 264 },
-      arrows: [], thumb: [460, 368],
+      vb: [460, 622], rect: tallRect, bed: { x: 0, y: 0, w: 460, h: 622, rx: 28, fill: '#FFF8E8' },
+      inf: { x: 8, y: 404, w: 444, h: 210 }, pod: { x: 316, y: 402, w: 130, h: 84 },
+      center: { x: 14, y: 409, w: 432, h: 199 },
+      arrows: [], thumb: [460, 400],
     },
   };
   const geo = () => GEO[layout];
@@ -1055,7 +1056,7 @@
     if (wide) for (const [p, r] of Object.entries(WIDE_CORNERS)) { const c = G.rect(Number(p)); s += `<clipPath id="cc${p}"><path d="${BA.rrect(c.x, c.y, c.w, c.h, r)}"/></clipPath>`; }
     s += '</defs>';
     // 注意：底板和内场必须是前两个 <rect>（二代赛道层按 nth-of-type 改内场颜色）
-    s += `<rect x="${bed.x}" y="${bed.y}" width="${bed.w}" height="${bed.h}" rx="${bed.rx}" fill="#0D0B14"/>`;
+    s += `<rect x="${bed.x}" y="${bed.y}" width="${bed.w}" height="${bed.h}" rx="${bed.rx}" fill="${bed.fill || '#0D0B14'}"${wide ? '' : ` stroke="${INK}" stroke-width="3"`}/>`;
     if (!crop) s += `<rect x="${inf.x}" y="${inf.y}" width="${inf.w}" height="${inf.h}" rx="22" fill="#0D0B14" stroke="#fff" stroke-width="3"/>`;
     // 外圈白线
     if (wide) s += `<path d="${BA.rrect(5, 13, 954, 444, [46, 46, 46, 46])}" fill="none" stroke="#fff" stroke-width="3"/>`;
@@ -1066,29 +1067,44 @@
     for (let p = 0; p < FIN; p++) {
       const r = G.rect(p);
       const sp = TRACKS[trackKey].spaces[p];
-      const fill = p === 0 ? BA.CELL[3] : BA.cellColor(p);
+      const fill = p === 0 ? (wide ? BA.CELL[3] : '#55505F') : BA.cellColor(p);
       const clip = wide && WIDE_CORNERS[p] ? ` clip-path="url(#cc${p})"` : '';
       const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-      s += `<g class="cell" data-p="${p}"><rect x="${f1(r.x)}" y="${f1(r.y)}" width="${r.w}" height="${r.h}" rx="${wide ? 7 : 8}" fill="${fill}"${clip}/>`;
+      s += `<g class="cell" data-p="${p}"><rect x="${f1(r.x)}" y="${f1(r.y)}" width="${r.w}" height="${r.h}" rx="${wide ? 7 : 7}" fill="${fill}"${wide ? '' : ` stroke="${INK}" stroke-width="2.6"`}${clip}/>`;
       if (p === 0) {
-        s += `<text x="${f1(cx)}" y="${f1(r.y + (wide ? 31 : r.h / 2 + 5))}" font-size="${wide ? 27 : 15}" font-weight="900" text-anchor="middle" fill="#F4432A" stroke="${INK}" stroke-width="${wide ? 5 : 3.5}" paint-order="stroke" font-style="italic" letter-spacing="1">START</text>`;
+        s += wide
+          ? `<text x="${f1(cx)}" y="${f1(r.y + 31)}" font-size="27" font-weight="900" text-anchor="middle" fill="#F4432A" stroke="${INK}" stroke-width="5" paint-order="stroke" font-style="italic" letter-spacing="1">START</text>`
+          : `<text x="${f1(cx)}" y="${f1(cy + 6)}" font-size="17" font-weight="900" text-anchor="middle" fill="#fff" opacity=".85" letter-spacing="2">起点</text>`;
       } else if (sp && (sp.type === 'star' || sp.type === 'rock' || sp.type === 'arrow')) {
         // 箭头沿赛道行进方向画：前进箭头指向下一格，后退箭头反向
         const nx = G.rect(p + 1), ang = Math.atan2(nx.y + nx.h / 2 - cy, nx.x + nx.w / 2 - cx) * 180 / Math.PI;
         s += BA.tile(sp.type, sp.n, ang, cx, cy, Math.min(r.w, r.h) - 10);
       } else if (p % 5 === 0 && !(sp && sp.type === 'whirl')) {
-        s += `<text x="${f1(cx)}" y="${f1(cy + (wide ? 11 : 8))}" font-size="${wide ? 32 : 23}" font-weight="900" text-anchor="middle" fill="${BA.MILE_INK[p]}">${p}</text>`;
+        // 竖屏照 APK：里程数字缩在格子右上角；横屏是居中大字
+        s += wide
+          ? `<text x="${f1(cx)}" y="${f1(cy + 11)}" font-size="32" font-weight="900" text-anchor="middle" fill="${BA.MILE_INK[p]}">${p}</text>`
+          : `<text x="${f1(r.x + r.w - 6)}" y="${f1(r.y + 19)}" font-size="18" font-weight="900" text-anchor="end" fill="${INK}" opacity=".78">${p}</text>`;
       } else {
-        // 每格底部淡淡的编号，方便数位置
-        s += `<text x="${f1(cx)}" y="${f1(r.y + r.h - 7)}" font-size="${wide ? 11 : 12}" font-weight="800" text-anchor="middle" fill="${INK}" opacity=".38">${p}</text>`;
+        // 每格角落淡淡的编号，方便数位置
+        s += wide
+          ? `<text x="${f1(cx)}" y="${f1(r.y + r.h - 7)}" font-size="11" font-weight="800" text-anchor="middle" fill="${INK}" opacity=".38">${p}</text>`
+          : `<text x="${f1(r.x + r.w - 6)}" y="${f1(r.y + r.h - 6)}" font-size="11" font-weight="800" text-anchor="end" fill="${INK}" opacity=".34">${p}</text>`;
       }
       s += '</g>';
     }
     // 终点：横屏是领奖台拱门底边的方格旗；竖屏是最下面一条棋盘格带
     const f0 = G.rect(FIN);
-    s += `<g class="cell" data-p="${FIN}"><rect x="${f0.x}" y="${f0.y}" width="${f0.w}" height="${f0.h}" rx="${wide ? 4 : 8}" fill="url(#chk)"${wide ? '' : ` stroke="${INK}" stroke-width="2.5"`}/>`;
-    const pw = wide ? 64 : 88, ph = wide ? 16 : 28;
-    s += `<rect x="${f1(f0.x + f0.w / 2 - pw / 2)}" y="${f1(f0.y + f0.h / 2 - ph / 2)}" width="${pw}" height="${ph}" rx="${ph / 3}" fill="${INK}"/><text x="${f1(f0.x + f0.w / 2)}" y="${f1(f0.y + f0.h / 2 + (wide ? 4 : 7))}" font-size="${wide ? 11 : 19}" font-weight="900" text-anchor="middle" fill="#fff" letter-spacing="${wide ? 2 : 3}">终点</text></g>`;
+    if (wide) {
+      s += `<g class="cell" data-p="${FIN}"><rect x="${f0.x}" y="${f0.y}" width="${f0.w}" height="${f0.h}" rx="4" fill="url(#chk)"/>`;
+      s += `<rect x="${f1(f0.x + f0.w / 2 - 32)}" y="${f1(f0.y + f0.h / 2 - 8)}" width="64" height="16" rx="5.3" fill="${INK}"/><text x="${f1(f0.x + f0.w / 2)}" y="${f1(f0.y + f0.h / 2 + 4)}" font-size="11" font-weight="900" text-anchor="middle" fill="#fff" letter-spacing="2">终点</text></g>`;
+    } else {
+      // 竖屏：右上角米色格子里立一面方格旗（跟 APK 一样）
+      const fx = f0.x + f0.w / 2 - 8, fy = f0.y + 8;
+      s += `<g class="cell" data-p="${FIN}"><rect x="${f0.x}" y="${f0.y}" width="${f0.w}" height="${f0.h}" rx="7" fill="#FFFDF4" stroke="${INK}" stroke-width="2.6"/>`
+        + `<path d="M${f1(fx)} ${f1(f0.y + f0.h - 9)} V${f1(fy)}" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`
+        + `<g transform="translate(${f1(fx + 1.5)} ${f1(fy)})"><rect width="26" height="18" fill="#fff" stroke="${INK}" stroke-width="2"/><path d="M0 0h6.5v6h-6.5zM13 0h6.5v6H13zM6.5 6H13v6H6.5zM19.5 6H26v6h-6.5zM0 12h6.5v6H0zM13 12h6.5v6H13z" fill="${INK}"/></g>`
+        + `<text x="${f1(f0.x + f0.w / 2)}" y="${f1(f0.y + f0.h - 2)}" font-size="9.5" font-weight="900" text-anchor="middle" fill="${INK}" opacity=".6" letter-spacing="1">终点</text></g>`;
+    }
     // 领奖台：冲线的运动员会站上来
     const pd = G.pod;
     const pcx = pd.x + pd.w / 2, pcy = pd.y + pd.h / 2 + 10;
@@ -1126,12 +1142,6 @@
   }
 
   /* ================= 棋子 ================= */
-  const SLOTS = {
-    1: [[0, 0]], 2: [[-11, -10], [11, 10]], 3: [[-13, -12], [13, -12], [0, 13]],
-    4: [[-13, -13], [13, -13], [-13, 13], [13, 13]],
-    5: [[-15, -16], [15, -16], [0, 0], [-15, 16], [15, 16]],
-    6: [[-15, -20], [15, -20], [-15, 0], [15, 0], [-15, 20], [15, 20]],
-  };
   // 宽屏赛道的格子是 56×88 的竖条：同格的人沿格子高度竖着排开（两列最多三行），谁都露得出来
   const SLOTS_WIDE = {
     1: [[0, 0]], 2: [[0, -21], [0, 21]], 3: [[0, -28], [0, 0], [0, 28]],
@@ -1145,6 +1155,13 @@
     4: [[-14, 8], [14, 8], [-14, 26], [14, 26]],
     5: [[-14, 6], [14, 6], [-14, 22], [14, 22], [0, 32]],
     6: [[-14, 6], [14, 6], [-14, 22], [14, 22], [-14, 34], [14, 34]],
+  };
+  // 竖屏的格子是 60×52 的大方格：同格的人排成两三排，棋子缩小后都露得出来
+  const SLOTS_TALL = {
+    1: [[0, 3]], 2: [[-13, 3], [13, 3]], 3: [[-15, -8], [15, -8], [0, 11]],
+    4: [[-15, -9], [15, -9], [-15, 10], [15, 10]],
+    5: [[-16, -10], [0, -10], [16, -10], [-8, 11], [8, 11]],
+    6: [[-16, -9], [0, -9], [16, -9], [-16, 10], [0, 10], [16, 10]],
   };
   const isTileCell = (p) => { const sp = vs && TRACKS[vs.track] && TRACKS[vs.track].spaces[p]; return !!sp && (sp.type === 'star' || sp.type === 'rock' || sp.type === 'arrow'); };
   function syncCellBadges(occupied) {
@@ -1243,10 +1260,9 @@
           dy = rows > 1 ? (row ? 17 : -17) : 0;
         } else {
           const sp = isTileCell(p);
-          const tbl = layout === 'wide' ? (sp ? SLOTS_WIDE_SP : SLOTS_WIDE) : SLOTS;
+          const tbl = layout === 'wide' ? (sp ? SLOTS_WIDE_SP : SLOTS_WIDE) : SLOTS_TALL;
           const sl = (tbl[Math.min(n, 6)] || tbl[6])[k % 6];
-          const f = crowd && layout === 'tall' ? 1.1 : 1;
-          [dx, dy] = layout === 'wide' ? sl : [sl[1] * f + (sp ? 15 : 0), sl[0] * f + (sp ? 2 : 0)];
+          [dx, dy] = layout === 'wide' ? sl : [sl[0] + (sp ? 14 : 0), sl[1]];
         }
         const el = tokenEl(r);
         if (instant) el.style.transition = 'none';
@@ -1697,10 +1713,60 @@
   }
 
   let dRound = null; // 本轮选秀的原始名单与「谁选走了哪张」
+  // 手机（竖屏窄屏、横屏矮屏）：选秀改成固定图标网格 + 独立技能栏——点图标只是查看，点「选 TA」才真正选人
+  let dSel = null;
+  const phoneDraft = () => innerWidth <= 600 || (innerHeight <= 520 && innerWidth > innerHeight);
+  function draftCols(n) { return n <= 16 ? 4 : n <= 25 ? 5 : 6; }
+  function renderDraftDetail() {
+    const box = $('#draftDetail'), ig = phoneDraft();
+    $('#draft').classList.toggle('ig', ig);
+    if (!ig || $('#draft').hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    const d = snap && snap.pending;
+    const tile = dSel && $(`#draftCards .rcard[data-id="${dSel}"]`);
+    if (!tile) {
+      dSel = null;
+      box.className = 'draft-detail empty';
+      box.innerHTML = '<span>点一下上面的头像，在这里查看 TA 的技能</span>';
+      return;
+    }
+    const r = R[dSel];
+    const takenSeat = tile.classList.contains('taken') ? (dRound && dRound.taken[dSel]) : null;
+    const mine = isParticipant() && d && d.kind === 'draft' && d.seat === you && !playing && !queue.length && !submitted && connection === 'ready';
+    let btn;
+    if (takenSeat != null && takenSeat === you && isParticipant()) btn = '<button class="dd-btn" disabled><b>已入队</b><small>我的队伍</small></button>';
+    else if (takenSeat != null) btn = `<button class="dd-btn" disabled><b>已被选走</b><small>${esc(vs.players[takenSeat].name.replace(/（AI）$/, ''))}</small></button>`;
+    else if (!isParticipant()) btn = '<button class="dd-btn" disabled><b>观战中</b><small>AI 自动选人</small></button>';
+    else if (mine) btn = '<button class="dd-btn go"><b>选 TA</b><small>加入我的队伍</small></button>';
+    else btn = `<button class="dd-btn" disabled><b>等待中</b><small>${d && d.kind === 'draft' && vs.players[d.seat] ? `${esc(vs.players[d.seat].name.replace(/（AI）$/, ''))} 在选` : '还没轮到你'}</small></button>`;
+    box.className = `draft-detail${takenSeat != null ? ' taken' : ''}`;
+    box.style.setProperty('--rc', rcol(dSel));
+    box.innerHTML = `<div class="dd-art">${art(dSel)}</div><div class="dd-tx"><div class="dd-name"><b>${esc(r.name)}</b><span class="sk">${esc(r.skill)}</span></div><p>${esc(r.text)}</p>${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>${btn}`;
+    const go = $('.dd-btn.go', box);
+    if (go) go.onclick = () => {
+      if (answer(d, dSel)) {
+        Sound.card();
+        tile.classList.add('chosen');
+        store.set('hn_tapHint', 1);
+        $$('#draftCards .rcard').forEach((c) => { c.classList.remove('pickable'); c.onclick = null; });
+        renderDraftDetail();
+      }
+    };
+  }
+  function selectDraftTile(id) {
+    dSel = id;
+    for (const c of $$('#draftCards .rcard')) c.classList.toggle('sel', c.dataset.id === id);
+    Sound.click();
+    renderDraftDetail();
+  }
   function renderDraft(deal) {
     const d = snap && snap.pending;
     // 本轮名单固定：被选走的卡留在原位置灰并标明是谁选的，不补位（快照恢复时没有原名单，只列剩下的）
     // 本轮名单只在名单与服务端剩余牌一致时沿用（每批事件收尾 vs 会被快照整体替换，名单所以放在 dRound 里）
+    if ((!dRound || !(vs.faceUp || []).every((id) => dRound.cards.includes(id))) && snap && snap.draftDeal && (vs.faceUp || []).every((id) => snap.draftDeal.cards.includes(id))) {
+      // 断线重连 / 中途进入：用服务端快照里的本轮原始名单还原固定位置（只认已经在 vs 里被拿走的牌）
+      dRound = { cards: snap.draftDeal.cards.slice(), taken: Object.fromEntries(Object.entries(snap.draftDeal.taken || {}).filter(([id]) => !(vs.faceUp || []).includes(id))) };
+    }
     const keep = dRound && (vs.faceUp || []).every((id) => dRound.cards.includes(id));
     const taken = keep ? dRound.taken : {};
     const list = keep ? dRound.cards : vs.faceUp || [];
@@ -1713,6 +1779,7 @@
     renderMyTeam();
     if (d && d.kind === 'draft') bindDraftPick(d);
     fitDraft();
+    renderDraftDetail();
   }
   // 选秀卡一屏摆完：在容器里找「卡宽最大且放得下」的方案；按密度分三档（a 完整 / b 去掉补充说明 / c 只留图与名字，说明靠悬停或点按），
   // 三档都放不下（极小屏）才退回分页
@@ -1730,6 +1797,17 @@
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(fitDraft);
       }).observe(box);
+    }
+    $('#draft').classList.toggle('ig', phoneDraft());
+    if (phoneDraft()) {
+      box.dataset.d = 'ig';
+      box.classList.remove('fitted');
+      box.style.setProperty('--cols', draftCols(items.length));
+      box.style.setProperty('--rows', Math.ceil(items.length / draftCols(items.length)));
+      for (const el of items) { el.hidden = false; delete el.dataset.tip; el.classList.toggle('sel', el.dataset.id === dSel); }
+      pager.hidden = true; pager.innerHTML = '';
+      renderDraftDetail();
+      return;
     }
     const fits = () => box.scrollHeight <= box.clientHeight + 1;
     const setW = (w) => box.style.setProperty('--cw', `${w}px`);
@@ -1764,6 +1842,16 @@
   function bindDraftPick(d) {
     const mine = isParticipant() && d.seat === you && !playing && !queue.length && !submitted && connection === 'ready';
     const cards = $$('#draftCards .rcard:not(.taken)');
+    if (phoneDraft()) {
+      // 手机：所有图标（含已被选走的）都只用来查看；真正选人在技能栏的「选 TA」按钮
+      for (const el of $$('#draftCards .rcard')) {
+        el.classList.toggle('pickable', mine && !el.classList.contains('taken'));
+        el.classList.remove('tap-hint', 'armed');
+        el.onclick = () => selectDraftTile(el.dataset.id);
+      }
+      renderDraftDetail();
+      return;
+    }
     for (const el of cards) {
       el.classList.toggle('pickable', mine);
       el.classList.remove('tap-hint');
@@ -2208,6 +2296,7 @@
       case 'faceUp':
         vs.faceUp = e.cards.slice();
         dRound = { cards: e.cards.slice(), taken: {} };
+        dSel = null;
         if (e.order) vs.draft = { order: e.order, idx: 0, round: e.round };
         $('#draftTitle').textContent = e.round === 0 ? '第一轮选秀' : '第二轮选秀';
         renderDraft(true);
@@ -2246,7 +2335,9 @@
           o.className = 'owner taken-by'; o.style.setProperty('--c', PCOL[e.seat % 6]); o.textContent = `${vs.players[e.seat].name.replace(/（AI）$/, '')} 选走`;
           $('.art', el).appendChild(o);
           el.tabIndex = -1;
+          if (phoneDraft()) el.onclick = () => selectDraftTile(el.dataset.id);
         }
+        renderDraftDetail();
         break;
       }
       case 'firstPlayer':
