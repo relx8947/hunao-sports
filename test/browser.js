@@ -2,7 +2,7 @@
 // 单人整局验收：隔离后端、实际按钮操作、四场成绩和总冠军强断言。
 // 一代（默认）、二代、混合三种模式各从首页选模式开一局快速局，并行跑完四场；EDITIONS=v1,v2 可只跑部分模式。
 const assert = require('node:assert/strict');
-const { launch, step, state, snapshot, assertFinished } = require('./browser-helper');
+const { launch, step, state, snapshot, assertFinished, clickTop } = require('./browser-helper');
 
 const EDITION_NAME = { v1: '一代', v2: '二代', mix: '混合' };
 
@@ -20,8 +20,8 @@ async function playOne(app, edition) {
   await page.locator('#game').waitFor({ state: 'visible' });
   const sent = await page.evaluate(() => window.__testSent.filter(message => message.type === 'quick').at(-1));
   assert.deepEqual(sent, { type: 'quick', ai: 2, edition }, 'quick 必须携带所选模式');
-  await page.locator('#speedBtn').click();
-  await page.locator('#speedBtn').click();
+  await clickTop(page, '#speedBtn');
+  await clickTop(page, '#speedBtn');
   const started = Date.now();
   const limit = Number(process.env.MAX_MS || 600000);
   const shots = new Set();

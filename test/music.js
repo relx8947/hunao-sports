@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { launch, step, state } = require('./browser-helper');
+const { launch, step, state, clickTop } = require('./browser-helper');
 const Music = require('../public/music.js');
 
 const { SCENES, parseBar } = Music._test;
@@ -169,8 +169,8 @@ function analyze(buffer, from = 0, to = buffer.length, winSec = 0.4) {
     /* ---------- 真实页面整局：场景按阶段切换，号角替代音效 ---------- */
     await page.locator('#game').waitFor({ state: 'visible' });
     await page.locator('#topTitle').click();
-    await page.locator('#speedBtn').click();
-    await page.locator('#speedBtn').click();
+    await clickTop(page, '#speedBtn');
+    await clickTop(page, '#speedBtn');
     const scenes = new Set(), wants = [];
     let stingers = 0, levels = new Set(), final;
     await page.evaluate(() => {

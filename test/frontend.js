@@ -6,6 +6,7 @@ const { createHub } = require('../server/hub');
 const { createServer } = require('../server');
 const { Game } = require('../game/engine');
 const { decide } = require('../game/ai');
+const { clickTop } = require('./browser-helper');
 
 (async () => {
   const hub = createHub(), server = createServer({ hub });
@@ -338,6 +339,8 @@ const { decide } = require('../game/ai');
     for (const [width, height] of [[844, 390], [740, 360], [320, 740], [390, 844]]) {
       await page.setViewportSize({ width, height });
       await page.waitForFunction(() => document.getElementById('board').getBoundingClientRect().width > 180);
+      // 旋转后第一帧容器查询还停在上一轮的过渡尺寸：等两帧让赛道尺寸落定再量
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       assert.equal(await page.locator('#trackSvg .cell.pick[data-p="10"]').count(), 1, '旋转后选择绑定保留');
       const sizes = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth, board: document.getElementById('board').getBoundingClientRect().width, areas: Object.fromEntries(['#game', '.stage', '.board-wrap', '.dock', '.side', '.topbar'].map(s => { const e = document.querySelector(s), r = e.getBoundingClientRect(); return [s, { width: r.width, height: r.height, top: r.top }]; })) }));
       if (sizes.board <= 180) await page.screenshot({ path: `/tmp/hunao-frontend-${width}.png`, fullPage: true });
@@ -446,7 +449,7 @@ const { decide } = require('../game/ai');
     // 打开规则时 Enter 只能激活弹窗按钮，不能误掷骰。
     await full(copied);
     const beforeEnter = await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'act').length);
-    await page.locator('#game [data-open="rules"]').click();
+    await clickTop(page, '#game [data-open="rules"]');
     await page.locator('#mClose').focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#modal').isVisible(), false);
@@ -640,7 +643,7 @@ const { decide } = require('../game/ai');
     await page.evaluate(() => document.querySelector('#speedBtn').click());
     assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'speed').length), speedsBefore);
     await emit({ type: 'room', room: spectatorRoom });
-    await page.locator('#speedBtn').click();
+    await clickTop(page, '#speedBtn');
     assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'speed').length), speedsBefore + 1);
 
     assert.equal(await playerActionCount(), actionsBeforeWatch, '观战前后 act/auto/emote 数量不增加');
@@ -742,7 +745,16 @@ const { decide } = require('../game/ai');
     // 重新加入普通房间，个人操作、托管、选卡都仍然保留。
     await emit({ type: 'room', room }); await full(pick, { gameId: 'ordinary-after-spectator' });
     assert.equal(await page.locator('#spectatorStatus').isVisible(), false);
+    // 横屏/桌面托管按钮常驻；手机竖屏收在「更多」弹层里：展开后可见，Esc 收起
     assert.equal(await page.locator('#autoBtn').isVisible(), true);
+    const landscape = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.locator('#autoBtn').isVisible(), false);
+    await page.evaluate(() => document.getElementById('moreBtn').click()); // 出战浮层盖着顶栏，直接触发点击
+    assert.equal(await page.locator('#autoBtn').isVisible(), true);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#autoBtn').isVisible(), false);
+    await page.setViewportSize(landscape);
     assert(await page.locator('#pickCards .pickable').count() > 0);
     assert.equal((await page.evaluate(() => window.__hn())).you, 0);
     await emit({ type: 'left' });
@@ -771,7 +783,7 @@ const { decide } = require('../game/ai');
       assert.deepEqual(badges, ['二代'], '游戏页只显示一枚模式标签');
       for (const [width, height] of [[360, 740], [393, 852], [390, 664], [852, 393], [1280, 720]]) {
         await page.setViewportSize({ width, height }); await noOverflow(`二代出战 ${width}x${height}`);
-        const top = await page.evaluate(() => { const t = document.querySelector('#game .topbar'); const r = document.getElementById('races').getBoundingClientRect(), a = document.querySelector('#game .top-actions').getBoundingClientRect(); return { sameRow: Math.abs(r.top - a.top) < 8, overlap: r.right > a.left + 1 && r.bottom > a.top + 1 && a.bottom > r.top + 1, h: t.getBoundingClientRect().height }; });
+        const top = await page.evaluate(() => { const t = document.querySelector('#game .topbar'); const r = document.getElementById('races').getBoundingClientRect(), a = (document.querySelector('#game .top-actions').getClientRects().length ? document.querySelector('#game .top-actions') : document.getElementById('moreBtn')).getBoundingClientRect(); return { sameRow: Math.abs(r.top - a.top) < 8, overlap: r.right > a.left + 1 && r.bottom > a.top + 1 && a.bottom > r.top + 1, h: t.getBoundingClientRect().height }; });
         assert(!top.overlap, `${width}x${height} 模式徽标不能挤压顶栏按钮：${JSON.stringify(top)}`);
         assert(top.sameRow, `${width}x${height} 场次条与按钮仍在同一行：${JSON.stringify(top)}`);
         const vis = await page.evaluate(() => [...document.querySelectorAll('#races .race-ed, #topTitle .tt-ed')].filter(e => e.getClientRects().length).length);

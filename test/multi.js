@@ -1,7 +1,7 @@
 'use strict';
 // 双真人 + AI：手机/桌面同步、刷新重连、旋转、四场完赛及再次开局。
 const assert = require('node:assert/strict');
-const { launch, step, state, snapshot, assertFinished } = require('./browser-helper');
+const { launch, step, state, snapshot, assertFinished, clickTop, clickEmote } = require('./browser-helper');
 
 (async () => {
   const app = await launch();
@@ -20,8 +20,8 @@ const { launch, step, state, snapshot, assertFinished } = require('./browser-hel
     await snapshot(B, app.out, 'multi-lobby');
     await A.locator('#startBtn').click();
     for (const page of [A, B]) await page.locator('#game').waitFor({ state: 'visible' });
-    await A.locator('#speedBtn').click();
-    await A.locator('#speedBtn').click();
+    await clickTop(A, '#speedBtn');
+    await clickTop(A, '#speedBtn');
     const oldIdentity = (await state(B)).identity;
     const limit = Number(process.env.MAX_MS || 600000);
     const started = Date.now();
@@ -32,7 +32,7 @@ const { launch, step, state, snapshot, assertFinished } = require('./browser-hel
       const stA = await state(A), stB = await state(B);
       if (stA.final && stB.final && !stA.visual.playing && !stB.visual.playing) break;
       if (!emoted && stB.visual.phase === 'race' && !stB.visual.playing && !stB.visual.queue && !stB.visual.overlayKind) {
-        await B.locator('#emotes [data-e="离谱！"]').click();
+        await clickEmote(B, '离谱！');
         await A.waitForFunction(() => [...document.querySelectorAll('.bubble, .floater')].some(element => element.textContent === '离谱！'));
         emoted = true;
       }

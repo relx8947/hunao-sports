@@ -2242,3 +2242,159 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   #board.spot .cell.pick, #board.spot .token.selectable .body, #dock .roll-btn, .sk-btn.wpc-skip { animation: none; }
 }
 #board.spot .center, #board.spot .turn-card { opacity: .38; transition: opacity .25s; }
+
+/* ================= 手机端上半部重构：顶栏单行 / 提示框 / 玩家栏等宽卡 / 「更多」「聊天」弹层 =================
+   仅 ≤600px 竖屏生效；桌面与横屏只多出被隐藏的新节点。参照 APK 的信息架构，素材全部是自家的 skin / art。 */
+.tb-more, .tb-chat { display: none; }
+.top-title .tb-do, .top-title .tb-end { display: none; }
+.top-actions .lbl, .top-actions .st { display: none; }
+.topbar > #leaveGame { order: 2; }
+@media (min-width: 1001px) { .topbar > #leaveGame { margin-left: -6px; } }
+
+@media (max-width: 600px) and (orientation: portrait) {
+  #game { position: relative; padding: 8px 8px calc(10px + env(safe-area-inset-bottom)); }
+  #game .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 6px; }
+  #game .topbar > #leaveGame { order: 1; }
+  #game .topbar > .races { order: 2; flex: 1 1 0; width: auto; min-width: 0; justify-content: center; gap: 4px; }
+  #game .topbar > .tb-more { order: 3; }
+  #game .topbar > .tb-chat { order: 4; }
+  #game .topbar > .spectator-status { order: 5; flex: 1 0 100%; }
+  #game .topbar > .top-title { order: 6; flex: 1 0 100%; }
+  #game .topbar > .icon-btn { display: inline-flex; flex: none; width: 40px; height: 40px; min-width: 40px; padding: 0; justify-content: center; border-radius: 13px; }
+  #game .topbar > .icon-btn .ico { width: 21px; height: 21px; }
+  #game .topbar > .icon-btn[aria-expanded="true"] { background: var(--yellow); transform: translate(1px, 1px); box-shadow: none; }
+  #game .topbar > .tb-chat[hidden] { display: none; }
+
+  /* 场次胶囊：只留序号圆，当前场黄底；模式徽标回到胶囊条最前面 */
+  #game .topbar .race-ed { display: inline-flex; flex: none; }
+  #game .race-pill { position: relative; flex: none; width: 34px; height: 34px; padding: 0; gap: 0; justify-content: center; border-radius: 50%; }
+  #game .race-pill::after { content: ''; position: absolute; inset: -3px; }
+  #game .race-pill .no { width: 24px; height: 24px; font-size: 12px; }
+  #game .race-pill .tn, #game .race-pill .pts { display: none; }
+
+  /* 「更多」弹层：.top-actions 本体，点按钮展开 */
+  #game .top-actions {
+    display: none; position: absolute; z-index: 60; top: 54px; right: 8px; width: min(264px, calc(100% - 16px)); margin: 0;
+    flex-direction: column; gap: 6px; padding: 10px; box-sizing: border-box; transform-origin: 85% 0;
+    background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; box-shadow: 4px 5px 0 var(--ink);
+  }
+  #game .top-actions.open { display: flex; animation: tbPop .24s cubic-bezier(.2, 1.5, .35, 1) both; }
+  #game .top-actions .icon-btn { width: 100%; height: 46px; min-width: 0; padding: 0 12px; gap: 10px; justify-content: flex-start; border-radius: 12px; font-size: 15px; font-weight: 800; box-shadow: 0 2px 0 var(--ink); }
+  #game .top-actions .icon-btn[hidden] { display: none; }
+  #game .top-actions .icon-btn .ico { flex: none; width: 21px; height: 21px; }
+  #game .top-actions .icon-btn .lbl, #game .top-actions .icon-btn b { display: inline; font-weight: 800; }
+  #game .top-actions .icon-btn .lbl, #game .top-actions #autoBtn b { flex: 1 1 auto; text-align: left; }
+  #game .top-actions #speedLabel, #game .top-actions .st { display: inline; flex: none; min-width: 2.6em; padding: 1px 8px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 12.5px; font-weight: 900; text-align: center; }
+  #game .top-actions #autoBtn::after { content: '关'; flex: none; min-width: 2.6em; padding: 1px 8px; border-radius: 99px; background: var(--line); color: var(--ink2); font-size: 12.5px; font-weight: 900; text-align: center; }
+  #game .top-actions #autoBtn[aria-pressed="true"]::after { content: '开'; background: var(--ink); color: #fff; }
+  #game .top-actions .icon-btn:disabled { opacity: .5; }
+  #game #recordsBtn { display: inline-flex; }
+
+  /* 快捷聊天弹层：#emotes 本体，点一个发出并收起 */
+  #game #emotes {
+    display: none; position: absolute; z-index: 60; top: 54px; right: 8px; width: min(288px, calc(100% - 16px)); box-sizing: border-box;
+    grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px; transform-origin: 85% 0;
+    background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; box-shadow: 4px 5px 0 var(--ink); overflow: visible;
+  }
+  #game #emotes.open { display: grid; animation: tbPop .24s cubic-bezier(.2, 1.5, .35, 1) both; }
+  #game #emotes[hidden] { display: none; }
+  #game #emotes button { flex: none; min-width: 0; min-height: 44px; padding: 0 4px; font-size: 15px; border-radius: 12px; box-shadow: 0 2px 0 var(--ink); }
+
+  /* 观战状态条：紧贴在提示框上方，单行省略 */
+  #game .spectator-status { gap: 6px; justify-content: center; min-height: 20px; padding: 0 2px; font-size: 11px; line-height: 20px; }
+  #game .spectator-status .spectator-code { margin-left: 0; padding: 0 6px; line-height: 17px; border-width: 1.5px; border-radius: 7px; flex: none; }
+  #game .spectator-status > .ico { width: 15px; height: 15px; }
+  #game #spectatorLabel { overflow: hidden; text-overflow: ellipsis; }
+
+  /* 提示框：#topTitle 本体。左侧色点 = 当前行动者玩家色；右侧旗帜 + 第 N/4 场 */
+  #game .topbar .top-title, #game[data-mode="spectator"] .topbar .top-title {
+    position: relative; display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+    min-height: 48px; padding: 4px 88px 4px 30px; overflow: visible; white-space: normal; text-overflow: clip;
+    background: #FFF8E8; border: 2.5px solid var(--ink); border-radius: 14px; text-align: center;
+    box-shadow: inset 0 0 0 2px #FFF8E8, inset 0 0 0 3.2px rgba(35, 31, 51, .85), 2px 3px 0 rgba(35, 31, 51, .9);
+    font-size: 14px; line-height: 1.2; font-weight: 900;
+  }
+  #game .topbar .top-title::before { content: ''; position: absolute; left: 12px; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; border-radius: 50%; background: var(--c, #C9C3D9); border: 2px solid var(--ink); }
+  #game .topbar .top-title[data-mine="1"] { background: #FFF1B8; box-shadow: inset 0 0 0 2px #FFF1B8, inset 0 0 0 3.2px rgba(35, 31, 51, .85), 2px 3px 0 rgba(35, 31, 51, .9); animation: tbMine 1.6s ease-in-out infinite; }
+  #game .topbar .top-title .tt-ed, #game .topbar .top-title .tt-plain, #game .topbar .top-title .tt-race, #game .topbar .top-title .tt-sep,
+  #game .topbar .top-title .tt-turn, #game .topbar .top-title .tt-cue { display: none; }
+  #game .topbar .top-title .tb-do { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; }
+  #game .topbar .top-title .tb-main { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; font-size: 14.5px; }
+  #game .topbar .top-title .tb-cue { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 800; color: var(--ink2); }
+  #game .topbar .top-title .tb-end { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 900; line-height: 1; white-space: nowrap; }
+  #game .topbar .top-title .tb-end svg { width: 22px; height: auto; flex: none; }
+
+  /* 玩家栏：全员等宽一横排，圆头像 + ★积分 + 玩家色名字条 */
+  #game .side { gap: 0; }
+  #game .players { flex-direction: row; justify-content: center; align-items: stretch; flex-wrap: nowrap; gap: 4px; overflow: visible; padding: 13px 2px 7px; }
+  #game .players .prow {
+    flex: 1 1 0; min-width: 0; max-width: 96px; display: flex; flex-direction: column; align-items: center; gap: 0;
+    padding: 6px 3px 0; background: #FFF8E8; border: 2.5px solid var(--ink); border-radius: 12px; box-shadow: 2px 2px 0 var(--ink);
+    transition: transform .3s cubic-bezier(.2, 1.5, .35, 1), box-shadow .2s, background .2s;
+  }
+  #game .players .prow.me { border-width: 2.5px; }
+  #game .players .prow.cur { transform: translateY(-4px); background: #FFF3C4; box-shadow: 0 0 0 3px var(--c), 2px 6px 0 3px var(--ink); animation: tbActive 1.4s ease-in-out infinite; }
+  #game .players .prow .pav { order: 1; flex: none; width: min(44px, 78%); height: auto; aspect-ratio: 1; margin: 0 0 3px; border: 3px solid var(--c); box-shadow: 0 0 0 2px var(--ink); }
+  #game .players .prow .pav .init { font-size: 17px; }
+  #game .players .prow .sc { order: 2; display: flex; align-items: center; justify-content: center; gap: 2px; padding: 0 0 4px; text-align: center; }
+  #game .players .prow .sc .sk-star { display: block; width: 14px; height: 14px; flex: none; }
+  #game .players .prow .sc .sk-star svg { display: block; width: 100%; height: 100%; }
+  #game .players .prow .sc b { display: inline; font-size: 14px; line-height: 1; }
+  #game .players .prow .sc span { display: none; }
+  #game .players .prow .pn { order: 3; align-self: stretch; width: auto; margin: 0 -3px; min-width: 0; }
+  #game .players .prow .pn .pline, #game .players .prow .pn .hand { display: none; }
+  #game .players .prow .pn b {
+    display: block; padding: 3px 2px 4px; background-color: var(--c); border-top: 2.5px solid var(--ink); border-radius: 0 0 9px 9px;
+    color: #fff; font-size: 11.5px; line-height: 1.2; letter-spacing: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-shadow: 0 1.5px 0 rgba(35, 31, 51, .55), 1px 0 0 rgba(35, 31, 51, .35), -1px 0 0 rgba(35, 31, 51, .35);
+    background-image: radial-gradient(circle at 25% 35%, rgba(255, 255, 255, .16) 0 1px, transparent 1.6px), linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(0, 0, 0, .1));
+    background-size: 6px 6px, 100% 100%;
+  }
+  #game .players .prow .pn b .pnm { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit !important; }
+  #game .players .prow.is-ai .pn b .pnm { color: #fff; }
+  #game .players .prow .pn b .you, #game .players .prow .pn b .auto {
+    position: absolute; z-index: 3; top: -8px; margin: 0; padding: 0 5px; font-size: 10px; line-height: 15px; white-space: nowrap;
+    border: 1.5px solid var(--ink); border-radius: 99px; pointer-events: none;
+  }
+  #game .players .prow .pn b .you { left: -4px; background: var(--ink); color: #fff; text-shadow: none; border-color: #fff; box-shadow: 0 0 0 1.5px var(--ink); }
+  #game .players .prow .pn b .auto { right: -4px; background: #fff; color: var(--ink2); text-shadow: none; }
+  #game .players .prow .pn b .auto.ai { display: none; }
+  #game .players .prow .think { z-index: 4; top: -9px; right: -5px; padding: 0 5px; font-size: 9.5px; line-height: 14px; border-width: 1.5px; }
+  #game .players .prow .soon-tag { display: none; }
+  #game .players .prow .bubble { left: 0; right: 0; width: max-content; max-width: 150%; margin: 0 auto; top: -26px; font-size: 13px; padding: 3px 9px; }
+  #game .players .prow .pav, #game .players .prow .hand i { cursor: pointer; }
+}
+@media (max-width: 600px) and (orientation: portrait) and (max-height: 700px) {
+  #game .topbar { padding-bottom: 4px; }
+  #game .topbar .top-title { min-height: 44px; }
+  #game .players { padding: 12px 2px 5px; }
+  #game .players .prow { padding-top: 4px; }
+  #game .players .prow .pav { width: min(38px, 74%); margin-bottom: 2px; }
+  #game .players .prow .sc { padding-bottom: 3px; }
+}
+@keyframes tbPop { from { opacity: 0; transform: scale(.82) translateY(-8px); } }
+@keyframes tbActive { 50% { box-shadow: 0 0 0 5px var(--c), 2px 7px 0 3px var(--ink); } }
+@keyframes tbMine { 50% { filter: brightness(1.04) saturate(1.15); } }
+@media (prefers-reduced-motion: reduce) {
+  #game .top-actions.open, #game #emotes.open, #game .players .prow.cur, #game .topbar .top-title[data-mine="1"] { animation: none; }
+}
+@media (max-width: 340px) and (orientation: portrait) {
+  #game .topbar { gap: 3px; }
+  #game .topbar > .icon-btn { width: 36px; min-width: 36px; height: 36px; }
+  #game .topbar > .races { gap: 3px; }
+  #game .race-pill { width: 30px; height: 30px; }
+  #game .race-pill .no { width: 21px; height: 21px; font-size: 11px; }
+  #game .race-ed { padding: 1px 5px; font-size: 10px; }
+}
+/* 超矮手机竖屏（如 375×560）：压缩提示框与玩家卡，给选秀卡牌/赛道让高度 */
+@media (max-width: 600px) and (orientation: portrait) and (max-height: 600px) {
+  #game .topbar { padding-bottom: 3px; }
+  #game .topbar .top-title { min-height: 38px; padding-top: 2px; padding-bottom: 2px; }
+  #game .topbar .top-title .tb-cue { display: none; }
+  #game .players { padding: 11px 2px 3px; }
+  #game .players .prow { padding-top: 3px; }
+  #game .players .prow .pav { width: min(30px, 64%); margin-bottom: 1px; border-width: 2.5px; }
+  #game .players .prow .pav .init { font-size: 14px; }
+  #game .players .prow .sc { padding-bottom: 2px; }
+  #game .players .prow .pn b { padding: 2px 2px 3px; font-size: 11px; }
+}

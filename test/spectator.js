@@ -1,7 +1,7 @@
 'use strict';
 // 全 AI 观战整局：观众不提交 act，验证自动完赛、刷新恢复及再次开局。
 const assert = require('node:assert/strict');
-const { launch, state, snapshot, assertFinished } = require('./browser-helper');
+const { launch, state, snapshot, assertFinished, clickTop } = require('./browser-helper');
 
 (async () => {
   const app = await launch();
@@ -36,8 +36,8 @@ const { launch, state, snapshot, assertFinished } = require('./browser-helper');
     assert.equal(joined.game.snap.players.length, 4, '加入观众不能替换或新增参赛 AI');
     assert.equal(await guest.locator('#speedBtn').isDisabled(), true, '普通观众不能修改房主速度');
     assert.equal(await guest.locator('#autoBtn').isVisible(), false);
-    await page.locator('#speedBtn').click();
-    await page.locator('#speedBtn').click();
+    await clickTop(page, '#speedBtn');
+    await clickTop(page, '#speedBtn');
     const limit = Number(process.env.MAX_MS || 600000), started = Date.now();
     let refreshed = false, rotated = false, final;
     const photographed = new Set();

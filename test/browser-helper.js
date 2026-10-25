@@ -307,4 +307,21 @@ async function quickStart(page, { ai = 2, edition } = {}) {
   await page.locator('#game').waitFor({ state: 'visible' });
 }
 
-module.exports = { launch, step, state, snapshot, assertFinished, assertResults, quickStart };
+// 手机竖屏里速度/托管/声音/纪录/规则收在顶栏「更多」弹层、快捷聊天收在聊天弹层：按钮不可见时先展开，点完收起；桌面直接点
+async function clickTop(page, selector) {
+  const target = page.locator(selector);
+  let opened = false;
+  if (!(await target.isVisible())) {
+    const more = page.locator('#moreBtn');
+    if (await more.isVisible()) { await more.click(); opened = true; }
+  }
+  await target.click();
+  if (opened && await page.locator('#topActions.open').count()) await page.keyboard.press('Escape');
+}
+async function clickEmote(page, key) {
+  const target = page.locator(`#emotes [data-e="${key}"]`);
+  if (!(await target.isVisible())) await page.locator('#chatBtn').click();
+  await target.click();
+}
+
+module.exports = { launch, step, state, snapshot, assertFinished, assertResults, quickStart, clickTop, clickEmote };
