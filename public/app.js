@@ -575,6 +575,7 @@
     return { scene: 'race', heat: Math.max(0, ...(vs.racers || []).map((r) => (r.finished ? FIN : r.pos || 0))) / FIN };
   }
   function showScreen(id) {
+    if (typeof closePlayerPop === 'function') closePlayerPop();
     for (const s of ['home', 'lobby', 'game']) $(`#${s}`).hidden = s !== id;
     document.body.dataset.screen = id;
     if (id === 'home') requestAnimationFrame(fitRooms);
@@ -1134,6 +1135,13 @@
     5: [[-15, -16], [15, -16], [0, 0], [-15, 16], [15, 16]],
     6: [[-15, -20], [15, -20], [-15, 0], [15, 0], [-15, 20], [15, 20]],
   };
+  // 宽屏赛道的格子是 56×88 的竖条：同格的人沿格子高度竖着排开（两列最多三行），谁都露得出来
+  const SLOTS_WIDE = {
+    1: [[0, 0]], 2: [[0, -21], [0, 21]], 3: [[0, -28], [0, 0], [0, 28]],
+    4: [[-14, -22], [14, -22], [-14, 22], [14, 22]],
+    5: [[-14, -28], [14, -28], [-14, 0], [14, 0], [0, 28]],
+    6: [[-14, -28], [14, -28], [-14, 0], [14, 0], [-14, 28], [14, 28]],
+  };
   function tokenEl(r) {
     let el = $(`#tokens .token[data-rid="${r.rid}"]`);
     if (!el) {
@@ -1201,7 +1209,8 @@
           dx = (k % per - (cnt - 1) / 2) * gap + (rows > 1 ? (row ? gap / 4 : -gap / 4) : 0);
           dy = rows > 1 ? (row ? 17 : -17) : 0;
         } else {
-          const sl = (SLOTS[Math.min(n, 6)] || SLOTS[6])[k % 6];
+          const tbl = layout === 'wide' ? SLOTS_WIDE : SLOTS;
+          const sl = (tbl[Math.min(n, 6)] || tbl[6])[k % 6];
           const f = crowd && layout === 'tall' ? 1.1 : 1;
           [dx, dy] = layout === 'wide' ? sl : [sl[1] * f, sl[0] * f];
         }
@@ -1225,11 +1234,10 @@
       });
     }
     fitTags(placed);
-    renderStandings();
   }
   // 名字签防重叠：从最上层的棋子往下排，名字签会压到更上层的棋子或已显示的名字签就先收起（悬停棋子仍能看是谁）
   function fitTags(placed) {
-    const s = layout === 'tall' ? 50 : 58;
+    const s = layout === 'tall' ? 50 : 46;
     const shown = [], bodies = [];
     placed.sort((a, b) => b.z - a.z || (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? 1 : -1));
     const measured = placed.map((t) => {
@@ -1299,7 +1307,6 @@
       layoutTokens(true);
       renderTurnCard();
     }
-    if (vs.phase !== 'race' && vs.phase !== 'between') renderStandings();
     renderV2();
   }
   function syncMeta() { renderPlayers(); renderTitle(); }
@@ -1487,6 +1494,20 @@
 
   // 每批事件收尾会连着调好几次 renderPlayers：内容没变就不重建 DOM、不重新量名字（省掉强制布局）
   let playersHtml = '';
+  // 赛中的实时名次（并列同名次）；全员还在同一格时没有意义，不标
+  function seatRanks() {
+    const out = {};
+    if (!vs || (vs.phase !== 'race' && vs.phase !== 'between') || !vs.racers.length) return out;
+    const list = vs.racers.slice().sort((a, b) => rankKey(a) - rankKey(b) || a.seat - b.seat);
+    if (rankKey(list[0]) === rankKey(list[list.length - 1])) return out;
+    let rank = 0, prev = null;
+    list.forEach((r, i) => {
+      const k = rankKey(r);
+      if (k !== prev) { rank = i + 1; prev = k; }
+      out[r.seat] = r.out ? 'out' : rank;
+    });
+    return out;
+  }
   function renderPlayers() {
     if (!vs) return;
     const d = snap && snap.pending;
@@ -1494,53 +1515,161 @@
     const ahead = vs.phase === 'race' ? turnsAhead() : null;
     const box = $('#players');
     const starSvg = window.Skin ? Skin.star({ size: 16 }) : '★';
+    const ranks = seatRanks();
     // 手机竖屏的提示框读取 pending（轮到谁、该做什么）：每次重排玩家栏顺带刷新（内容没变时 renderTitle 自己早退）
     renderTitle();
     const html = vs.players.map((p) => {
       const c = PCOL[p.seat % 6];
       const cur = vs.racers.find((r) => r.seat === p.seat);
       const ava = cur && racing ? art(cur.rid) : `<span class="init">${esc(p.name.slice(0, 1))}</span>`;
-      const hand = p.hand.map((id) => `<i class="${p.used.includes(id) && !(cur && cur.rid === id && racing) ? 'used' : ''} ${cur && cur.rid === id && racing ? 'now' : ''}" style="--rc:${rcol(id)}" data-tip="${id}">${art(id)}</i>`).join('');
-      const effective = cur && (Object.prototype.hasOwnProperty.call(cur, 'eff') ? cur.eff : cur.power);
-      const skill = effective && R[effective] ? R[effective].skill : cur?.power === 'copycat' ? '暂无可复制技能' : R[cur?.rid]?.skill;
-      const line = cur && racing
-        ? `<div class="pline" data-tip="${cur.rid}">${esc(R[cur.rid].name)} · <span>${esc(skill)}</span>${cur.finished ? ` · 第 ${cur.finished} 名` : cur.out ? ' · 出局' : cur.tripped ? ' · 摔倒' : ` · ${cur.pos} 格`}</div>`
-        : '';
-      const kinds = { gold: 0, silver: 0, bronze: 0 };
-      for (const c of p.chips || []) if (kinds[c.kind] != null) kinds[c.kind] += c.v;
-      const scoreTitle = `金 ${kinds.gold} · 银 ${kinds.silver} · 铜 ${kinds.bronze}`;
       let think = '';
       if (d && !playing && !queue.length) {
         if (d.simul && d.seats.includes(p.seat)) think = d.done.includes(p.seat) ? '<span class="think ok">已出牌</span>' : '<span class="think">思考中</span>';
         else if (!d.simul && d.seat === p.seat) think = '<span class="think">行动中</span>';
       }
-      const offline = !p.ai && room && room.seats[p.seat] && room.seats[p.seat].online === false;
-      const modeLabel = offline ? '离线' : autoModes[p.seat] === 'timeout' ? '超时托管' : '托管';
-      const tags = `${p.seat === you ? '<span class="you">你</span>' : ''}${(autoFlags[p.seat] || offline) && !p.ai ? `<span class="auto">${modeLabel}</span>` : ''}${p.ai ? '<span class="auto ai">AI</span>' : ''}`;
+      const tags = playerTags(p);
       // 快轮到你：你的选手下一个行动时，你的玩家卡轻轻脉冲
       const soon = p.seat === you && ahead === 1 && !think;
-      return `<div class="prow ${vs.curSeat === p.seat && vs.phase === 'race' ? 'cur' : ''} ${p.seat === you ? 'me' : ''} ${soon ? 'soon' : ''} ${p.ai ? 'is-ai' : ''}" data-seat="${p.seat}" data-fly-target="seat-${p.seat}" style="--c:${c}" title="${esc(p.name)}">
-        <div class="pav" ${cur && racing ? `data-tip="${cur.rid}"` : ''}>${ava}</div>
-        <div class="pn"><b><span class="pnm">${esc(pname(p))}</span>${tags}</b>${line}<div class="hand">${hand}</div></div>
-        <div class="sc" title="${scoreTitle}"><i class="sk-star" aria-hidden="true">${starSvg}</i><b data-score="${p.seat}">${p.score}</b><span>分</span></div>${think}${soon ? '<span class="soon-tag">下一个是你</span>' : ''}</div>`;
+      const rk = ranks[p.seat];
+      const rkHtml = rk == null ? '' : `<i class="rk ${rk === 1 ? 'rk1' : rk === 2 ? 'rk2' : rk === 'out' ? 'rko' : ''}" title="${rk === 'out' ? '出局' : `当前第 ${rk} 名`}">${rk === 'out' ? '出' : rk}</i>`;
+      return `<div class="prow ${vs.curSeat === p.seat && vs.phase === 'race' ? 'cur' : ''} ${p.seat === you ? 'me' : ''} ${soon ? 'soon' : ''} ${p.ai ? 'is-ai' : ''} ${popSeat === p.seat ? 'open' : ''}" data-seat="${p.seat}" data-fly-target="seat-${p.seat}" style="--c:${c}" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="${popSeat === p.seat}" aria-label="${esc(p.name)}，${p.score} 分，点按查看角色和得分">
+        <div class="pav">${ava}</div>${rkHtml}
+        <div class="pn"><b><span class="pnm">${esc(pname(p))}</span>${tags}</b></div>
+        <div class="sc"><i class="sk-star" aria-hidden="true">${starSvg}</i><b data-score="${p.seat}">${p.score}</b><span>分</span></div>${think}${soon ? '<span class="soon-tag">下一个是你</span>' : ''}</div>`;
     }).join('');
-    if (html === playersHtml && box.firstElementChild) return;
-    playersHtml = html;
-    box.innerHTML = html;
-    fitPlayerNames();
+    if (html !== playersHtml || !box.firstElementChild) {
+      playersHtml = html;
+      box.innerHTML = html;
+      fitPlayerNames();
+    }
+    refreshPlayerPop();
+  }
+  function playerTags(p) {
+    const offline = !p.ai && room && room.seats[p.seat] && room.seats[p.seat].online === false;
+    const modeLabel = offline ? '离线' : autoModes[p.seat] === 'timeout' ? '超时托管' : '托管';
+    return `${p.seat === you ? '<span class="you">你</span>' : ''}${(autoFlags[p.seat] || offline) && !p.ai ? `<span class="auto">${modeLabel}</span>` : ''}${p.ai ? '<span class="auto ai">AI</span>' : ''}`;
+  }
+
+  /* ================= 玩家信息弹层：点头像看分数、角色名单、当前角色 ================= */
+  let popSeat = null, popHtml = '';
+  function playerPopHtml(p) {
+    const racing = vs.phase === 'race' || vs.phase === 'between';
+    const cur = vs.racers.find((r) => r.seat === p.seat);
+    const kinds = { gold: 0, silver: 0, bronze: 0 };
+    for (const c of p.chips || []) if (kinds[c.kind] != null) kinds[c.kind] += c.v;
+    const names = { gold: '金', silver: '银', bronze: '铜' };
+    const chips = Object.keys(kinds).filter((k) => kinds[k]).map((k) => `<span class="pp-chip ${k}"><i></i>${names[k]} ${kinds[k]}</span>`).join('') || '<span class="pp-none">还没有得分</span>';
+    const rows = p.hand.map((id) => {
+      const now = !!(cur && cur.rid === id && racing);
+      const used = p.used.includes(id) && !now;
+      let st = used ? '已上场' : '待上场', skill = R[id].skill;
+      if (now) {
+        const effective = Object.prototype.hasOwnProperty.call(cur, 'eff') ? cur.eff : cur.power;
+        skill = effective && R[effective] ? R[effective].skill : cur.power === 'copycat' ? '暂无可复制技能' : R[id].skill;
+        st = cur.finished ? `第 ${cur.finished} 名` : cur.out ? '出局' : cur.tripped ? '摔倒中' : `第 ${cur.pos} 格`;
+      }
+      return `<div class="pp-r ${now ? 'now' : ''} ${used ? 'used' : ''}" data-tip="${id}"><i style="--rc:${rcol(id)}">${art(id)}</i><span class="pp-n"><b>${esc(R[id].name)}</b><small>${esc(skill)}</small></span><em>${now ? '<u>出战</u>' : ''}${st}</em></div>`;
+    }).join('');
+    const empty = p.hand.length ? '' : '<div class="pp-none pp-empty">还没有选人</div>';
+    const ava = cur && racing ? art(cur.rid) : `<span class="init">${esc(p.name.slice(0, 1))}</span>`;
+    return `<div class="pp-head"><div class="pav">${ava}</div><div class="pp-who"><b>${esc(pname(p))}${playerTags(p)}</b><div class="pp-chips">${chips}</div></div><div class="pp-sc"><i class="sk-star" aria-hidden="true">${window.Skin ? Skin.star({ size: 20 }) : '★'}</i><b>${p.score}</b></div></div>
+      <div class="pp-sec">角色${p.hand.length ? `<small>${p.hand.length}/4</small>` : ''}</div><div class="pp-list">${rows}${empty}</div>`;
+  }
+  function placePlayerPop() {
+    const pop = $('#playerPop');
+    if (popSeat == null || pop.hidden) return;
+    const row = $(`#players .prow[data-seat="${popSeat}"]`);
+    if (!row || $('#game').hidden) { closePlayerPop(); return; }
+    const a = row.getBoundingClientRect();
+    // 矮横屏：玩家条竖排在左侧，弹层从头像右边展开
+    const beside = matchMedia('(max-width: 1000px) and (orientation: landscape) and (max-height: 550px)').matches;
+    pop.classList.toggle('beside', beside);
+    pop.style.setProperty('--w', `${Math.min(320, beside ? innerWidth - a.right - 16 : innerWidth - 16)}px`);
+    const w = pop.offsetWidth;
+    if (beside) {
+      pop.style.maxHeight = `${innerHeight - 16}px`;
+      const h = pop.offsetHeight;
+      pop.style.left = `${a.right + 10}px`;
+      pop.style.top = `${Math.max(8, Math.min(innerHeight - h - 8, a.top + a.height / 2 - h / 2))}px`;
+      pop.style.setProperty('--c', PCOL[popSeat % 6]);
+      return;
+    }
+    const x = Math.max(8, Math.min(innerWidth - w - 8, a.left + a.width / 2 - w / 2));
+    pop.style.left = `${x}px`;
+    pop.style.top = `${a.bottom + 10}px`;
+    pop.style.maxHeight = `${Math.max(160, innerHeight - a.bottom - 18)}px`;
+    pop.style.setProperty('--ax', `${Math.max(16, Math.min(w - 16, a.left + a.width / 2 - x))}px`);
+    pop.style.setProperty('--c', PCOL[popSeat % 6]);
+  }
+  function refreshPlayerPop() {
+    if (popSeat == null) return;
+    const p = vs && vs.players[popSeat];
+    if (!p) { closePlayerPop(); return; }
+    const pop = $('#playerPop');
+    const html = playerPopHtml(p);
+    if (html !== popHtml) { popHtml = html; pop.innerHTML = html; }
+    placePlayerPop();
+  }
+  function closePlayerPop(focusBack) {
+    if (popSeat == null) return;
+    const seat = popSeat;
+    popSeat = null; popHtml = '';
+    const pop = $('#playerPop');
+    pop.hidden = true;
+    pop.classList.remove('in');
+    const row = $(`#players .prow[data-seat="${seat}"]`);
+    if (row) { row.classList.remove('open'); row.setAttribute('aria-expanded', 'false'); if (focusBack) row.focus({ preventScroll: true }); }
+  }
+  function togglePlayerPop(row) {
+    const seat = Number(row.dataset.seat);
+    if (popSeat === seat) { closePlayerPop(); Sound.click(); return; }
+    const prev = popSeat;
+    if (prev != null) closePlayerPop();
+    closeTopPops();
+    hideTip();
+    Sound.click();
+    popSeat = seat;
+    const pop = $('#playerPop');
+    pop.hidden = false;
+    row.classList.add('open'); row.setAttribute('aria-expanded', 'true');
+    popHtml = '';
+    refreshPlayerPop();
+    pop.classList.remove('in'); void pop.offsetWidth; pop.classList.add('in');
+  }
+  function initPlayerPop() {
+    const box = $('#players');
+    box.addEventListener('click', (e) => { const row = e.target.closest('.prow'); if (row) togglePlayerPop(row); });
+    box.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const row = e.target.closest('.prow');
+      if (!row) return;
+      e.preventDefault();
+      togglePlayerPop(row);
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (popSeat != null && !e.target.closest('#playerPop, #players .prow, #tip')) closePlayerPop();
+    }, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && popSeat != null) { e.preventDefault(); closePlayerPop(true); } });
   }
 
   function rcard(id, opts = {}) {
     const r = R[id];
     const owner = opts.owner != null ? `<span class="owner" style="--c:${PCOL[opts.owner % 6]}">${esc(vs.players[opts.owner].name)}</span>` : '';
-    return `<button class="rcard ${opts.mini ? 'mini' : ''} ${opts.cls || ''}" data-id="${id}" style="--rc:${rcol(id)};--k:${opts.k || 0}" ${opts.disabled ? 'tabindex="-1"' : ''}>
-      <div class="art">${art(id)}<span class="nm">${esc(r.name)}</span>${owner}</div>
+    const takenBy = opts.taken != null ? `<span class="owner taken-by" style="--c:${PCOL[opts.taken % 6]}">${esc(vs.players[opts.taken].name.replace(/（AI）$/, ''))} 选走</span>` : '';
+    return `<button class="rcard ${opts.mini ? 'mini' : ''} ${opts.taken != null ? 'taken' : ''} ${opts.cls || ''}" data-id="${id}" style="--rc:${rcol(id)};--k:${opts.k || 0}" ${opts.disabled ? 'tabindex="-1"' : ''}>
+      <div class="art">${art(id)}<span class="nm">${esc(r.name)}</span>${owner}${takenBy}</div>
       <div class="txt"><b class="nm2">${esc(r.name)}</b><span class="sk">${esc(r.skill)}</span><div class="tx">${esc(r.text)}</div>${r.note && !opts.mini ? `<div class="nt">${esc(r.note)}</div>` : ''}</div></button>`;
   }
 
+  let dRound = null; // 本轮选秀的原始名单与「谁选走了哪张」
   function renderDraft(deal) {
     const d = snap && snap.pending;
-    $('#draftCards').innerHTML = (vs.faceUp || []).map((id, k) => rcard(id, { cls: deal ? 'deal' : '', k })).join('');
+    // 本轮名单固定：被选走的卡留在原位置灰并标明是谁选的，不补位（快照恢复时没有原名单，只列剩下的）
+    // 本轮名单只在名单与服务端剩余牌一致时沿用（每批事件收尾 vs 会被快照整体替换，名单所以放在 dRound 里）
+    const keep = dRound && (vs.faceUp || []).every((id) => dRound.cards.includes(id));
+    const taken = keep ? dRound.taken : {};
+    const list = keep ? dRound.cards : vs.faceUp || [];
+    $('#draftCards').innerHTML = list.map((id, k) => rcard(id, { cls: deal ? 'deal' : '', k, taken: taken[id] })).join('');
     if (!isParticipant()) for (const el of $$('#draftCards .rcard')) el.dataset.tip = el.dataset.id;
     $('#draftTitle').textContent = isParticipant() ? (vs.draft ? `${vs.draft.round === 0 ? '第一' : '第二'}轮选秀` : '组建你的队伍') : `AI 自动选秀${vs.draft ? ` · 第 ${vs.draft.round + 1}/2 轮` : ''}`;
     const total = vs.players.length * 4;
@@ -1551,17 +1680,68 @@
     if (d && d.kind === 'draft') bindDraftPick(d);
     fitDraft();
   }
+  // 选秀卡一屏摆完：在容器里找「卡宽最大且放得下」的方案；按密度分三档（a 完整 / b 去掉补充说明 / c 只留图与名字，说明靠悬停或点按），
+  // 三档都放不下（极小屏）才退回分页
   function fitDraft() {
     if ($('#draft').hidden) return;
-    paginate('draft', $('#draftCards'), () => $$('#draftCards .rcard'), $('#draftPager'));
+    const box = $('#draftCards'), items = $$('#draftCards .rcard'), pager = $('#draftPager');
+    if (!box.offsetParent || !items.length) return;
+    // 提示栏 / 操作坞变高变矮会改变容器高度：尺寸变了就重排
+    if (!box.dataset.ro && window.ResizeObserver) {
+      box.dataset.ro = '1';
+      let lw = 0, lh = 0, raf = 0;
+      new ResizeObserver(() => {
+        if (!box.offsetParent || (Math.abs(box.clientWidth - lw) < 2 && Math.abs(box.clientHeight - lh) < 2)) return;
+        lw = box.clientWidth; lh = box.clientHeight;
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(fitDraft);
+      }).observe(box);
+    }
+    const fits = () => box.scrollHeight <= box.clientHeight + 1;
+    const setW = (w) => box.style.setProperty('--cw', `${w}px`);
+    const phone = innerWidth <= 600;
+    box.classList.remove('fitted');
+    for (const el of items) el.hidden = false;
+    pager.hidden = true; pager.innerHTML = '';
+    let done = false;
+    for (const [lv, minW] of [['a', 150], ['b', 120], ['c', phone ? 72 : 88], ['d', 60]]) {
+      box.dataset.d = lv;
+      setW(minW);
+      if (!fits()) continue;
+      let lo = minW, hi = 250;
+      while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); setW(mid); if (fits()) lo = mid; else hi = mid - 1; }
+      setW(lo);
+      done = true;
+      break;
+    }
+    if (done) {
+      box.classList.add('fitted');
+      // 说明被收起的档位（以及观战）：悬停 / 点按卡牌看完整技能
+      for (const el of items) { if (box.dataset.d === 'c' || box.dataset.d === 'd' || !isParticipant()) el.dataset.tip = el.dataset.id; else delete el.dataset.tip; }
+      return;
+    }
+    box.dataset.d = 'd'; setW(60);
+    const run = () => paginate('draft', box, () => $$('#draftCards .rcard'), pager);
+    run();
+    // 轮到你选而这一页的卡都被选走了：翻到第一张还能选的卡所在页
+    const open = items.filter((c) => c.classList.contains('pickable'));
+    if (open.length && open.every((c) => c.hidden)) { pagers.draft.anchor = items.indexOf(open[0]); run(); }
   }
   function bindDraftPick(d) {
     const mine = isParticipant() && d.seat === you && !playing && !queue.length && !submitted && connection === 'ready';
-    const cards = $$('#draftCards .rcard');
+    const cards = $$('#draftCards .rcard:not(.taken)');
     for (const el of cards) {
       el.classList.toggle('pickable', mine);
       el.classList.remove('tap-hint');
       el.onclick = mine ? () => {
+        // 说明被收起时，触屏第一次点按只是看说明（卡上标「再点一次」），第二次才选
+        if (/^[cd]$/.test($('#draftCards').dataset.d) && matchMedia('(hover: none)').matches && !el.classList.contains('armed')) {
+          for (const c of $$('#draftCards .rcard.armed')) c.classList.remove('armed');
+          el.classList.add('armed');
+          Sound.click();
+          showTip(el.dataset.id, el);
+          return;
+        }
         if (answer(d, el.dataset.id)) {
           Sound.card();
           el.classList.add('chosen');
@@ -1580,51 +1760,6 @@
 
   /* ================= 名次条 / 行动卡 / 悬停说明 ================= */
   const rankKey = (r) => (r.finished ? -1000 + r.finished : r.out ? 1000 : -r.pos);
-  function renderStandings() {
-    const box = $('#rankbar');
-    const show = !!(vs && (vs.phase === 'race' || vs.phase === 'between') && vs.racers.length && layout === 'wide');
-    box.hidden = !show;
-    if (!show) return;
-    const list = vs.racers.slice().sort((a, b) => rankKey(a) - rankKey(b) || a.seat - b.seat);
-    const W = box.clientWidth || 800;
-    const n = list.length, gap = 10;
-    const w = Math.min(230, (W - gap * (n - 1)) / n);
-    const x0 = (W - (n * w + gap * (n - 1))) / 2;
-    const live = new Set(list.map((r) => r.rid));
-    for (const el of $$('.st-item', box)) if (!live.has(el.dataset.rid)) el.remove();
-    let rank = 0, prev = null;
-    list.forEach((r, i) => {
-      const k = rankKey(r);
-      if (k !== prev) { rank = i + 1; prev = k; }
-      let el = $(`.st-item[data-rid="${r.rid}"]`, box);
-      const fresh = !el;
-      if (fresh) {
-        el = document.createElement('div');
-        el.className = 'st-item';
-        el.dataset.rid = r.rid;
-        el.dataset.tip = r.rid;
-        el.style.setProperty('--c', PCOL[r.seat % 6]);
-        el.innerHTML = `<span class="sr"></span><span class="sa">${art(r.rid)}</span><span class="sn"><b>${esc(R[r.rid].name)}</b><i>${esc(pname(vs.players[r.seat]))}${r.seat === you && isParticipant() ? '<em class="st-you">你</em>' : ''}</i></span><span class="ss"></span><span class="sbar"><em></em></span>`;
-        el.style.transition = 'none';
-        box.appendChild(el);
-      }
-      el.style.width = `${w}px`;
-      el.style.transform = `translateX(${x0 + i * (w + gap)}px)`;
-      const sr = $('.sr', el);
-      sr.textContent = r.finished ? (r.finished === 1 ? '冠' : '亚') : r.out ? '出' : rank;
-      sr.className = `sr ${r.finished ? `rk${r.finished}` : r.out ? 'rko' : ''}`;
-      // 名次条直接写「还差几格到终点」，格数位置放在悬停说明里
-      const ss = $('.ss', el), left = FIN - r.pos;
-      ss.innerHTML = r.finished ? '已冲线' : r.out ? '被吃掉' : `${r.tripped ? '摔倒 · ' : ''}差 <b>${left}</b> 格`;
-      ss.title = r.finished || r.out ? '' : `在第 ${r.pos} 格，离终点还差 ${left} 格`;
-      ss.classList.toggle('bad', !!r.tripped && !r.finished);
-      $('.sbar em', el).style.width = `${r.finished ? 100 : r.out ? 0 : Math.round(r.pos / FIN * 100)}%`;
-      el.classList.toggle('cur', vs.curSeat === r.seat && vs.phase === 'race' && !r.finished && !r.out);
-      el.classList.toggle('me', r.seat === you && isParticipant());
-      el.classList.toggle('gone', !!r.out);
-      if (fresh) { void el.offsetWidth; el.style.transition = ''; }
-    });
-  }
 
   // 行动卡：谁在行动（头像、玩家、选手）→ 位置进度（技能点头像可看，卡里只在借用他人技能时标出） + 接下来的行动顺序；右上角标签告诉你还有几位轮到你
   let tcRid = null, tcSoonSaid = null;
@@ -1712,12 +1847,6 @@
     x = Math.max(8, Math.min(innerWidth - t.width - 8, x));
     let y = a.top - t.height - 10;
     if (y < 8) y = a.bottom + 10;
-    // 锚点在名次栏下方时，提示卡不盖住名次栏：改放到锚点下方，放不下就贴着名次栏底边
-    const rb = $('.rankbar')?.getBoundingClientRect();
-    if (rb && rb.height && a.top >= rb.bottom && y < rb.bottom + 4) {
-      y = a.bottom + 10;
-      if (y + t.height > innerHeight - 8) y = Math.max(rb.bottom + 4, innerHeight - t.height - 8);
-    }
     tip.style.left = `${x}px`;
     tip.style.top = `${y}px`;
   }
@@ -1895,6 +2024,7 @@
     return timer;
   }
   function resetGameView({ preserveSubmission = false, preserveDeadline = false } = {}) {
+    dRound = null;
     animationEpoch++;
     for (const w of pendingWaits) { clearTimeout(w.timer); w.reject(CANCELLED); }
     pendingWaits.clear();
@@ -2043,6 +2173,7 @@
         break;
       case 'faceUp':
         vs.faceUp = e.cards.slice();
+        dRound = { cards: e.cards.slice(), taken: {} };
         if (e.order) vs.draft = { order: e.order, idx: 0, round: e.round };
         $('#draftTitle').textContent = e.round === 0 ? '第一轮选秀' : '第二轮选秀';
         renderDraft(true);
@@ -2052,16 +2183,12 @@
       case 'drafted': {
         const el = $(`#draftCards .rcard[data-id="${e.rid}"]`);
         vs.players[e.seat].hand.push(e.rid);
+        if (dRound) dRound.taken[e.rid] = e.seat;
         if (vs.draft) vs.draft.idx++;
         renderDraftOrder();
         renderMyTeam();
-        if (el) {
-          const o = document.createElement('span');
-          o.className = 'owner'; o.style.setProperty('--c', PCOL[e.seat % 6]); o.textContent = vs.players[e.seat].name;
-          $('.art', el).appendChild(o);
-        }
         renderPlayers();
-        // 被选走的卡先被「拎起」，再飞向该玩家的队伍栏/玩家卡；找不到落点就原地淡出
+        // 被选走的卡先被「拎起」，复制一张飞向该玩家的队伍栏/玩家卡；原卡留在原位变灰，标上谁选走的
         const target = el && !el.hidden && !fast && !reducedMotion.matches ? flyTarget(e.seat, vs.players[e.seat].hand.length - 1) : null;
         if (target) {
           el.classList.add('lift');
@@ -2073,11 +2200,19 @@
           await pause(440);
         } else {
           Sound.card();
-          if (el) el.classList.add('gone');
-          await pause(560);
+          await pause(fast ? 0 : 200);
         }
         vs.faceUp = vs.faceUp.filter((id) => id !== e.rid);
-        if (el) removeDraftCard(el);
+        if (el && el.isConnected) {
+          el.classList.remove('lift', 'pickable', 'tap-hint', 'chosen');
+          el.style.visibility = '';
+          el.onclick = null;
+          el.classList.add('taken');
+          const o = document.createElement('span');
+          o.className = 'owner taken-by'; o.style.setProperty('--c', PCOL[e.seat % 6]); o.textContent = `${vs.players[e.seat].name.replace(/（AI）$/, '')} 选走`;
+          $('.art', el).appendChild(o);
+          el.tabIndex = -1;
+        }
         break;
       }
       case 'firstPlayer':
@@ -2731,24 +2866,6 @@
     ], { duration: dur, easing: 'cubic-bezier(.5, 0, .3, 1)', fill: 'forwards' });
     anim.onfinish = () => { c.remove(); restartClass(target, 'fly-land', 520); if (onLand) onLand(); };
     setTimeout(() => c.remove(), dur + 250);
-  }
-  // 移走选秀卡，其余卡用 FLIP 平滑补位（分页可能重排，先量旧位置）
-  function removeDraftCard(el) {
-    const box = $('#draftCards');
-    const smooth = !fast && !reducedMotion.matches && box && box.contains(el);
-    const first = smooth ? new Map($$('#draftCards .rcard').filter((c) => c !== el && !c.hidden).map((c) => [c, c.getBoundingClientRect()])) : null;
-    el.remove();
-    if (!smooth) return;
-    fitDraft();
-    for (const c of $$('#draftCards .rcard')) {
-      if (c.hidden) continue;
-      const f = first.get(c);
-      const l = c.getBoundingClientRect();
-      if (!f) { c.animate([{ opacity: 0, transform: 'scale(.9)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' }); continue; }
-      const dx = f.left - l.left, dy = f.top - l.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      c.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.3, .7, .4, 1)' });
-    }
   }
   // 快进（积压或后台）跳过了动画：结束后提示一次，并让位置变了的棋子闪一下
   function tokenSpots() {
@@ -3979,12 +4096,20 @@
       if (focusBack) b.focus({ preventScroll: true });
     }
   }
+  // 弹层贴在触发按钮下面、右对齐按钮（桌面、平板、手机顶栏高度各不相同，不写死 top）
+  function placeTopPop(btn, pop) {
+    const g = $('#game').getBoundingClientRect(), b = $(btn).getBoundingClientRect();
+    $(pop).style.top = `${Math.round(b.bottom - g.top + 8)}px`;
+    $(pop).style.right = `${Math.max(8, Math.round(g.right - b.right))}px`;
+  }
   function toggleTopPop(which) {
     const [btn, pop] = TOP_POPS[which];
     const opening = !$(pop).classList.contains('open');
     closeTopPops();
     if (!opening) return;
+    closePlayerPop();
     Sound.click();
+    placeTopPop(btn, pop);
     $(pop).classList.add('open');
     $(btn).setAttribute('aria-expanded', 'true');
     const first = $(`${pop} button:not(:disabled)`);
@@ -4019,6 +4144,7 @@
     $('#autoBtn').onclick = () => { Sound.click(); send({ type: 'auto', on: !autoFlags[you] }); };
     $('#soundBtn').onclick = () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); };
     initTopPops();
+    initPlayerPop();
     $('#leaveGame').onclick = () => {
       if ($('#leaveGame').dataset.armed) { navigate('leave', $('#leaveGame')); return; }
       $('#leaveGame').dataset.armed = '1';
@@ -4593,7 +4719,7 @@
         }
         st.finale = 'running';
         layoutTokens();
-        renderV2(); renderTurnCard(); renderStandings();
+        renderV2(); renderTurnCard();
         banner('季终决战！', `${rids.map((rid) => R[rid] ? R[rid].name : '').join(' 对 ')} · 第 ${e.pos} 格再跑一次，胜者通吃`, true);
         Sound.reveal();
         for (const rid of rids) spotlight(rid);
@@ -4902,7 +5028,7 @@
     for (const b of $$('[data-open]')) b.addEventListener('click', () => { Sound.click(); openModal(b.dataset.open); });
     for (const b of $$('[data-sound]')) b.addEventListener('click', () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); });
     renderSoundToggles();
-    window.addEventListener('resize', () => { syncSpot(); checkLayout(); renderStandings(); hideTip(); refitPagers(); fitRooms(); });
+    window.addEventListener('resize', () => { syncSpot(); checkLayout(); hideTip(); placePlayerPop(); fitDraft(); refitPagers(); fitRooms(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && queue.length > 1) fast = true; });
     showScreen(new URLSearchParams(location.search).get('room') ? 'lobby' : 'home');
     connect();

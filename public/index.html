@@ -141,7 +141,6 @@
         <button class="icon-btn" id="leaveGame" title="离开" aria-label="离开对局"><span class="ico" data-icon="door"></span></button>
       </header>
       <main class="stage">
-        <div class="rankbar" id="rankbar" hidden></div>
         <div class="board-wrap">
           <div class="board" id="board">
             <svg id="trackSvg" viewBox="0 0 964 392" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
@@ -171,11 +170,9 @@
       <aside class="side">
         <div class="players" id="players"></div>
         <div class="emotes" id="emotes" role="group" aria-label="快捷聊天"></div>
-        <div class="feed-wrap">
-          <div class="feed-title">赛况</div>
-          <div class="feed" id="feed"></div>
-        </div>
+        <div class="feed" id="feed" hidden aria-hidden="true"></div>
       </aside>
+      <div class="player-pop" id="playerPop" role="dialog" aria-label="玩家信息" hidden></div>
       <div class="dock" id="dock"></div>
     </section>
   </div>
