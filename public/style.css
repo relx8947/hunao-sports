@@ -2039,3 +2039,30 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 }
 /* 大屏手机竖屏（430×932）：多了模式行后角色游行放不下，先收起游行、保留顶部徽章 */
 @media (max-height: 940px) and (max-width: 440px) and (orientation: portrait) { .parade { display: none; } }
+
+/* ================= 图鉴：固定弹窗大小与统一卡高 ================= */
+/* 弹窗高度不随内容变（一代/二代/全部切换时不再来回跳），卡片统一高度由 galleryPre 量出 */
+.modal-gallery { height: min(100%, 860px); }
+.modal-gallery .modal-body { flex: 1 1 auto; }
+.modal-gallery .gallery { flex: 1 1 auto; align-content: start; }
+.modal-gallery .gallery .rcard { min-height: var(--ch, 0); }
+/* 卡片是 <button>：统一加高后内容要贴顶排布，不能被按钮垂直居中 */
+.modal-gallery .gallery .rcard { display: flex; flex-direction: column; justify-content: flex-start; }
+.modal-gallery .gallery .rcard .art { flex: none; height: calc(var(--w) * .56); }
+@media (max-width: 1000px) and (orientation: portrait) { .modal-gallery .gallery .rcard { display: grid; align-content: stretch; } .modal-gallery .gallery .rcard .art { height: auto; } .modal-gallery .gallery .rcard .txt { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; } .modal-gallery .gallery .rcard .txt > * { max-width: 100%; } }
+@media (max-width: 1000px) and (orientation: landscape) { .modal-gallery .gallery .rcard { display: grid; align-content: start; } .modal-gallery .gallery .rcard .art { height: auto; } }
+/* 桌面图鉴：4 列宽卡，文字折行少，统一卡高后每页仍有 8~12 张 */
+@media (min-width: 1001px) {
+  .modal-gallery .gallery { grid-template-columns: repeat(4, minmax(0, 1fr)); justify-items: stretch; }
+  .modal-gallery .gallery .rcard { --w: 100%; width: 100%; }
+  .modal-gallery .gallery .rcard .art { flex: 1 0 auto; height: 90px; }
+  .modal-gallery .gallery .rcard .txt { padding: 8px 10px 9px; min-height: 0; }
+  .modal-gallery .gallery .rcard .tx { font-size: 12.5px; line-height: 1.42; }
+}
+/* 手机竖屏列表：头像列收窄，把宽度让给技能文字 */
+@media (max-width: 1000px) and (orientation: portrait) {
+  .modal-gallery .gallery .rcard { grid-template-columns: 60px minmax(0, 1fr); }
+  .modal-gallery .gallery .rcard .art { min-height: 60px; }
+  .modal-gallery .gallery .rcard .txt { padding: 6px 9px 7px; }
+  .modal-gallery .gallery .rcard .tx { font-size: 12px; line-height: 1.4; }
+}

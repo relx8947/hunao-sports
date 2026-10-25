@@ -39,6 +39,7 @@
     st.run = () => paginate(key, box, getItems, host);
     st.box = box;
     if (!box.offsetParent) return st; // 还没显示出来量不了尺寸，显示后由 refitPagers 补排
+    if (st.pre) st.pre(box); // 分页前的统一量尺（图鉴用它把所有卡拉到同一高度）
     const items = getItems();
     const n = items.length;
     const apply = (per) => {
@@ -3481,6 +3482,8 @@
     m.onclick = (e) => { if (e.target === m) close(); };
     if (kind === 'gallery') {
       syncGalleryFilter();
+      // 网页字体晚到会改变文字高度，加载完后让下次量尺重来
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { const g = $('#modal .gallery'); if (g && modalKind === 'gallery') { delete g.dataset.eq; fitModal(); } });
       m.querySelector('.modal-box').addEventListener('click', (e) => {
         const b = e.target.closest('button[data-gf]');
         if (!b || b.dataset.gf === galleryFilter) return;
@@ -3510,9 +3513,33 @@
     const n = galleryFilter === 'v2' ? 2 : 1;
     return RACERS_ALL.filter((r) => (r.edition || 1) === n);
   }
-  function galleryCards() {
+  function galleryCards(list = galleryRacers()) {
     const save = vs; if (!vs) vs = { players: [] };
-    try { return galleryRacers().map((r) => rcard(r.id)).join(''); } finally { vs = save; }
+    try { return list.map((r) => rcard(r.id)).join(''); } finally { vs = save; }
+  }
+  // 一代、二代的技能文字长短不一，按内容分页会让两边页数、弹窗高度都不一样。
+  // 先把全部 72 张卡摆进去量出最高的那张，所有卡统一用这个高度（--ch），再放回当前筛选的卡片：
+  // 无论看一代、二代还是全部，每页张数和弹窗大小都一样。列数或字体变了才重量。
+  function galleryPre(box) {
+    const key = `${box.clientWidth}x${box.clientHeight}|${getComputedStyle(box).display}`;
+    if (box.dataset.eq === key) return;
+    const keep = box.innerHTML;
+    box.style.removeProperty('--ch');
+    box.innerHTML = galleryCards(RACERS_ALL);
+    let mx = 0;
+    for (const c of box.children) mx = Math.max(mx, c.offsetHeight);
+    box.innerHTML = keep;
+    // 每页放得下的整行数固定；剩余高度平均分给每行，卡片刚好铺满弹窗，图片区随之变大
+    const cs = getComputedStyle(box), gap = parseFloat(cs.rowGap) || 0;
+    const room = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const rows = Math.max(1, Math.floor((room + gap) / (mx + gap)));
+    box.style.setProperty('--ch', `${Math.max(mx, Math.floor((room - gap * (rows - 1)) / rows))}px`);
+    box.dataset.eq = key;
+  }
+  function galleryPager() {
+    const st = pagers.gallery || (pagers.gallery = { anchor: 0, dir: 0 });
+    st.pre = galleryPre;
+    return st;
   }
   // 筛选标签：宽屏放在弹窗标题栏，窄屏放在图鉴上方（两份同步，CSS 只显示其中一份）
   function galleryFilterHtml(cls) {
@@ -3533,7 +3560,7 @@
     if (!box) return;
     box.innerHTML = galleryCards();
     const n = $('#galCount'); if (n) n.textContent = ` · ${galleryRacers().length} 名`;
-    if (pagers.gallery) { pagers.gallery.anchor = 0; pagers.gallery.dir = 0; }
+    galleryPager().anchor = 0; pagers.gallery.dir = 0;
     paginate('gallery', box, () => $$('.gallery .rcard', m), $('#mPager'));
   }
 
@@ -3586,7 +3613,7 @@
     if (m.hidden || !modalKind) return;
     if (fresh) for (const k of ['gallery', 'rules']) if (pagers[k]) pagers[k].anchor = 0;
     if (modalKind === 'records') return;
-    if (modalKind === 'gallery') paginate('gallery', $('.gallery', m), () => $$('.gallery .rcard', m), $('#mPager'));
+    if (modalKind === 'gallery') { galleryPager(); paginate('gallery', $('.gallery', m), () => $$('.gallery .rcard', m), $('#mPager')); }
     else if (modalKind === 'tracks') renderTrackGuide(fresh || !tgTracks().includes(tgKey) ? tgTracks()[0] : tgKey);
     else paginate('rules', $('.rules', m), () => $$('.rules .rule-sec', m), $('#mPager'));
   }
