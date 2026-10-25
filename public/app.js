@@ -981,12 +981,12 @@
     if (p <= 29) return { x: 900 - (p - 15) * 60, y: 360, w: 56, h: 88 };
     return { x: 6, y: 360, w: 50, h: 88 };
   }
-  // 竖屏：7 列 × 10 行的方格回环，起点在左上，顺时针一圈，终点线在起点正下方
+  // 竖屏：蛇形赛道，每行 6 格来回折返（偶数行向右、奇数行向左），终点是最下面一条棋盘格带；
+  // 赛道只占上半，下半整块留给行动卡、骰子和领奖台
   function tallRect(p) {
-    const S = 64, pad = 8;
-    let c, r;
-    if (p <= 0) { c = 0; r = 0; } else if (p <= 6) { c = p; r = 0; } else if (p <= 15) { c = 6; r = p - 6; } else if (p <= 21) { c = 6 - (p - 15); r = 9; } else if (p <= 29) { c = 0; r = 9 - (p - 21); } else return { x: 76, y: 72, w: 26, h: 60 };
-    return { x: pad + c * S, y: pad + r * S, w: 60, h: 60 };
+    if (p >= FIN) return { x: 4, y: 338, w: 452, h: 54 };
+    const q = Math.max(0, p), r = Math.floor(q / 6), i = q % 6, c = r % 2 ? 5 - i : i;
+    return { x: 4 + c * 76, y: 8 + r * 66, w: 72, h: 62 };
   }
   const GEO = {
     wide: {
@@ -997,8 +997,8 @@
     },
     tall: {
       vb: [460, 652], rect: tallRect, bed: { x: 0, y: 0, w: 460, h: 652, rx: 34 },
-      inf: { x: 72, y: 72, w: 316, h: 508 }, pod: { x: 150, y: 78, w: 150, h: 120 },
-      center: { x: 80, y: 196, w: 300, h: 378 },
+      inf: { x: 8, y: 398, w: 444, h: 246 }, pod: { x: 316, y: 402, w: 130, h: 104, k: 0.8 },
+      center: { x: 14, y: 404, w: 432, h: 234 },
       arrows: [],
     },
   };
