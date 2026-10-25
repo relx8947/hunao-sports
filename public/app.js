@@ -1670,7 +1670,6 @@
     const taken = keep ? dRound.taken : {};
     const list = keep ? dRound.cards : vs.faceUp || [];
     $('#draftCards').innerHTML = list.map((id, k) => rcard(id, { cls: deal ? 'deal' : '', k, taken: taken[id] })).join('');
-    if (!isParticipant()) for (const el of $$('#draftCards .rcard')) el.dataset.tip = el.dataset.id;
     $('#draftTitle').textContent = isParticipant() ? (vs.draft ? `${vs.draft.round === 0 ? '第一' : '第二'}轮选秀` : '组建你的队伍') : `AI 自动选秀${vs.draft ? ` · 第 ${vs.draft.round + 1}/2 轮` : ''}`;
     const total = vs.players.length * 4;
     const picked = vs.players.reduce((s, p) => s + p.hand.length, 0);
@@ -1716,8 +1715,8 @@
     }
     if (done) {
       box.classList.add('fitted');
-      // 说明被收起的档位（以及观战）：悬停 / 点按卡牌看完整技能
-      for (const el of items) { if (box.dataset.d === 'c' || box.dataset.d === 'd' || !isParticipant()) el.dataset.tip = el.dataset.id; else delete el.dataset.tip; }
+      // 技能文字已写在卡面上的档位不再弹悬浮框，只有文字被收起的紧凑档位才悬停 / 点按看完整技能
+      for (const el of items) { if (box.dataset.d === 'c' || box.dataset.d === 'd') el.dataset.tip = el.dataset.id; else delete el.dataset.tip; }
       return;
     }
     box.dataset.d = 'd'; setW(60);
