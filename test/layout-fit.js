@@ -10,10 +10,13 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { launch, step, state } = require('./browser-helper');
+const { launch, step, state, quickStart } = require('./browser-helper');
 
 const MOBILE = [[360, 740], [375, 667], [393, 852], [430, 932], [393, 700], [390, 664], [375, 560], [844, 390], [852, 393], [667, 375]];
 const DESKTOP = [[1920, 1080], [1440, 900], [1366, 768], [1280, 720]];
+// 二代赛道（扭扭糖果 / 漩涡乐园）比赛画面要量的尺寸
+const V2_MOBILE = [[393, 852], [360, 740], [390, 664], [852, 393]];
+const V2_DESKTOP = [[1440, 900], [1920, 1080], [1280, 720]];
 const SHOTS = process.env.SHOTS;
 const failures = [];
 const seen = new Map();
@@ -149,12 +152,46 @@ async function playThrough(app, label, sizes, edition) {
   await measure(page, sizes, `${label}-spectator`, home);
 }
 
+// 二代快速局：扭扭糖果（第 1 场）与漩涡乐园（第 2 场）各在比赛中轮到本人时量一次
+async function v2Through(app, label, sizes) {
+  const home = sizes[0];
+  const page = await app.page(`二代${label}验收`, { width: home[0], height: home[1] });
+  await page.waitForTimeout(600);
+  await quickStart(page, { ai: 3, edition: 'v2' });
+  await page.locator('#speedBtn').click();
+  await page.locator('#speedBtn').click();
+  const captured = new Set();
+  const started = Date.now();
+  while (captured.size < 2 && Date.now() - started < Number(process.env.MAX_MS || 420000)) {
+    const st = await state(page);
+    const v = st.visual, snap = st.game && st.game.snap;
+    const idle = !v.playing && !v.queue && !v.locked;
+    const mine = await page.evaluate(() => !!document.querySelector('#dock .prompt.mine'));
+    const track = snap && snap.track;
+    // 跑过几轮再量：让变数徽标、漩涡、运动员分散在赛道上
+    if (v.phase === 'race' && !v.overlayKind && idle && mine && ['twisty', 'whirly'].includes(track) && !captured.has(track)) {
+      const turns = await page.evaluate(() => window.__testMessages.filter((m) => m.type === 'game').reduce((n, m) => n + (m.events || []).filter((e) => e.t === 'turn').length, 0));
+      if (turns > 8 + snap.raceNo * 6) {
+        captured.add(track);
+        const marks = await page.evaluate(() => document.querySelectorAll('#trackSvg .twl-mark').length);
+        if (track === 'whirly' && marks !== 12) failures.push(`二代${label}：漩涡格应为 12 个，实际 ${marks}`);
+        await measure(page, sizes, `v2-${label}-${track}`, home);
+      }
+    }
+    if (st.final) break;
+    if (!(await step(page))) await page.waitForTimeout(150);
+  }
+  for (const k of ['twisty', 'whirly']) if (!captured.has(k)) failures.push(`二代${label}：没有抓到 ${k} 比赛界面`);
+}
+
 (async () => {
   const app = await launch();
   try {
     await Promise.all([
       playThrough(app, 'mobile', MOBILE, 'v1'),
       playThrough(app, 'desktop', DESKTOP, 'v2'),
+      v2Through(app, 'mobile', V2_MOBILE),
+      v2Through(app, 'desktop', V2_DESKTOP),
     ]);
   } finally {
     await app.close();

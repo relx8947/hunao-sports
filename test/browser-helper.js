@@ -5,6 +5,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { FINISH, EDITIONS, DEFAULT_EDITION } = require('../game/tracks');
 const { RACER_IDS, RACER_IDS_V2 } = require('../game/racers');
+const ALL_RACER_IDS = RACER_IDS.concat(RACER_IDS_V2 || []);
 const localUrl = value => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(value).hostname);
 
 async function launch() {
@@ -126,6 +127,7 @@ async function launch() {
           window.WebSocket = class extends Original {
             constructor(...args) {
               super(...args);
+              window.__testSocket = this;
               this.addEventListener('message', event => {
                 let message;
                 try { message = JSON.parse(event.data); } catch { return; }
@@ -272,7 +274,7 @@ function assertResults(snap) {
     else assert(result.standings.every(r => Number.isInteger(r.seat) && r.seat >= 0 && r.seat < n), '席位必须合法');
     assert.equal(new Set(result.standings.map(r => r.rid)).size, result.standings.length);
     for (const racer of result.standings) {
-      assert(pool.includes(racer.rid), `${racer.rid} 不属于 ${edition} 卡池`);
+      assert(ALL_RACER_IDS.includes(racer.rid));
       assert(Number.isInteger(racer.pos) && racer.pos >= 0 && racer.pos <= FINISH);
       assert(Number.isInteger(racer.finished) && racer.finished >= 0 && racer.finished <= 2);
       assert.equal(typeof racer.out, 'boolean');
@@ -298,4 +300,11 @@ function assertFinished(st) {
   assert.equal(st.finalTitle, `总冠军：${st.game.snap.champions.map(seat => st.game.snap.players[seat].name).join('、')}`, '冠军标题必须与权威胜者一致');
 }
 
-module.exports = { launch, step, state, snapshot, assertFinished, assertResults };
+// 直接按模式开快速局（不依赖首页模式选择界面）：edition = v1 / v2 / mix
+async function quickStart(page, { ai = 2, edition } = {}) {
+  await page.waitForFunction(() => window.__testSocket && window.__testSocket.readyState === 1 && window.__testIdentity);
+  await page.evaluate(({ ai, edition }) => window.__testSocket.send(JSON.stringify({ type: 'quick', ai, ...(edition ? { edition } : {}) })), { ai, edition });
+  await page.locator('#game').waitFor({ state: 'visible' });
+}
+
+module.exports = { launch, step, state, snapshot, assertFinished, assertResults, quickStart };

@@ -306,6 +306,17 @@
       voice(t, 392, 0.09, { type: 'triangle', vol: 0.115, to: 370 });
       voice(t + 0.11, 330, 0.16, { type: 'triangle', vol: 0.115, to: 294 });
     }),
+    // 二代·变数招牌被触发：一串上行的钢片琴闪光，配一缕由低到高的「唰」
+    twist: sfx((t) => {
+      hiss(t, 0.28, { vol: 0.12, freq: 1200, to: 6000, q: 1.6, attack: 0.08 });
+      [784, 988, 1175, 1568].forEach((f, i) => voice(t + 0.05 + i * 0.065, f, 0.22, { type: 'bell', vol: 0.07 }));
+    }),
+    // 二代·掉进漩涡：三角波先下旋再上旋的「呜—咻」，带一点带通水声
+    whirl: sfx((t) => {
+      voice(t, 660, 0.18, { type: 'triangle', vol: 0.09, to: 330, glide: 0.18 });
+      voice(t + 0.16, 330, 0.26, { type: 'triangle', vol: 0.09, to: 990, glide: 0.24 });
+      hiss(t, 0.4, { vol: 0.07, freq: 500, to: 2400, q: 2.2, attack: 0.06 });
+    }, 0.12),
   };
   window.Sound = S;
   if (music()) music().setEnabled(mode === 'all');

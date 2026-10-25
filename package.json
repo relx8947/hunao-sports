@@ -16,8 +16,9 @@
     "test:browser-helper": "node test/browser-helper-test.js",
     "test:layout": "node test/layout-fit.js",
     "test:sfx": "node test/sfx.js",
-    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi && npm run test:spectator && npm run test:directory && npm run test:music && npm run test:layout && npm run test:ui-polish && npm run test:sfx",
-    "test:ui-polish": "node test/ui-polish.js"
+    "test:ui-polish": "node test/ui-polish.js",
+    "test:modes-ui": "node test/modes-ui.js",
+    "test:all": "npm test && npm run test:frontend && npm run test:browser-helper && npm run test:browser && npm run test:multi && npm run test:spectator && npm run test:directory && npm run test:music && npm run test:layout && npm run test:ui-polish && npm run test:sfx && npm run test:modes-ui"
   },
   "engines": {
     "node": ">=20"
