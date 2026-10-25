@@ -2649,6 +2649,12 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   .dd-info { height: auto; min-height: 0; flex: 1 1 0; grid-template-columns: 50px minmax(0, 1fr); }
 }
 
+/* 手机选秀时底部 dock 的「等待中」和技能栏下的按钮重复：dock 的文字与按钮让出，只留一条倒计时细线，空间还给头像网格 */
+#game:has(.draft.ig:not([hidden])) #dock { min-height: 0; height: 6px; padding: 0; }
+#game:has(.draft.ig:not([hidden])) #dock .prompt { position: relative; width: 100%; min-height: 0; height: 6px; padding: 0; border: 0; background: none; box-shadow: none; animation: none; }
+#game:has(.draft.ig:not([hidden])) #dock .prompt > :not(.timer) { display: none; }
+#game:has(.draft.ig:not([hidden])) #dock .prompt .timer { left: 0; right: auto; bottom: 0; height: 5px; border-radius: 0 3px 3px 0; }
+
 /* 矮屏手机（竖屏）：收起标题，技能栏与按钮变矮，仍保持固定高度 */
 @media (max-height: 800px) and (orientation: portrait) {
   #game .draft.ig::before { display: none; }
