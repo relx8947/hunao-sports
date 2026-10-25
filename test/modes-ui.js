@@ -11,7 +11,7 @@ const { createServer } = require('../server');
 const { Game } = require('../game/engine');
 const { decide } = require('../game/ai');
 const { TWISTS } = require('../game/racers');
-const { launch, step, state, assertFinished, quickStart } = require('./browser-helper');
+const { launch, step, state, assertFinished, quickStart, clickTop } = require('./browser-helper');
 
 // node /tmp 里按覆盖贪心挑出的种子：合起来覆盖全部二代事件、两种特殊格与 13 张变数卡
 const REPLAY = (process.env.REPLAY_SEEDS || '3,41,13,23,32,6').split(',').map(Number);
@@ -106,8 +106,8 @@ async function realGame(app, label, viewport, edition) {
   const page = await app.page(label, viewport);
   await page.waitForTimeout(600);
   await quickStart(page, { ai: 3, edition });
-  await page.locator('#speedBtn').click();
-  await page.locator('#speedBtn').click();
+  await clickTop(page, '#speedBtn');
+  await clickTop(page, '#speedBtn');
   const started = Date.now(), limit = Number(process.env.MAX_MS || 600000);
   let final, n = 0, whirlChecked = false;
   while (Date.now() - started < limit) {

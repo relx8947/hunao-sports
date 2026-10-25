@@ -7,7 +7,7 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { WebSocketServer } = require('ws');
-const { launch } = require('./browser-helper');
+const { launch, clickTop } = require('./browser-helper');
 
 function listen(server, host) {
   return new Promise((resolve, reject) => {
@@ -69,8 +69,8 @@ function refused(base) {
     await page.locator('#aiCount [data-v="2"]').click();
     await page.locator('#quickBtn').click();
     await page.waitForFunction(() => window.__testGame?.gameId, null, { timeout: 5000 });
-    await page.locator('#speedBtn').click();
-    await page.locator('#speedBtn').click();
+    await clickTop(page, '#speedBtn');
+    await clickTop(page, '#speedBtn');
     await page.waitForFunction(() => {
       const visual = window.__hn();
       return !visual.playing && !visual.queue && !visual.locked && document.querySelector('#draftCards .rcard.pickable');

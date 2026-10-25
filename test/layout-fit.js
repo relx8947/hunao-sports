@@ -10,7 +10,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { launch, step, state, quickStart } = require('./browser-helper');
+const { launch, step, state, quickStart, clickTop } = require('./browser-helper');
 
 const MOBILE = [[360, 740], [375, 667], [393, 852], [430, 932], [393, 700], [390, 664], [375, 560], [844, 390], [852, 393], [667, 375]];
 const DESKTOP = [[1920, 1080], [1440, 900], [1366, 768], [1280, 720]];
@@ -47,12 +47,39 @@ async function measure(page, sizes, screen, home, expectOverlay) {
         ? [...document.querySelectorAll('body *')].filter(visible).filter((el) => getComputedStyle(el).position !== 'fixed' && !el.closest('#overlay, #modal, #toasts, #tip'))
           .map((el) => ({ el, r: el.getBoundingClientRect() })).filter(({ r }) => r.bottom > innerHeight + 1 || r.right > innerWidth + 1)
           .slice(-3).map(({ el, r }) => `${name(el)}(${Math.round(r.right)}×${Math.round(r.bottom)})`) : [];
-      return { sh: se.scrollHeight, sw: se.scrollWidth, ih: innerHeight, iw: innerWidth, overflow, culprits, outside: [...new Set(outside)].slice(0, 6), overlayKind: window.__hn ? window.__hn().overlayKind : null };
+      // 手机竖屏的赛场上半部：顶栏单行、提示框不被挤出、玩家栏等宽一横排、「你」不折行
+      const topIssues = [];
+      if (innerWidth <= 600 && innerHeight > innerWidth && !document.getElementById('game').hidden && document.querySelector('#players .prow')) {
+        const rect = (sel) => { const el = document.querySelector(sel); return el && visible(el) ? el.getBoundingClientRect() : null; };
+        const bar = ['#leaveGame', '#races', '#moreBtn', '#chatBtn'].map((sel) => [sel, rect(sel)]).filter(([, r]) => r);
+        const cy = bar.map(([, r]) => r.top + r.height / 2);
+        if (Math.max(...cy) - Math.min(...cy) > 6) topIssues.push(`顶栏没排成一行 ${bar.map(([sel, r]) => `${sel}@${Math.round(r.top)}`).join(',')}`);
+        const sorted = bar.slice().sort((a, b) => a[1].left - b[1].left);
+        for (let i = 1; i < sorted.length; i++) if (sorted[i][1].left < sorted[i - 1][1].right - 1) topIssues.push(`顶栏控件重叠 ${sorted[i - 1][0]}/${sorted[i][0]}`);
+        const pills = [...document.querySelectorAll('#races .race-pill, #races .race-ed')].filter(visible);
+        if (pills.some((el) => el.getBoundingClientRect().height > 40 || el.getBoundingClientRect().right > innerWidth + 1)) topIssues.push('场次胶囊折行或溢出');
+        if (innerWidth >= 360) for (const sel of ['#leaveGame', '#moreBtn', '#chatBtn']) { const r = rect(sel); if (r && (r.width < 39.5 || r.height < 39.5)) topIssues.push(`${sel} 触控目标不足 40px：${Math.round(r.width)}×${Math.round(r.height)}`); }
+        const bn = rect('#topTitle');
+        if (!bn || bn.height < 30) topIssues.push('提示框缺失');
+        else if (bn.right > innerWidth + 1 || bn.left < -1) topIssues.push('提示框溢出');
+        const rows = [...document.querySelectorAll('#players .prow')].filter(visible).map((el) => el.getBoundingClientRect());
+        if (rows.length < 2) topIssues.push(`玩家卡只有 ${rows.length} 张`);
+        else {
+          if (Math.max(...rows.map((r) => r.width)) - Math.min(...rows.map((r) => r.width)) > 1.5) topIssues.push('玩家卡宽度不等');
+          if (Math.max(...rows.map((r) => r.top)) - Math.min(...rows.map((r) => r.top)) > 6) topIssues.push('玩家卡没排成一行');
+          if (rows.some((r) => r.left < -1 || r.right > innerWidth + 1)) topIssues.push('玩家卡超出视口');
+        }
+        for (const el of document.querySelectorAll('#players .prow .pn b, #players .prow .you')) if (visible(el) && el.getBoundingClientRect().height > (el.classList.contains('you') ? 20 : 30)) topIssues.push(`玩家卡文字折行 ${el.textContent.slice(0, 6)}`);
+        const hiddenTop = document.querySelector('#topActions.open, #emotes.open');
+        if (hiddenTop) topIssues.push('更多/聊天弹层不应默认展开');
+      }
+      return { topIssues, sh: se.scrollHeight, sw: se.scrollWidth, ih: innerHeight, iw: innerWidth, overflow, culprits, outside: [...new Set(outside)].slice(0, 6), overlayKind: window.__hn ? window.__hn().overlayKind : null };
     });
     const tag = `${screen} @${width}×${height}`;
     const bad = [];
     if (m.sh > m.ih + 1) bad.push(`页面纵向滚动 ${m.sh}>${m.ih} ${m.culprits.join(' ')}`);
     if (m.sw > m.iw + 1) bad.push(`页面横向滚动 ${m.sw}>${m.iw}`);
+    if (m.topIssues.length) bad.push(`上半部：${m.topIssues.join('；')}`);
     if (m.overflow.length) bad.push(`容器溢出 ${m.overflow.join('；')}`);
     if (m.outside.length) bad.push(`超出视口 ${m.outside.join('、')}`);
     // 量的必须真是要验收的那个浮层（倍速下单场结算曾被下一场暗选顶掉，量到的其实是暗选）
@@ -112,8 +139,8 @@ async function playThrough(app, label, sizes, edition) {
   await measure(page, sizes, `${label}-lobby`, home);
   await page.locator('#startBtn').click();
   await page.locator('#game').waitFor({ state: 'visible' });
-  await page.locator('#speedBtn').click();
-  await page.locator('#speedBtn').click();
+  await clickTop(page, '#speedBtn');
+  await clickTop(page, '#speedBtn');
 
   const captured = new Set();
   const started = Date.now();
@@ -158,8 +185,8 @@ async function v2Through(app, label, sizes) {
   const page = await app.page(`二代${label}验收`, { width: home[0], height: home[1] });
   await page.waitForTimeout(600);
   await quickStart(page, { ai: 3, edition: 'v2' });
-  await page.locator('#speedBtn').click();
-  await page.locator('#speedBtn').click();
+  await clickTop(page, '#speedBtn');
+  await clickTop(page, '#speedBtn');
   const captured = new Set();
   const started = Date.now();
   while (captured.size < 2 && Date.now() - started < Number(process.env.MAX_MS || 420000)) {

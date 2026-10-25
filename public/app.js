@@ -1307,17 +1307,41 @@
     }).join('');
   }
   // 顶栏标题只讲「现在是什么局面」：场次 + 轮到谁 + 离你还有几位（手机上场次名会让位给后两项）
+  // 手机竖屏里它就是 APK 风格的「提示框」：一句话说清轮到谁、该做什么，右侧旗帜 + 第 N/4 场（桌面隐藏 .tb-end / .tb-do）
+  const TURN_DO = {
+    draft: '选一名运动员', roll: '掷骰子', mode: '选择这回合怎么走', reroll: '决定要不要重掷', genius: '预言点数',
+    mastermind: '预言冠军', hypnotist: '施展催眠', thirdwheel: '找两人世界', cheerleader: '决定要不要加油', alchemist: '炼金',
+    rocket: '决定要不要点火', suckerfish: '决定要不要跟上', duel: '决定要不要决斗', egg: '挑一个技能', twin: '挑一位冠军复制',
+  };
+  function bannerDo(mine, d, p) {
+    if (!d || !p || d.simul || playing || queue.length) return '';
+    if (mine) return TURN_DO[d.kind] || '';
+    return WAIT_TEXT[d.kind] || '';
+  }
   function renderTitle() {
     if (!vs) return;
     const el = $('#topTitle');
+    const plainSpan = (t) => `<span class="tt-plain">${esc(t)}</span>`;
     const part = (cls, text) => `<span class="${cls}">${esc(text)}</span>`;
-    let html = '', plain = '';
+    const pend = snap && snap.pending;
+    const total = raceSchedule().length || 4;
+    let html = '', plain = '', mine = false, doing = '', cue2 = '';
+    let round = vs.phase === 'draft' ? '选秀' : `第 ${Math.max(1, vs.raceNo)}/${total} 场`;
     if (vs.phase === 'draft') {
       plain = isParticipant() ? '选秀：组建你的 4 人队伍' : 'AI 选秀：自动组建队伍';
-      html = esc(plain);
+      html = plainSpan(plain);
+      if (isParticipant() && pend && pend.kind === 'draft' && !playing && !queue.length) {
+        const dp = vs.players[pend.seat];
+        mine = pend.seat === you;
+        doing = mine ? '轮到你选人：点一张卡牌' : `轮到 ${pname(dp)} 选人`;
+      } else doing = plain;
     } else if (vs.phase === 'pick') {
       plain = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name} · ${isParticipant() ? '派谁上场？' : 'AI 正在暗选出战'}`;
-      html = esc(plain);
+      html = plainSpan(plain);
+      const done = pend && pend.simul && (pend.done || []).includes(you);
+      mine = isParticipant() && !done;
+      doing = isParticipant() ? (done ? '已选好，等其他人亮牌' : '派谁上场？点一张卡牌') : 'AI 正在暗选出战';
+      cue2 = TRACKS[vs.track].name;
     } else if (vs.phase === 'race') {
       const p = vs.curSeat != null ? vs.players[vs.curSeat] : null;
       const race = `第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}`;
@@ -1328,14 +1352,23 @@
       html = part('tt-race', race) + (who ? `<span class="tt-sep"> · </span>${part(`tt-turn ${ahead === 0 ? 'mine' : ''}`, who)}` : '')
         + (cue ? `<span class="tt-sep"> · </span>${part(`tt-cue ${ahead === 1 ? 'soon' : ''}`, cue)}` : '');
       if (p) el.style.setProperty('--c', PCOL[p.seat % 6]);
-    } else if (vs.phase === 'between') { plain = `第 ${vs.raceNo} 场结束`; html = esc(plain); }
-    else if (vs.phase === 'over') { plain = '比赛结束'; html = esc(plain); }
+      mine = ahead === 0;
+      const todo = bannerDo(mine, pend && !pend.simul && pend.seat === p?.seat ? pend : null, p);
+      doing = who ? who + (todo ? `：${todo}` : '') : race;
+      cue2 = cue;
+    } else if (vs.phase === 'between') { plain = `第 ${vs.raceNo} 场结束`; html = plainSpan(plain); doing = plain; }
+    else if (vs.phase === 'over') { plain = '比赛结束'; html = plainSpan(plain); doing = plain; round = `共 ${total} 场`; }
     // 手机竖屏的场次条放不下模式徽标，改由标题行开头显示（CSS 二选一显示）
     const ed = curEdition();
-    if (el.dataset.plain === plain && el.dataset.ed === ed) return;
-    el.dataset.plain = plain;
+    const key = `${plain}|${doing}|${cue2}|${round}|${mine}`;
+    if (el.dataset.plain === key && el.dataset.ed === ed) return;
+    el.dataset.plain = key;
     el.dataset.ed = ed;
-    el.innerHTML = edBadge(ed, 'tt-ed') + html;
+    el.dataset.mine = mine ? '1' : '';
+    const flagSvg = window.Skin ? Skin.flag({ size: 22 }) : '';
+    el.innerHTML = edBadge(ed, 'tt-ed') + html
+      + `<span class="tb-do"><b class="tb-main">${esc(doing)}</b>${cue2 && cue2 !== doing ? `<small class="tb-cue">${esc(cue2)}</small>` : ''}</span>`
+      + `<span class="tb-end">${flagSvg}<b>${esc(round)}</b></span>`;
     el.title = `${edName(ed)} · ${plain}`;
   }
   function renderSpectatorStatus() {
@@ -1374,7 +1407,10 @@
     $('#autoBtn').title = autoFlags[you] ? '点击关闭托管并接管' : '点击开启托管';
     $('#autoBtn').hidden = !isParticipant();
     $('#emotes').hidden = !isParticipant();
-    $('#soundBtn').innerHTML = `<span class="ico">${icon(Sound.ui.icon)}</span>`;
+    $('#chatBtn').hidden = !isParticipant();
+    if (!isParticipant()) closeTopPops();
+    const soundShort = { all: '音乐', sfx: '音效', off: '静音' }[Sound.mode] || '';
+    $('#soundBtn').innerHTML = `<span class="ico">${icon(Sound.ui.icon)}</span><span class="lbl">声音</span><b class="st">${soundShort}</b>`;
     $('#soundBtn').title = Sound.ui.label;
     $('#soundBtn').setAttribute('aria-label', Sound.ui.label);
     renderSoundToggles();
@@ -1407,9 +1443,17 @@
   // 窄屏玩家卡：卡片太窄时把名字放到头像下面一行；名字还放不下就缩字号，最后只保留前几个字（不加省略号）
   // 名字、标签和视口都没变时直接套用上次量好的字号，不再强制布局
   let fitMemo = null;
+  const MQ_PHONE_PORTRAIT = matchMedia('(max-width: 600px) and (orientation: portrait)');
   function fitPlayerNames() {
     const box = $('#players');
     if (!box) return;
+    // 手机竖屏的玩家栏是等宽头像卡（名字条 CSS 省略号截断），不需要逐个量字号
+    if (MQ_PHONE_PORTRAIT.matches) {
+      box.classList.remove('pf-stack');
+      for (const nm of $$('.prow .pnm', box)) { nm.style.fontSize = ''; nm.classList.remove('clip'); }
+      fitMemo = null;
+      return;
+    }
     const all = $$('.prow .pnm', box);
     const key = `${innerWidth}x${innerHeight}|${document.fonts ? document.fonts.status : ''}|${all.map((nm) => nm.parentElement.textContent).join('|')}`;
     if (fitMemo && fitMemo.key === key) {
@@ -1443,6 +1487,9 @@
     const racing = vs.phase === 'race' || vs.phase === 'between';
     const ahead = vs.phase === 'race' ? turnsAhead() : null;
     const box = $('#players');
+    const starSvg = window.Skin ? Skin.star({ size: 16 }) : '★';
+    // 手机竖屏的提示框读取 pending（轮到谁、该做什么）：每次重排玩家栏顺带刷新（内容没变时 renderTitle 自己早退）
+    renderTitle();
     const html = vs.players.map((p) => {
       const c = PCOL[p.seat % 6];
       const cur = vs.racers.find((r) => r.seat === p.seat);
@@ -1469,7 +1516,7 @@
       return `<div class="prow ${vs.curSeat === p.seat && vs.phase === 'race' ? 'cur' : ''} ${p.seat === you ? 'me' : ''} ${soon ? 'soon' : ''} ${p.ai ? 'is-ai' : ''}" data-seat="${p.seat}" data-fly-target="seat-${p.seat}" style="--c:${c}" title="${esc(p.name)}">
         <div class="pav" ${cur && racing ? `data-tip="${cur.rid}"` : ''}>${ava}</div>
         <div class="pn"><b><span class="pnm">${esc(pname(p))}</span>${tags}</b>${line}<div class="hand">${hand}</div></div>
-        <div class="sc" title="${scoreTitle}"><b data-score="${p.seat}">${p.score}</b><span>分</span></div>${think}${soon ? '<span class="soon-tag">下一个是你</span>' : ''}</div>`;
+        <div class="sc" title="${scoreTitle}"><i class="sk-star" aria-hidden="true">${starSvg}</i><b data-score="${p.seat}">${p.score}</b><span>分</span></div>${think}${soon ? '<span class="soon-tag">下一个是你</span>' : ''}</div>`;
     }).join('');
     if (html === playersHtml && box.firstElementChild) return;
     playersHtml = html;
@@ -3438,6 +3485,7 @@
     box.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       send({ type: 'emote', key: b.dataset.e });
+      closeTopPops(true);
     });
   }
   function showEmote(seat, key) {
@@ -3791,6 +3839,48 @@
     confettiState.raf = requestAnimationFrame(tick);
   }
 
+  /* ================= 对局顶栏：手机竖屏的「更多」「快捷聊天」弹层 ================= */
+  // 弹层本体就是 #topActions / #emotes（桌面上它们是常驻的，类名 .open 只在手机竖屏 CSS 里生效）
+  const TOP_POPS = [['#moreBtn', '#topActions'], ['#chatBtn', '#emotes']];
+  function closeTopPops(focusBack) {
+    for (const [btn, pop] of TOP_POPS) {
+      const b = $(btn), p = $(pop);
+      if (!b || !p || !p.classList.contains('open')) continue;
+      p.classList.remove('open');
+      b.setAttribute('aria-expanded', 'false');
+      if (focusBack) b.focus({ preventScroll: true });
+    }
+  }
+  function toggleTopPop(which) {
+    const [btn, pop] = TOP_POPS[which];
+    const opening = !$(pop).classList.contains('open');
+    closeTopPops();
+    if (!opening) return;
+    Sound.click();
+    $(pop).classList.add('open');
+    $(btn).setAttribute('aria-expanded', 'true');
+    const first = $(`${pop} button:not(:disabled)`);
+    if (first && hasKeyboard.matches) first.focus({ preventScroll: true });
+  }
+  function initTopPops() {
+    $('#moreBtn').onclick = () => toggleTopPop(0);
+    $('#chatBtn').onclick = () => toggleTopPop(1);
+    // 点弹层外面关闭；点赛事纪录 / 玩法说明（会弹出窗口）后顺手收起
+    document.addEventListener('pointerdown', (e) => {
+      if (!$('#topActions').classList.contains('open') && !$('#emotes').classList.contains('open')) return;
+      if (e.target.closest('#topActions, #emotes, #moreBtn, #chatBtn')) return;
+      closeTopPops();
+    }, true);
+    $('#topActions').addEventListener('click', (e) => { if (e.target.closest('#recordsBtn, [data-open]')) closeTopPops(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!$('#topActions').classList.contains('open') && !$('#emotes').classList.contains('open')) return;
+      e.preventDefault();
+      closeTopPops(true);
+    });
+    window.addEventListener('resize', () => { if (!MQ_PHONE_PORTRAIT.matches) closeTopPops(); });
+  }
+
   /* ================= 对局顶栏 ================= */
   function initGameBar() {
     // 倍速循环 1 → 1.5 → 2.2 → 1（与 hub.js 的 SPEEDS 一致）：往快里切用「嗖↑」，绕回 1 倍用普通点击
@@ -3800,6 +3890,7 @@
     $('#speedBtn').onclick = () => { if (!(speed < 2.2 && playSfx('boost'))) Sound.click(); send({ type: 'speed' }); };
     $('#autoBtn').onclick = () => { Sound.click(); send({ type: 'auto', on: !autoFlags[you] }); };
     $('#soundBtn').onclick = () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); };
+    initTopPops();
     $('#leaveGame').onclick = () => {
       if ($('#leaveGame').dataset.armed) { navigate('leave', $('#leaveGame')); return; }
       $('#leaveGame').dataset.armed = '1';
