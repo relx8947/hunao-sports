@@ -149,10 +149,9 @@ function analyze(buffer, from = 0, to = buffer.length, winSec = 0.4) {
     await page.locator('#aiCount [data-v="2"]').click();
     await page.locator('#quickBtn').click();
     await page.locator('#game').waitFor({ state: 'visible' });
-    const btn = page.locator('#soundBtn');
     const seen = [];
     for (const expected of ['sfx', 'off', 'all']) {
-      await btn.click();
+      await clickTop(page, '#soundBtn');
       const s = await page.evaluate(() => ({ mode: Sound.mode, enabled: Music.enabled, title: document.querySelector('#soundBtn').title, svg: document.querySelector('#soundBtn svg').innerHTML }));
       assert.equal(s.mode, expected);
       assert.equal(s.enabled, expected === 'all');
@@ -160,7 +159,7 @@ function analyze(buffer, from = 0, to = buffer.length, winSec = 0.4) {
     }
     assert.equal(new Set(seen.map((s) => s.svg)).size, 3, '三档图标各不相同');
     assert.equal(new Set(seen.map((s) => s.title)).size, 3, '三档提示各不相同');
-    await btn.click(); // → sfx，刷新后保持
+    await clickTop(page, '#soundBtn'); // → sfx，刷新后保持
     await page.reload();
     await page.locator('#game, #home, #lobby').first().waitFor({ state: 'attached' });
     assert.equal(await page.evaluate(() => Sound.mode), 'sfx', '刷新后保持仅音效');

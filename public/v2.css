@@ -124,3 +124,7 @@
 @media (prefers-reduced-motion: reduce) {
   #trackSvg .twl-pipe.flow .twl-shine, .v2-coin.pop, .v2-monster.pop, .token.v2-howl .hop, .token.v2-popin .hop, .v2-chip.v2-land { animation: none; }
 }
+
+/* 手机蛇形赛道的漩涡管道：平时隐身，传送时才亮起 */
+.twl-pipe.twl-ghost { opacity: 0; transition: opacity .2s; }
+.twl-pipe.twl-ghost.flow { opacity: 1; }

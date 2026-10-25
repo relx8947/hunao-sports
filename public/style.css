@@ -2401,3 +2401,24 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 
 /* 手机横屏：顶栏内容再宽也不能撑宽页面（否则手机浏览器会整体缩小，点击错位） */
 @media (max-width: 1000px) { #game { grid-template-columns: minmax(0, 1fr); } #game > * { min-width: 0; } .topbar { min-width: 0; overflow: hidden; } }
+
+/* 手机竖屏蛇形赛道：下半部 = 左边标题/骰子/解说 + 右边领奖台，底部整宽行动卡 */
+.board.tall .center { gap: calc(6 * var(--u)); }
+.board.tall .center-main { flex: none; width: 66%; height: calc(86 * var(--u)); }
+.board.tall .turn-card { flex: 1 1 0; min-height: 0; }
+.board.tall .tc-ava { width: calc(40 * var(--u)); height: calc(40 * var(--u)); }
+.board.tall .tc-head { padding: calc(4 * var(--u)) calc(10 * var(--u)); }
+.board.tall .tc-who b { font-size: calc(18 * var(--u)); margin-top: 0; }
+.board.tall .tc-skill { padding: calc(6 * var(--u)) calc(11 * var(--u)) calc(2 * var(--u)); }
+.board.tall .tc-skill p { margin-top: calc(3 * var(--u)); font-size: calc(13 * var(--u)); line-height: 1.35; }
+.board.tall .tc-st { margin-bottom: calc(6 * var(--u)); padding-top: calc(4 * var(--u)); }
+.board.tall .tc-head { padding: calc(3 * var(--u)) calc(10 * var(--u)); }
+.board.tall .tc-skill { padding: calc(3 * var(--u)) calc(11 * var(--u)) 0; }
+.board.tall .tc-gap { margin-top: calc(3 * var(--u)); }
+.board.tall .tc-st { margin-bottom: calc(4 * var(--u)); margin-top: calc(3 * var(--u)); padding-top: calc(3 * var(--u)); }
+.board.tall .center-main { height: calc(80 * var(--u)); }
+.board.tall .tc-ava { width: calc(34 * var(--u)); height: calc(34 * var(--u)); }
+.board.tall .tc-st { margin-bottom: calc(3 * var(--u)); }
+.board.tall .tc-who b { line-height: 1.1; }
+.board.tall .tc-player { line-height: 1.25; }
+.board.tall .center-main { height: calc(77 * var(--u)); }

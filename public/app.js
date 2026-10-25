@@ -984,9 +984,9 @@
   // 竖屏：蛇形赛道，每行 6 格来回折返（偶数行向右、奇数行向左），终点是最下面一条棋盘格带；
   // 赛道只占上半，下半整块留给行动卡、骰子和领奖台
   function tallRect(p) {
-    if (p >= FIN) return { x: 4, y: 338, w: 452, h: 54 };
+    if (p >= FIN) return { x: 4, y: 318, w: 452, h: 44 };
     const q = Math.max(0, p), r = Math.floor(q / 6), i = q % 6, c = r % 2 ? 5 - i : i;
-    return { x: 4 + c * 76, y: 8 + r * 66, w: 72, h: 62 };
+    return { x: 4 + c * 76, y: 8 + r * 62, w: 72, h: 58 };
   }
   const GEO = {
     wide: {
@@ -997,9 +997,9 @@
     },
     tall: {
       vb: [460, 652], rect: tallRect, bed: { x: 0, y: 0, w: 460, h: 652, rx: 34 },
-      inf: { x: 8, y: 398, w: 444, h: 246 }, pod: { x: 316, y: 402, w: 130, h: 104, k: 0.8 },
-      center: { x: 14, y: 404, w: 432, h: 234 },
-      arrows: [],
+      inf: { x: 8, y: 368, w: 444, h: 276 }, pod: { x: 316, y: 366, w: 130, h: 84 },
+      center: { x: 14, y: 374, w: 432, h: 264 },
+      arrows: [], thumb: [460, 368],
     },
   };
   const geo = () => GEO[layout];
@@ -1043,19 +1043,21 @@
   }
 
   // 赛道 SVG：对局棋盘和地图图鉴共用同一套画法（wide = 电脑/横屏，tall = 手机竖屏）
-  function trackSvgMarkup(trackKey, lay) {
+  function trackSvgMarkup(trackKey, lay, thumb) {
     const wild = trackKey === 'wild';
-    const G = GEO[lay];
+    // 手机竖屏的缩略图只取蛇形赛道本身（不带下半部的内场和领奖台）
+    const crop = thumb && lay === 'tall';
+    const G = crop ? { ...GEO[lay], bed: { ...GEO[lay].bed, h: GEO[lay].thumb[1] } } : GEO[lay];
     const { bed, inf } = G;
     let s = `<defs><pattern id="chk" width="12.5" height="12.5" patternUnits="userSpaceOnUse"><rect width="12.5" height="12.5" fill="#fff"/><rect width="6.25" height="6.25" fill="${INK}"/><rect x="6.25" y="6.25" width="6.25" height="6.25" fill="${INK}"/></pattern></defs>`;
     s += `<rect x="${bed.x}" y="${bed.y}" width="${bed.w}" height="${bed.h}" rx="${bed.rx}" fill="${INK}"/>`;
-    s += `<rect x="${inf.x}" y="${inf.y}" width="${inf.w}" height="${inf.h}" rx="24" fill="${wild ? '#F7DDAE' : '#CFEFC4'}" stroke="#fff" stroke-width="3"/>`;
+    if (!crop) s += `<rect x="${inf.x}" y="${inf.y}" width="${inf.w}" height="${inf.h}" rx="24" fill="${wild ? '#F7DDAE' : '#CFEFC4'}" stroke="#fff" stroke-width="3"/>`;
     // 行进方向箭头（跑道外圈的小白箭头）
     for (const [x, y, rot] of G.arrows) s += `<path d="M-5 -5 L3 0 L-5 5" transform="translate(${x} ${y}) rotate(${rot})" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>`;
     // 内场点缀
     let seed = wild ? 7 : 3;
     const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < (crop ? 0 : 30); i++) {
       const x = inf.x + 18 + rnd() * (inf.w - 36), y = inf.y + 14 + rnd() * (inf.h - 28);
       if (wild) s += `<path d="M${x} ${y} l4 -9 l4 9 z" fill="#E4B774" opacity=".7"/>`;
       else {
@@ -1087,13 +1089,14 @@
     const f0 = G.rect(FIN);
     const f = lay === 'wide' ? { x: f0.x, y: G.rect(0).y, w: f0.w, h: f0.y + f0.h - G.rect(0).y } : f0;
     s += `<g class="cell" data-p="${FIN}"><rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="8" fill="url(#chk)" stroke="${INK}" stroke-width="2.5"/>`;
+    if (lay === 'tall') s += `<rect x="${f.x + f.w / 2 - 44}" y="${f.y + f.h / 2 - 14}" width="88" height="28" rx="8" fill="${INK}"/><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 + 7}" font-size="19" font-weight="900" text-anchor="middle" fill="#fff" letter-spacing="3">终点</text>`;
     if (lay === 'wide') s += `<rect x="${f.x + 9}" y="${f.y + f.h / 2 - 28}" width="${f.w - 18}" height="56" rx="7" fill="${INK}"/><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 - 3}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">终</text><text x="${f.x + f.w / 2}" y="${f.y + f.h / 2 + 15}" font-size="15" font-weight="900" text-anchor="middle" fill="#fff">点</text>`;
     s += '</g>';
     // 领奖台：冲线的运动员会站上来
     const pd = G.pod;
     const pcx = pd.x + pd.w / 2, pcy = pd.y + pd.h / 2 + 10;
-    s += `<g transform="translate(${pcx} ${pcy})"><ellipse cx="0" cy="40" rx="66" ry="7" fill="${INK}" opacity=".12"/><rect x="-58" y="6" width="38" height="30" rx="4" fill="#A7B0BE" stroke="${INK}" stroke-width="2.5"/><rect x="-19" y="-10" width="38" height="46" rx="4" fill="#E9A91B" stroke="${INK}" stroke-width="2.5"/><rect x="20" y="16" width="38" height="20" rx="4" fill="#fff" stroke="${INK}" stroke-width="2.5"/><text x="0" y="18" font-size="20" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">1</text><text x="-39" y="29" font-size="17" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">2</text><text x="0" y="62" font-size="13" font-weight="900" text-anchor="middle" fill="${INK}" opacity=".55">领奖台</text></g>`;
-    s += trackV2Layer(trackKey, lay); // 二代赛道：糖果格、扭扭招牌、漩涡与管道
+    if (!crop) s += `<g transform="translate(${pcx} ${pcy})"><ellipse cx="0" cy="40" rx="66" ry="7" fill="${INK}" opacity=".12"/><rect x="-58" y="6" width="38" height="30" rx="4" fill="#A7B0BE" stroke="${INK}" stroke-width="2.5"/><rect x="-19" y="-10" width="38" height="46" rx="4" fill="#E9A91B" stroke="${INK}" stroke-width="2.5"/><rect x="20" y="16" width="38" height="20" rx="4" fill="#fff" stroke="${INK}" stroke-width="2.5"/><text x="0" y="18" font-size="20" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">1</text><text x="-39" y="29" font-size="17" font-weight="900" text-anchor="middle" fill="#fff" stroke="${INK}" stroke-width="3.5" paint-order="stroke">2</text><text x="0" y="62" font-size="13" font-weight="900" text-anchor="middle" fill="${INK}" opacity=".55">领奖台</text></g>`;
+    s += trackV2Layer(trackKey, lay, G.bed); // 二代赛道：糖果格、扭扭招牌、漩涡与管道
     return s;
   }
 
@@ -3816,7 +3819,7 @@
   // 也可以由别的脚本提供 window.TrackThumbs[key](lay) 单独绘制地图图鉴缩略图，返回空值时退回默认画法。
   function trackThumbMarkup(key, lay) {
     const custom = window.TrackThumbs && typeof window.TrackThumbs[key] === 'function' ? window.TrackThumbs[key](lay) : '';
-    return custom || trackSvgMarkup(key, lay);
+    return custom || trackSvgMarkup(key, lay, true);
   }
   let tgLay = null, tgResizeBound = false;
   function renderTrackGuide(key, dir = 0) {
@@ -3855,7 +3858,7 @@
         ${stars.length ? item(glyph('star', 0), '星星', `第 ${cells(stars)} 格`, '停上去立刻拿 1 分铜牌，每次停上都算。') : ''}
       </ul><p class="tg-note">只看最后停在哪格：掷骰、技能移动、瞬移落到这里都触发，路过不算；赛道格效果先于所有技能结算。</p>`
       : `<p class="tg-note tg-plain">没有特殊格。起点后 ${FIN - 1} 格赛道，第 ${FIN} 步冲线，比的就是技能和运气。</p>`;
-    const [W, H] = GEO[lay].vb;
+    const [W, H] = GEO[lay].thumb || GEO[lay].vb;
     const list = tgTracks();
     box.innerHTML = `<div class="tg-tabs n${list.length}" role="tablist" aria-label="选择赛道">${list.map((k) => TRACKS[k]).map((x) => `<button role="tab" data-tg="${x.key}" aria-selected="${x.key === key}" class="${x.key === key ? 'on' : ''}${x.key === 'wild' ? ' wild' : ''} tk-${x.key}">${icon(x.key === 'wild' ? 'rock' : x.key === 'whirly' ? 'swirl' : 'flag')}<span class="tg-full">${esc(x.name)}</span><span class="tg-short">${esc(trackShort(x.key))}</span></button>`).join('')}</div>
       <div class="tg-page tg-${lay}${dir ? (dir > 0 ? ' pg-in-next' : ' pg-in-prev') : ''}" data-fit>
@@ -4115,6 +4118,17 @@
     if (pipeCache[lay]) return pipeCache[lay];
     const G = GEO[lay], f = G.inf;
     const pairs = (TRACKS.whirly && TRACKS.whirly.whirls) || [];
+    if (lay === 'tall') {
+      // 蛇形赛道里管道不绕圈：格子上的同色漩涡 + 字母已经说明配对，管道只在传送时亮起，沿两格中心的弧线滑过去
+      const out = pairs.map(([a, b], k) => {
+        const ra = G.rect(a), rb = G.rect(b);
+        const ax = ra.x + ra.w / 2, ay = ra.y + ra.h / 2, bx = rb.x + rb.w / 2, by = rb.y + rb.h / 2;
+        const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1, bow = Math.min(46, len * 0.22) * (k % 2 ? -1 : 1);
+        return { k, a, b, lane: 0, d: `M${f1(ax)} ${f1(ay)} Q${f1((ax + bx) / 2 - dy / len * bow)} ${f1((ay + by) / 2 + dx / len * bow)} ${f1(bx)} ${f1(by)}` };
+      });
+      pipeCache[lay] = out;
+      return out;
+    }
     const gutter = lay === 'wide' ? -3 : -2, step = lay === 'wide' ? 12 : 11;
     const lane = (L) => ({ x0: f.x + L, x1: f.x + f.w - L, y0: f.y + L, y1: f.y + f.h - L });
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -4192,11 +4206,11 @@
   }
 
   // 二代赛道图层：由 trackSvgMarkup 末尾一行调用，不改动既有绘制；格子底色用本图层自带的样式覆盖（:has 作用域，按实例 id 区分）
-  function trackV2Layer(trackKey, lay) {
+  function trackV2Layer(trackKey, lay, bedOverride) {
     const t = TRACKS[trackKey];
     if (!t || (trackKey !== 'twisty' && trackKey !== 'whirly')) return '';
     const G = GEO[lay], u = ++v2uid, scope = `svg:has(.twl-u${u})`;
-    const { bed } = G;
+    const bed = bedOverride || G.bed;
     let defs = '', css = '', s = '';
     if (trackKey === 'twisty') {
       CANDY.concat([CANDY_FIVE]).forEach((c, k) => {
@@ -4221,7 +4235,7 @@
       const w = lay === 'wide' ? 1 : 0.9;
       for (const pp of pipes) {
         const col = WHIRL_COLS[pp.k];
-        s += `<g class="twl-pipe" data-p="${pp.a} ${pp.b}" data-k="${pp.k}" style="--pc:${col}"><path class="twl-under" d="${pp.d}" fill="none" stroke="${INK}" stroke-width="${f1(8 * w)}" stroke-linecap="round" stroke-linejoin="round"/>`
+        s += `<g class="twl-pipe${lay === 'tall' ? ' twl-ghost' : ''}" data-p="${pp.a} ${pp.b}" data-k="${pp.k}" style="--pc:${col}"><path class="twl-under" d="${pp.d}" fill="none" stroke="${INK}" stroke-width="${f1(8 * w)}" stroke-linecap="round" stroke-linejoin="round"/>`
           + `<path class="twl-core" d="${pp.d}" fill="none" stroke="${col}" stroke-width="${f1(4.6 * w)}" stroke-linecap="round" stroke-linejoin="round"/>`
           + `<path class="twl-shine" d="${pp.d}" fill="none" stroke="#fff" stroke-width="${f1(1.4 * w)}" stroke-dasharray="2 7" stroke-linecap="round" opacity=".75"/></g>`;
       }
@@ -4230,7 +4244,7 @@
         if (sp.type !== 'whirl') continue;
         const r = G.rect(Number(p)), port = cellPort(G, Number(p));
         const col = WHIRL_COLS[sp.pair % 6];
-        s += `<circle class="twl-port" cx="${f1(port.x)}" cy="${f1(port.y)}" r="${lay === 'wide' ? 4.6 : 4}" fill="${col}" stroke="${INK}" stroke-width="2"/>`;
+        if (lay !== 'tall') s += `<circle class="twl-port" cx="${f1(port.x)}" cy="${f1(port.y)}" r="${lay === 'wide' ? 4.6 : 4}" fill="${col}" stroke="${INK}" stroke-width="2"/>`;
         const mr = lay === 'wide' ? 8.5 : 8;
         s += whirlMark(sp.pair, r.x + r.w - mr - 3, r.y + mr + 3, mr);
       }
@@ -4260,7 +4274,7 @@
     const G = GEO[lay] || GEO.wide;
     const t = TRACKS[key];
     if (!t) return '';
-    return `<svg class="track-thumb" viewBox="0 0 ${G.vb[0]} ${G.vb[1]}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(t.name)}赛道缩略图">${trackSvgMarkup(key, lay)}</svg>`;
+    return `<svg class="track-thumb" viewBox="0 0 ${(G.thumb || G.vb)[0]} ${(G.thumb || G.vb)[1]}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(t.name)}赛道缩略图">${trackSvgMarkup(key, lay, true)}</svg>`;
   }
   window.HN_trackThumbSvg = trackThumbSvg;
 
