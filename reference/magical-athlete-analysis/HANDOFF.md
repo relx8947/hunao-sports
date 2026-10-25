@@ -56,6 +56,6 @@
 
 此前独立目录：`/home/dev/project/playgroud/magical-athlete-analysis/`。
 
-当前实体目录：`/home/dev/project/playgroud/hunao-sports/reference/magical-athlete-analysis/`。此前独立目录及其交接 ZIP/校验文件仅保留软链接，指向当前实体资料；历史对话引用仍可使用，不存在第二份资料副本。旧综合报告、其他桌游提取物和临时工具已从交接范围移除；原始 APK、目标模块和必要共用控件在此目录中保存。
+当前实体目录：`/home/dev/project/playgroud/hunao-sports/reference/magical-athlete-analysis/`。此前独立目录及其交接 ZIP/校验文件的三个软链接已按用户要求删除，后续统一使用此项目内路径。旧综合报告、其他桌游提取物和临时工具已从交接范围移除；原始 APK、目标模块和必要共用控件在此目录中保存。
 
-历史对话里的旧路径属于迁移前位置，接手时使用当前项目的 README 链接。
+历史对话里的旧路径属于迁移前位置，现已失效；当前对话历史保留，接手时使用游戏项目和分析项目 README 中的现有链接。

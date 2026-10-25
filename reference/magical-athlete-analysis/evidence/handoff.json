@@ -40,10 +40,11 @@
   },
   "host_project": "hunao-sports",
   "canonical_directory": "hunao-sports/reference/magical-athlete-analysis",
-  "compatibility_paths": [
+  "compatibility_paths": [],
+  "latest_location_change": "Analysis is stored only in hunao-sports/reference. The three former workspace symlinks were removed at the user request.",
+  "removed_legacy_paths": [
     "magical-athlete-analysis",
     "magical-athlete-analysis.zip",
     "magical-athlete-analysis.zip.sha256"
-  ],
-  "latest_location_change": "Analysis directory and complete handoff archive moved into hunao-sports/reference; former workspace paths are symbolic links."
+  ]
 }

@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>胡闹运动会一代与二代全解</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23E8432B'/%3E%3Crect x='14' y='14' width='36' height='36' rx='8' fill='%23fff'/%3E%3Ccircle cx='24' cy='24' r='4' fill='%231B1B1B'/%3E%3Ccircle cx='40' cy='24' r='4' fill='%231B1B1B'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%231B1B1B'/%3E%3Ccircle cx='24' cy='40' r='4' fill='%231B1B1B'/%3E%3Ccircle cx='40' cy='40' r='4' fill='%231B1B1B'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://sf3-scmcdn-cn.feishucdn.com" crossorigin>
+<link rel="preload" href="https://sf3-scmcdn-cn.feishucdn.com/obj/feishu-static/lark-miaoda-fonts/fonts/zcool-kuaile/6abc492ba976.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="https://sf3-scmcdn-cn.feishucdn.com/obj/feishu-static/lark-miaoda-fonts/fonts/zcool-kuaile/d2ae1fb355cd.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&amp;display=swap">
+<style>
+/* ===== Tokens ===== */
+:root{
+  --paper:#FFF6E5;      /* 赛场看台的米黄 */
+  --ink:#1B1B1B;        /* 卡牌描边黑 */
+  --red:#E8432B;        /* 一代红盒 */
+  --green:#1E8F4E;      /* 二代绿盒 */
+  --sky:#5DA9E9;        /* 赛道蓝格 */
+  --sun:#F6C445;        /* 赛道黄格 */
+  --pink:#E58CC8;       /* 赛道粉格 */
+  --muted:#5B5650;
+  --line:#1B1B1B;
+  --r1:var(--red); --r2:var(--green);
+  --display:"ZCOOL KuaiLe","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --body:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.7}
+img{max-width:100%;display:block}
+a{color:inherit}
+a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
+.wrap{width:100%;max-width:1180px;margin:0 auto;padding:0 16px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* 赛道条纹：页面唯一的“签名元素” */
+.lane{display:grid;grid-template-columns:repeat(15,1fr);height:16px;border-top:3px solid var(--ink);border-bottom:3px solid var(--ink)}
+.lane i:nth-child(5n+1){background:var(--pink)}
+.lane i:nth-child(5n+2){background:var(--sun)}
+.lane i:nth-child(5n+3){background:var(--green)}
+.lane i:nth-child(5n+4){background:var(--sky)}
+.lane i:nth-child(5n){background:var(--red)}
+.lane i{border-right:2px solid var(--ink)}
+.lane i:last-child{border-right:0}
+
+/* ===== Hero ===== */
+.hero{background:var(--ink);color:#fff;padding:28px 0 0}
+.hero-grid{display:grid;grid-template-columns:1fr;gap:20px;align-items:center}
+.hero h1{font-family:var(--display);font-weight:400;font-size:44px;line-height:1.15;margin:0 0 10px;letter-spacing:1px}
+.hero h1 .v1{color:#FF7A5C}
+.hero h1 .v2{color:#5FD38C}
+.hero .lead{font-size:16px;color:#E9E3D8;margin:0 0 16px;max-width:36em}
+.boxes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.boxcard{margin:0;background:#2a2a2a;border:3px solid #fff;border-radius:10px;overflow:hidden}
+.boxcard img{width:100%;aspect-ratio:3/2;object-fit:cover}
+.boxcard figcaption{padding:8px 10px;font-size:14px;line-height:1.45}
+.boxcard figcaption b{display:block;font-size:15px}
+.boxcard.one{border-color:var(--red)} .boxcard.two{border-color:#5FD38C}
+.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:0;padding:0;list-style:none}
+.facts li{background:#2a2a2a;border-radius:8px;padding:8px 10px;font-size:14px;line-height:1.4}
+.facts li b{display:block;font-family:var(--display);font-weight:400;font-size:22px;color:var(--sun)}
+.hero .lane{margin-top:24px}
+
+/* ===== Nav ===== */
+.toc{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:3px solid var(--ink)}
+.toc ul{display:flex;gap:6px;margin:0;padding:8px 0;list-style:none;overflow-x:auto;scrollbar-width:none}
+.toc ul::-webkit-scrollbar{display:none}
+.toc a{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:2px solid var(--ink);border-radius:999px;text-decoration:none;font-size:14px;font-weight:600;white-space:nowrap;background:#fff}
+.toc a:hover{background:var(--sun)}
+
+/* ===== Sections ===== */
+section{padding:44px 0 8px;scroll-margin-top:64px}
+.sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.sec-head h2{font-family:var(--display);font-weight:400;font-size:32px;line-height:1.2;margin:0}
+.sec-head p{margin:0;color:var(--muted);font-size:15px}
+h3{font-size:19px;margin:22px 0 8px;line-height:1.4}
+p{margin:0 0 12px}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 5px;margin-left:2px;border:1.5px solid var(--ink);border-radius:5px;font-size:12px;font-weight:700;line-height:1;text-decoration:none;background:#fff;vertical-align:2px}
+.cite:hover{background:var(--sun)}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:13px;font-weight:700;border:1.5px solid var(--ink);line-height:1.6}
+.tag.t1{background:#FFD9CF} .tag.t2{background:#CDEFD9} .tag.tn{background:#fff}
+.note{border:2px dashed var(--ink);border-radius:10px;padding:10px 14px;background:#fff;font-size:15px}
+.note b{color:var(--red)}
+
+/* 速览：差异条 */
+.diff{border:3px solid var(--ink);border-radius:14px;overflow:hidden;background:#fff}
+.diff-row{display:grid;grid-template-columns:1fr;border-top:2px solid var(--ink)}
+.diff-row:first-child{border-top:0}
+.diff-k{padding:10px 14px;font-weight:700;background:var(--sun);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.diff-v{display:grid;grid-template-columns:1fr 1fr}
+.diff-v > div{padding:10px 14px;font-size:15px;line-height:1.55;min-width:0}
+.diff-v > div:first-child{border-right:2px solid var(--ink);background:#FFF1EC}
+.diff-v > div:last-child{background:#EEF9F2}
+.diff-v small{display:block;font-size:13px;font-weight:700;color:var(--muted)}
+.diff-head{display:grid;grid-template-columns:1fr 1fr;background:var(--ink);color:#fff;font-weight:700}
+.diff-head div{padding:8px 14px;font-size:15px}
+.diff-head .c1{border-right:2px solid #fff}
+.diff-head .hk{display:none}
+
+/* 时间轴 */
+.tl{--dot:18px;--col:56px;list-style:none;margin:0;padding:0}
+.tl li{display:grid;grid-template-columns:var(--col) 1fr;column-gap:12px;position:relative;padding-bottom:18px}
+.tl li::before{content:"";position:absolute;left:calc(var(--col)/2 - 1.5px);top:calc(var(--dot) + 4px);bottom:0;width:3px;background:var(--ink)}
+.tl li:last-child::before{display:none}
+.tl .dot{justify-self:center;width:var(--dot);height:var(--dot);margin-top:4px;border:3px solid var(--ink);border-radius:50%;background:var(--sun);position:relative;z-index:1}
+.tl .dot.r{background:var(--red)} .tl .dot.g{background:var(--green)}
+.tl .yr{font-family:var(--display);font-size:22px;line-height:1.1;display:block}
+.tl .ev{font-weight:700;display:block;margin:2px 0}
+.tl .ds{font-size:15px;color:#3b3732}
+
+/* 流程 */
+.flow{display:grid;grid-template-columns:1fr;gap:10px;counter-reset:st;margin:0;padding:0;list-style:none}
+.flow li{border:3px solid var(--ink);border-radius:12px;background:#fff;padding:12px 14px 12px 58px;position:relative;min-width:0}
+.flow li::before{counter-increment:st;content:counter(st);position:absolute;left:12px;top:12px;width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;font-family:var(--display);font-size:20px;display:flex;align-items:center;justify-content:center;border:2px solid var(--ink)}
+.flow b{display:block;font-size:16px;margin-bottom:2px}
+.flow span{font-size:15px;color:#3b3732}
+
+.grid2{display:grid;grid-template-columns:1fr;gap:14px}
+.panel{border:3px solid var(--ink);border-radius:12px;background:#fff;padding:14px 16px;min-width:0}
+.panel h3{margin-top:0}
+.panel ul{margin:0;padding-left:20px}
+.panel li{margin-bottom:6px;font-size:15px}
+.kv{width:100%;border-collapse:collapse;table-layout:fixed;font-size:15px}
+.kv th,.kv td{border:2px solid var(--ink);padding:7px 10px;text-align:left;vertical-align:top;word-break:break-word}
+.kv th{background:var(--sun)}
+.kv td.c{text-align:center}
+
+/* 计分柱 */
+.score{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:end;height:200px;padding:0 4px;border-bottom:3px solid var(--ink)}
+.score .col{display:flex;align-items:flex-end;gap:4px;height:100%}
+.score .g,.score .s{flex:1;border:2px solid var(--ink);border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+.score .g{background:var(--sun)} .score .s{background:#D7DBE0}
+.score-x{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:6px 4px 0;font-size:14px;text-align:center;font-weight:700}
+
+/* 赛道图 */
+.track{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.cell{aspect-ratio:1/1;border:2px solid var(--ink);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;line-height:1.1;position:relative;background:#fff;min-width:0;text-align:center;padding:2px}
+.cell .n{position:absolute;top:2px;left:4px;font-size:11px;color:#5B5650}
+.cell b{font-size:14px;display:inline-flex;align-items:center;gap:1px}
+.ic{width:13px;height:13px;fill:currentColor;flex:none}
+.cell.start{background:var(--sky);font-weight:800}
+.cell.finish{background:var(--ink);color:#fff;font-weight:800}
+.cell.finish{grid-column:1/-1;aspect-ratio:auto;height:44px;flex-direction:row;letter-spacing:4px;background:repeating-linear-gradient(90deg,var(--ink) 0 14px,#3a3a3a 14px 28px)}
+@media (min-width:768px) and (max-width:1099px){.cell.finish{grid-column:auto;aspect-ratio:1/1;height:auto;letter-spacing:0;background:var(--ink)}}
+.cell.star{background:var(--sun)}
+.cell.trip{background:#B9B2A8}
+.cell.fw{background:#CDEFD9}
+.cell.bk{background:#FFD9CF}
+.cell.tw{background:var(--pink)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:10px 0 0;padding:0;list-style:none;font-size:14px}
+.legend li{display:flex;align-items:center;gap:6px}
+.legend i{width:18px;height:18px;border:2px solid var(--ink);border-radius:4px;display:inline-block}
+.photo{margin:0;border:3px solid var(--ink);border-radius:12px;overflow:hidden;background:#fff}
+.photo img{width:100%;height:auto}
+.photo figcaption{padding:8px 12px;font-size:14px;color:#3b3732;border-top:2px solid var(--ink)}
+
+/* ===== Desktop ===== */
+@media (min-width:768px){
+  .wrap{padding:0 28px}
+  .hero{padding-top:44px}
+  .hero-grid{grid-template-columns:1.05fr 1fr;gap:36px}
+  .hero h1{font-size:64px}
+  .facts{grid-template-columns:repeat(4,1fr)}
+  .sec-head h2{font-size:40px}
+  .diff-row{grid-template-columns:200px 1fr}
+  .diff-k{border-right:2px solid var(--ink)}
+  .diff-head{grid-template-columns:200px 1fr 1fr}
+  .diff-head .hk{display:block;border-right:2px solid #fff}
+  .flow{grid-template-columns:repeat(2,1fr)}
+  .grid2{grid-template-columns:1fr 1fr}
+  .track{grid-template-columns:repeat(8,1fr)}
+  .cell{font-size:13px}
+}
+@media (min-width:1100px){
+  .flow{grid-template-columns:repeat(3,1fr)}
+  .track{grid-template-columns:repeat(10,1fr);max-width:900px}
+  .cell{aspect-ratio:auto;height:72px}
+}
+/* ===== 选手 ===== */
+.pair{display:grid;grid-template-columns:1fr;gap:12px;margin:14px 0}
+.fbar{display:grid;gap:10px;border:3px solid var(--ink);border-radius:12px;background:#fff;padding:12px;margin:16px 0 14px}
+.frow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.frow > span{font-size:14px;font-weight:700;color:var(--muted);margin-right:4px}
+.fbtn{min-height:44px;padding:0 14px;border:2px solid var(--ink);border-radius:999px;background:#fff;color:var(--ink);font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+.fbtn:hover{background:#FFF1C9}
+.fbtn[aria-pressed="true"]{background:var(--ink);color:#fff}
+.fbtn.tg[aria-pressed="true"]{background:var(--sun);color:var(--ink)}
+.search{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search label{font-size:14px;font-weight:700;color:var(--muted)}
+.search input{flex:1 1 220px;min-width:0;min-height:44px;font-size:16px;font-family:inherit;border:2px solid var(--ink);border-radius:10px;padding:0 12px;background:var(--paper);color:var(--ink)}
+.count{font-size:15px;font-weight:700;margin:0}
+.rgrid{display:grid;grid-template-columns:1fr;gap:12px}
+.rc{border:3px solid var(--ink);border-top-width:10px;border-radius:12px;background:#fff;padding:10px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.rc[data-g="1"]{border-top-color:var(--red)}
+.rc[data-g="2"]{border-top-color:var(--green)}
+.rc[hidden]{display:none!important}
+.rc .hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.rc h4{margin:0;font-size:18px;line-height:1.35}
+.rc .en{font-size:14px;color:var(--muted);font-weight:600}
+.rc .ab{margin:0;font-size:15px;line-height:1.65}
+.rc .nt{margin:0;font-size:14px;line-height:1.6;color:#45403a;background:var(--paper);border-radius:8px;padding:6px 9px}
+.rc .ft{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:auto;padding-top:2px}
+.chip{display:inline-block;font-size:13px;font-weight:700;line-height:22px;padding:0 8px;border:1.5px solid var(--ink);border-radius:999px;background:#fff}
+.gen{display:inline-block;font-size:13px;font-weight:800;line-height:22px;padding:0 8px;border-radius:999px;color:#fff;border:1.5px solid var(--ink)}
+.gen.g1{background:var(--red)} .gen.g2{background:var(--green)}
+.empty{display:none;border:2px dashed var(--ink);border-radius:12px;padding:16px;background:#fff;text-align:center;margin-bottom:12px}
+.empty.on{display:block}
+.empty p{margin:0 0 8px}
+
+/* ===== 扭扭卡 ===== */
+.twg{display:grid;grid-template-columns:1fr;gap:12px;margin:0;padding:0;list-style:none}
+.tw{border:3px solid var(--ink);border-radius:14px;background:var(--pink);padding:8px;min-width:0;display:flex}
+.tw > div{background:#fff;border:2px solid var(--ink);border-radius:10px;padding:10px 12px;flex:1;min-width:0}
+.tw h4{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:17px;line-height:1.35}
+.tw .no{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-family:var(--display);font-size:17px;flex:none}
+.tw p{margin:0;font-size:15px;line-height:1.65}
+.tw.rule{background:var(--sun)}
+.tw.rule h4{font-family:var(--display);font-weight:400;font-size:21px}
+
+/* ===== 出处 ===== */
+.src{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr;gap:8px}
+.src li{display:grid;grid-template-columns:36px 1fr;gap:10px;border:2px solid var(--ink);border-radius:10px;background:#fff;padding:10px 12px;scroll-margin-top:76px;min-width:0}
+.src li:last-child:nth-child(odd){grid-column:1/-1}
+.src li:target{background:#FFF3C4;box-shadow:0 0 0 3px var(--sun)}
+.src li > div{min-width:0}
+.src .no{font-family:var(--display);font-size:22px;line-height:1.1}
+.src .tt{font-weight:700;font-size:15px;line-height:1.5}
+.src .mt{font-size:14px;color:var(--muted)}
+.src a{color:#1a5aa8;word-break:break-all;font-size:14px}
+.src .use{font-size:14px;margin-top:2px;line-height:1.55}
+.method{margin-bottom:14px}
+.end{margin-top:44px;background:var(--ink);color:#E9E3D8;padding:0 0 24px}
+.end p{margin:18px 0 0;font-size:14px}
+
+@media (min-width:768px){
+  .pair{grid-template-columns:1fr 1fr}
+  .rgrid{grid-template-columns:repeat(2,1fr)}
+  .twg{grid-template-columns:repeat(2,1fr)}
+  .src{grid-template-columns:1fr 1fr}
+}
+@media (min-width:1100px){
+  .rgrid{grid-template-columns:repeat(3,1fr)}
+  .twg{grid-template-columns:repeat(3,1fr)}
+}
+
+.photo.board{max-width:900px;margin-left:auto;margin-right:auto}
+.photo.narrow{max-width:720px}
+.cap{font-size:15px;font-weight:700;margin:6px 0 8px}
+.sleg{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:14px;margin:0 0 8px}
+.sleg i{width:16px;height:16px;border:2px solid var(--ink);border-radius:4px;display:inline-block;margin-right:-6px}
+.sleg .lg{background:var(--sun)} .sleg .ls{background:#D7DBE0}
+.mini{display:flex;gap:4px;margin:4px 0 12px;flex-wrap:wrap}
+.mini span{min-width:38px;height:38px;padding:0 6px;border:2px solid var(--ink);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;background:#fff}
+.mini span.tw{background:var(--pink);font-weight:800}
+.rc .al{margin:0;font-size:14px;color:var(--muted)}
+.rc .fl{margin:0;font-size:14px;color:var(--muted)}
+.meter{display:grid;gap:10px}
+.meter > div{display:grid;grid-template-columns:72px 1fr;gap:10px;align-items:center}
+.meter b{font-size:15px}
+.bar{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+.bar i{height:14px;border:2px solid var(--ink);border-radius:4px;background:#fff}
+.bar i.on{background:var(--green)}
+.meter p{grid-column:2;margin:-4px 0 0;font-size:14px;color:#45403a}
+.vgrid{display:grid;grid-template-columns:1fr;gap:12px}
+.ver{border:3px solid var(--ink);border-radius:12px;background:#fff;padding:12px 14px;min-width:0}
+.ver h3{margin:0 0 4px;font-size:17px}
+.ver p{margin:0;font-size:15px}
+.ver .who{font-size:14px;color:var(--muted);margin-bottom:4px}
+.ver.r{border-top:10px solid var(--red)} .ver.g{border-top:10px solid var(--green)} .ver.o{border-top:10px solid var(--sky)}
+@media (min-width:768px){.vgrid{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:1100px){.vgrid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+
+<!-- ===== Hero ===== -->
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1><span class="v1">胡闹运动会</span><br>一代与<span class="v2">二代</span>全解</h1>
+      <p class="lead">Magical Athlete（2025）与续作 Magical Athlete: Second Wind（2026 年公布）一页看全：玩法规则、计分、四条赛道（含狂野赛道逐格图解）、72 名选手技能、13 张扭扭卡、两代差异和混玩方法。页面里的主要事实都标了出处编号，点编号可以直接跳到对应的来源链接。</p>
+      <ul class="facts">
+        <li><b>2–6 人</b>人数</li>
+        <li><b>约 30 分钟</b>时长</li>
+        <li><b>4 场</b>一局比赛数</li>
+        <li><b>36 + 36</b>两代选手数</li>
+      </ul>
+    </div>
+    <div class="boxes">
+      <figure class="boxcard one">
+        <img src="assets/cover1.jpg" alt="胡闹运动会一代盒面插画，香蕉、大象魔术师等角色在赛跑">
+        <figcaption><b>一代 Magical Athlete</b>红盒，2025 年 CMYK 新版</figcaption>
+      </figure>
+      <figure class="boxcard two">
+        <img src="assets/sw_box.jpg" alt="胡闹运动会二代 Second Wind 绿色盒子">
+        <figcaption><b>二代 Second Wind</b>绿盒，可单独玩的续作</figcaption>
+      </figure>
+    </div>
+  </div>
+  <div class="lane" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+</header>
+
+<!-- ===== 目录 ===== -->
+<nav class="toc" aria-label="页面目录">
+  <div class="wrap">
+    <ul>
+      <li><a href="#diff">两代差异速览</a></li>
+      <li><a href="#history">游戏背景</a></li>
+      <li><a href="#rules">基本玩法</a></li>
+      <li><a href="#terms">术语与细则</a></li>
+      <li><a href="#tracks">四条赛道</a></li>
+      <li><a href="#racers">72 名选手</a></li>
+      <li><a href="#twists">13 张扭扭卡</a></li>
+      <li><a href="#variants">变体与混玩</a></li>
+      <li><a href="#buy">版本与选购</a></li>
+      <li><a href="#sources">出处</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+<!-- ===== 视图：差异速览 ===== -->
+<section id="diff">
+  <div class="wrap">
+    <div class="sec-head"><h2>两代差异速览</h2><p>核心玩法一样，内容全部换新</p></div>
+    <p>二代没有改“轮抽 4 名选手、跑 4 场、前两名拿分”这套骨架，换掉的是选手、赛道，又加了扭扭卡，还把几条细则改了<a class="cite" href="#s-v4">4</a><a class="cite" href="#s-wm">1</a>。</p>
+    <div class="diff" role="table" aria-label="一代与二代对比">
+      <div class="diff-head" role="row"><div class="hk" role="columnheader">项目</div><div class="c1" role="columnheader">一代 Magical Athlete</div><div role="columnheader">二代 Second Wind</div></div>
+      <div class="diff-row" role="row"><div class="diff-k" role="rowheader">选手 <span class="tag tn">全新</span></div><div class="diff-v"><div role="cell">36 名，如香蕉、大嘴巴、芭芭雅嘎、巨婴<a class="cite" href="#s-jp">8</a></div><div role="cell">36 名全新选手，如咬痕、野猪骑士、触手怪<a class="cite" href="#s-v5">5</a><a class="cite" href="#s-v6">6</a></div></div></div>
+      <div class="diff-row" role="row"><div class="diff-k" role="rowheader">赛道 <span class="tag tn">全新</span></div><div class="diff-v"><div role="cell">温和赛道 Mild Mile / 狂野赛道 Wild Wilds，各 30 格<a class="cite" href="#s-gd">10</a></div><div role="cell">扭扭赛道 Twisty Twirl / 螺旋世界 Whirly World<a class="cite" href="#s-wm">1</a></div></div></div>
+      <div class="diff-row" role="row"><div class="diff-k" role="rowheader">扭扭卡 <span class="tag t2">新增</span></div><div class="diff-v"><div role="cell">没有</div><div role="cell">13 张。第一个经过扭扭格的选手抽 1 张，当场改写本场规则<a class="cite" href="#s-v4">4</a></div></div></div>
+      <div class="diff-row" role="row"><div class="diff-k" role="rowheader">重掷细则 <span class="tag tn">修订</span></div><div class="diff-v"><div role="cell">被重掷掉的那次点数当作没掷过，不产生任何效果（不会因此触发能力）；但“重掷”这个动作本身仍会触发骰子商人、蹭蹭怪等能力<a class="cite" href="#s-vn">9</a><a class="cite" href="#s-pdf">13</a></div><div role="cell">据博主解读，二代删去了一代“上一次点数当作没掷过”这条，改为明确写出：“重掷”这个动作本身可以触发能力（如蹭蹭怪）<a class="cite" href="#s-v4">4</a></div></div></div>
+      <div class="diff-row" role="row"><div class="diff-k" role="rowheader">无限循环 <span class="tag tn">修订</span></div><div class="diff-v"><div role="cell">按顺序结算一轮循环，然后停止<a class="cite" href="#s-vn">9</a></div><div role="cell">蹭蹭怪、吸盘鱼这类多次互相作用不算循环，照常结算；真正进入死循环时比赛立刻结束，除非已有选手冲线，否则所有人都拿不到剩余分数<a class="cite" href="#s-v4">4</a></div></div></div>
+      <div class="diff-row" role="row"><div class="diff-k" role="rowheader">1 分标记 <span class="tag tn">增加</span></div><div class="diff-v"><div role="cell">16 枚（另有 3 分标记 9 枚）<a class="cite" href="#s-gd">10</a></div><div role="cell">28 枚（3 分标记仍是 9 枚），靠技能拿分的选手更多<a class="cite" href="#s-v4">4</a></div></div></div>
+      <div class="diff-row" role="row"><div class="diff-k" role="rowheader">双选手变体</div><div class="diff-v"><div role="cell">2025 初版每回合自己定先后<a class="cite" href="#s-pdf">13</a>；2026 年 8 月修订版（据博主解读）改为按固定顺序行动<a class="cite" href="#s-v4">4</a></div><div role="cell">自己的两名选手依次行动，顺序可以自己定（博主解读）<a class="cite" href="#s-v4">4</a></div></div></div>
+      <div class="diff-row" role="row"><div class="diff-k" role="rowheader">不变</div><div class="diff-v"><div role="cell" style="grid-column:1/-1;background:#fff">4 金 4 银奖杯、6 颗骰子、双面版图、2–6 人<a class="cite" href="#s-v4">4</a><a class="cite" href="#s-wm">1</a><a class="cite" href="#s-gd">10</a></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 视图：游戏背景 ===== -->
+<section id="history">
+  <div class="wrap">
+    <div class="sec-head"><h2>游戏背景</h2><p>从 2002 年的日本小众游戏到 2026 年的续作</p></div>
+    <div class="grid2">
+      <ol class="tl">
+        <li><span class="dot"></span><div><span class="yr">2002–2003</span><span class="ev">日本原版诞生</span><span class="ds">石田贵史（Takashi Ishida）设计，2002 年由日本 Grimpeur 出版<a class="cite" href="#s-zm">11</a>，2003 年由 Z-Man Games 发行英文版<a class="cite" href="#s-lp">7</a><a class="cite" href="#s-gd">10</a><a class="cite" href="#s-gb">12</a>。原版有 25 个角色，用筹码竞价选角<a class="cite" href="#s-zm">11</a>，规则受《Cosmic Encounter》启发<a class="cite" href="#s-lp">7</a></span></div></li>
+        <li><span class="dot"></span><div><span class="yr">之后</span><span class="ev">成为小众经典，复刻一度落空</span><span class="ds">GMT 曾尝试复刻但没有成功，直到 CMYK 拿到版权，交给《万智牌》作者 Richard Garfield 改版<a class="cite" href="#s-gb">12</a><a class="cite" href="#s-lp">7</a></span></div></li>
+        <li><span class="dot r"></span><div><span class="yr">2025</span><span class="ev">CMYK 新版（即“一代”）</span><span class="ds">Richard Garfield 改规则，Angela Kirkwood 重绘全部美术，换成 36 名选手和木质棋子，2025 年 11 月左右出货，美国零售价 29.99 美元<a class="cite" href="#s-gd">10</a><a class="cite" href="#s-lp">7</a></span></div></li>
+        <li><span class="dot r"></span><div><span class="yr">2026</span><span class="ev">中文版上市</span><span class="ds">Asmodee 发行简体中文版《胡闹运动会》、繁体中文版《搞怪運動會》<a class="cite" href="#s-tb">16</a><a class="cite" href="#s-tw">15</a></span></div></li>
+        <li><span class="dot g"></span><div><span class="yr">2026.08</span><span class="ev">二代首次露面</span><span class="ds">CMYK 创意总监 Alex Hague 在 BGG 上传一代修订版规则书，第 20 页“Combining Boxes”出现了未公布的续作 Second Wind；CMYK 表示二代规格与一代相同，已经开始生产，要等临近上市才正式宣传<a class="cite" href="#s-wm">1</a><a class="cite" href="#s-sp">2</a>；9 月桌游播客的新闻栏目也报道了二代公布<a class="cite" href="#s-pc">3</a></span></div></li>
+        <li><span class="dot g"></span><div><span class="yr">2026.10</span><span class="ev">官网出现商品页</span><span class="ds">CMYK 官网 10 月 7 日（美东时间）发布了二代商品页，标价 29.99 美元，设计 Christian Kudahl 与 Richard Garfield，美术 Angela Kirkwood。截至 10 月 25 日，这个页面还没列进官网站点地图，介绍只有占位符“TK”，没有图片，也没有公开规则书<a class="cite" href="#s-cmyk2">32</a></span></div></li>
+      </ol>
+      <div>
+        <figure class="photo">
+          <img src="assets/second_wind_page.jpg" alt="一代修订版规则书第20页，标题为Combining Boxes，展示二代 Second Wind 盒子">
+          <figcaption>一代修订版规则书第 20 页“Combining Boxes”，二代就是在这里第一次露面<a class="cite" href="#s-wm">1</a></figcaption>
+        </figure>
+        <table class="kv" style="margin-top:14px">
+          <colgroup><col style="width:34%"><col style="width:66%"></colgroup>
+          <tr><th>设计</th><td>一代：Takashi Ishida（原作）、Richard Garfield（新版）<a class="cite" href="#s-tl">17</a>；二代：Christian Kudahl、Richard Garfield<a class="cite" href="#s-cmyk2">32</a></td></tr>
+          <tr><th>美术</th><td>Angela Kirkwood<a class="cite" href="#s-gb">12</a></td></tr>
+          <tr><th>出版</th><td>CMYK；中文版 Asmodee<a class="cite" href="#s-gd">10</a><a class="cite" href="#s-tw">15</a></td></tr>
+          <tr><th>机制</th><td>掷骰移动、公开轮抽、角色专属能力、竞速<a class="cite" href="#s-tl">17</a></td></tr>
+          <tr><th>复杂度</th><td>BGG 重度 1.2 / 5<a class="cite" href="#s-tl">17</a></td></tr><tr><th>评分</th><td>BGG 约 7.8 分（第三方聚合站显示）<a class="cite" href="#s-bgb">25</a>；有博主称它进入过 BGG 聚会游戏榜前十<a class="cite" href="#s-v1">21</a></td></tr><tr><th>最佳人数</th><td>5–6 人<a class="cite" href="#s-lp">7</a><a class="cite" href="#s-bgb">25</a></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 视图：基本玩法 ===== -->
+<section id="rules">
+  <div class="wrap">
+    <div class="sec-head"><h2>基本玩法</h2><p>两代通用，按官方规则书顺序</p></div>
+    <div class="pair">
+      <figure class="photo"><img src="assets/components.jpg" alt="一代全部配件平铺：版图、骰子、卡牌、奖杯和36个木质棋子"><figcaption>一代全部配件：双面版图、6 颗木骰、36 张选手卡、36 个木质棋子、奖杯奖章和星形分数标记<a class="cite" href="#s-gd">10</a></figcaption></figure>
+      <div>
+        <table class="kv">
+          <colgroup><col style="width:36%"><col style="width:32%"><col style="width:32%"></colgroup>
+          <tr><th>配件</th><th>一代</th><th>二代</th></tr>
+          <tr><td>选手（卡 + 棋子）</td><td class="c">36</td><td class="c">36</td></tr>
+          <tr><td>双面版图</td><td class="c">温和 / 狂野</td><td class="c">扭扭 / 螺旋</td></tr>
+          <tr><td>扭扭卡</td><td class="c">无</td><td class="c">13</td></tr>
+          <tr><td>1 分标记</td><td class="c">16</td><td class="c">28</td></tr>
+          <tr><td>3 分标记</td><td class="c">9</td><td class="c">9</td></tr>
+          <tr><td>金奖杯 / 银奖章</td><td class="c">4 / 4</td><td class="c">4 / 4</td></tr>
+          <tr><td>骰子</td><td class="c">6</td><td class="c">6</td></tr>
+        </table>
+        <p style="font-size:15px;margin-top:10px">一代数量来自评测的开箱清单<a class="cite" href="#s-gd">10</a>，二代来自规则书解读<a class="cite" href="#s-v4">4</a>。二代的咬痕另有一个狼人形态的专属模型，野猪骑士自带一个野猪棋子<a class="cite" href="#s-v5">5</a>。</p>
+      </div>
+    </div>
+
+    <ol class="flow">
+      <li><b>准备</b><span>版图放中间（一代先用温和赛道面）；金奖杯、银奖章按分值叠好，大的在最下面；洗匀选手牌；每人拿 1 颗骰子<a class="cite" href="#s-vn">9</a></span></li>
+      <li><b>蛇形轮抽</b><span>翻开“人数 × 2”张选手牌（3 人 6 张、4 人 8 张、5 人 10 张、6 人 12 张），掷骰点数最高者先选，顺时针每人选 1 张，再从最后一人逆时针选回来<a class="cite" href="#s-vn">9</a></span></li>
+      <li><b>第二轮轮抽</b><span>再翻一批，由上一轮起始玩家左手边的人先选，结束后每人共有 4 名选手<a class="cite" href="#s-vn">9</a></span></li>
+      <li><b>派人上场</b><span>每场比赛前，大家秘密选 1 名还没出战过的选手，同时亮牌，把棋子放到起点格。每名选手整局只能用一次<a class="cite" href="#s-vn">9</a></span></li>
+      <li><b>主要移动</b><span>轮到你就掷骰，按点数前进，这叫“主要移动”（main move）。很多技能只认主要移动，选手也会被别的方式移动<a class="cite" href="#s-vn">9</a></span></li>
+      <li><b>冲线与换场</b><span>两名选手冲过终点，本场立刻结束：第 1 名拿最上面的金奖杯，第 2 名拿银奖章。用过的选手移出游戏，版图翻面<a class="cite" href="#s-vn">9</a></span></li>
+    </ol>
+    <div class="grid2" style="margin-top:14px">
+      <div class="panel">
+        <h3>能力怎么生效</h3>
+        <ul>
+          <li>牌上写“可以 / 能够”（can）的是可选能力，其余都是强制能力<a class="cite" href="#s-vn">9</a></li>
+          <li>同时触发多个效果时，按“赛道格 → 当前玩家 → 其他玩家（顺时针）”的顺序结算<a class="cite" href="#s-vn">9</a></li>
+          <li>下一场由上一场落在最后（或最先被淘汰）的选手的玩家先手<a class="cite" href="#s-vn">9</a></li>
+          <li>四场结束后总分最高者获胜；平局就共享胜利<a class="cite" href="#s-vn">9</a></li>
+          <li>遇到规则书没写清的情况，官方建议商量着来，还谈不拢就掷骰决定谁对<a class="cite" href="#s-vn">9</a><a class="cite" href="#s-gd">10</a></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>计分：越往后的比赛越值钱</h3>
+        <p class="sleg"><i class="lg"></i>金奖杯（第 1 名）<i class="ls"></i>银奖章（第 2 名）</p>
+        <div class="score" role="img" aria-label="四场比赛奖杯分值：第1场金3银1，第2场金4银2，第3场金4银2，第4场金5银3">
+          <div class="col"><div class="g" style="height:54%">3</div><div class="s" style="height:18%">1</div></div>
+          <div class="col"><div class="g" style="height:72%">4</div><div class="s" style="height:36%">2</div></div>
+          <div class="col"><div class="g" style="height:72%">4</div><div class="s" style="height:36%">2</div></div>
+          <div class="col"><div class="g" style="height:90%">5</div><div class="s" style="height:54%">3</div></div>
+        </div>
+        <div class="score-x"><span>第 1 场</span><span>第 2 场</span><span>第 3 场</span><span>第 4 场</span></div>
+        <p style="margin-top:10px;font-size:15px">分值读自官方配件实拍图：金奖杯 3/4/4/5、银奖章 1/2/2/3，和 Z-Man 英文版规则书（2010 年版，原作 2002 年）前四场的分值完全一致<a class="cite" href="#s-gd">10</a><a class="cite" href="#s-zm">11</a>。另外还有 1 分、3 分标记，靠赛道星星格和选手技能获得<a class="cite" href="#s-vn">9</a>。</p>
+      </div>
+    </div>
+    <figure class="photo narrow" style="margin-top:14px">
+      <img src="assets/rule_example_c.jpg" alt="规则书示例漫画：恋爱脑越过香蕉被绊倒，蹭蹭怪连续前进">
+      <figcaption>规则书里的连锁示例：恋爱脑掷 5 越过蹭蹭怪和香蕉，被香蕉绊倒；香蕉的能力触发，蹭蹭怪前进 1 格，停在香蕉那格；这一格正好有两名选手，恋爱脑虽然倒着也能前进 2 格；这又是一次能力触发，蹭蹭怪再走 1 格<a class="cite" href="#s-vn">9</a></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ===== 视图：术语 ===== -->
+<section id="terms">
+  <div class="wrap">
+    <div class="sec-head"><h2>术语与细则</h2><p>结算争议基本都出在这几个词上</p></div>
+    <table class="kv">
+      <colgroup><col style="width:24%"><col style="width:76%"></colgroup>
+      <tr><th>领先 / 落后</th><td>停在离终点更近的格子算领先，离起点更近算落后；同格的选手互不算领先或落后。已经冲线的选手不算“领先者”<a class="cite" href="#s-vn">9</a></td></tr>
+      <tr><th>独自</th><td>所在格没有其他选手<a class="cite" href="#s-vn">9</a></td></tr>
+      <tr><th>移动</th><td>通过主要移动、能力或任何写明“移动”的方式换格子。“移动 0 格”不算移动，不能触发和移动有关的能力<a class="cite" href="#s-vn">9</a></td></tr>
+      <tr><th>经过 / 超过</th><td>一次移动开始时在对方后面，结束时在对方前面<a class="cite" href="#s-vn">9</a>。博主解读二代规则时特别提醒：向后移动越过别人也算经过，经过类能力会被频繁触发<a class="cite" href="#s-v4">4</a></td></tr>
+      <tr><th>同处一格</th><td>两名选手都实际停在这一格才算；移动或传送途中短暂占到同一格不算<a class="cite" href="#s-vn">9</a></td></tr>
+      <tr><th>格子</th><td>起点也算一格；终点线之外的任何位置都不算格子<a class="cite" href="#s-vn">9</a></td></tr>
+      <tr><th>绊倒</th><td>被绊倒的选手跳过下一次主要移动，连骰子都不掷，但能力照样生效，也能被其他方式移动。先走完当前这次移动再把棋子放倒，下回合扶起来<a class="cite" href="#s-vn">9</a></td></tr>
+      <tr><th>传送（warp）</th><td>直接把棋子放到新格子，不算“移动”，不会触发经过、移动类能力<a class="cite" href="#s-vn">9</a></td></tr>
+      <tr><th>其他细则</th><td>写明时点的能力（如“在我的主要移动前”）每回合只生效一次；选手冲线或离场后能力失效（另有说明除外）；能重掷时只重掷最近那颗骰子；同时到达一格也算一起停在这格<a class="cite" href="#s-vn">9</a></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ===== 视图：赛道 ===== -->
+<section id="tracks">
+  <div class="wrap">
+    <div class="sec-head"><h2>四条赛道</h2><p>一代两面 + 二代两面</p></div>
+    <figure class="photo board">
+      <img src="assets/board_both.jpg" alt="一代双面版图实拍：上为温和赛道，下为狂野赛道">
+      <figcaption>一代版图实拍：上面是温和赛道，下面是狂野赛道。两面都是 30 格赛道，终点旁有放第 1、2 名的领奖台<a class="cite" href="#s-gd">10</a></figcaption>
+    </figure>
+
+    <h3>一代 · 温和赛道 Mild Mile <span class="tag t1">一代</span></h3>
+    <p>没有任何特殊格，纯拼骰子和技能。格子上印着 5、10、15、20、25 的里程数，方便数格<a class="cite" href="#s-gd">10</a><a class="cite" href="#s-gb">12</a>。玩家讲解视频认为飞艇、大长腿这类稳定加速的选手最适合这一面<a class="cite" href="#s-v8">18</a><a class="cite" href="#s-v9">19</a>。</p>
+
+    <h3>一代 · 狂野赛道 Wild Wilds <span class="tag t1">一代</span></h3>
+    <p>停在特殊格上才会触发。箭头格的移动算一次单独的移动，不算主要移动<a class="cite" href="#s-vn">9</a>。下图按官方版图照片逐格整理，格号从起点之后第 1 格开始数<a class="cite" href="#s-gd">10</a>。</p>
+    <p class="cap">赛道拉直成一行的示意图，从左往右跑：</p>
+    <div class="track" role="img" aria-label="狂野赛道示意：起点后共29格。第1格星星得1分，第5格绊倒，第7格前进3，第11格前进1，第13格星星得1分，第16格后退4，第17格绊倒，第23格前进2，第24格后退2，第26格绊倒">
+      <div class="cell start">起点</div>
+      <div class="cell star"><span class="n">1</span><b><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3 6.1 20.6l1.3-6.6L2.5 9.4l6.6-.8z"/></svg>1</b>得1分</div>
+      <div class="cell"><span class="n">2</span></div>
+      <div class="cell"><span class="n">3</span></div>
+      <div class="cell"><span class="n">4</span></div>
+      <div class="cell trip"><span class="n">5</span><b>绊倒</b></div>
+      <div class="cell"><span class="n">6</span></div>
+      <div class="cell fw"><span class="n">7</span><b><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5h10.2l-4-4 2.1-2.1L20 12l-7.7 7.6-2.1-2.1 4-4H4z"/></svg>3</b>前进3</div>
+      <div class="cell"><span class="n">8</span></div>
+      <div class="cell"><span class="n">9</span></div>
+      <div class="cell"><span class="n">10</span></div>
+      <div class="cell fw"><span class="n">11</span><b><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5h10.2l-4-4 2.1-2.1L20 12l-7.7 7.6-2.1-2.1 4-4H4z"/></svg>1</b>前进1</div>
+      <div class="cell"><span class="n">12</span></div>
+      <div class="cell star"><span class="n">13</span><b><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3 6.1 20.6l1.3-6.6L2.5 9.4l6.6-.8z"/></svg>1</b>得1分</div>
+      <div class="cell"><span class="n">14</span></div>
+      <div class="cell"><span class="n">15</span></div>
+      <div class="cell bk"><span class="n">16</span><b><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10.5H9.8l4-4-2.1-2.1L4 12l7.7 7.6 2.1-2.1-4-4H20z"/></svg>4</b>后退4</div>
+      <div class="cell trip"><span class="n">17</span><b>绊倒</b></div>
+      <div class="cell"><span class="n">18</span></div>
+      <div class="cell"><span class="n">19</span></div>
+      <div class="cell"><span class="n">20</span></div>
+      <div class="cell"><span class="n">21</span></div>
+      <div class="cell"><span class="n">22</span></div>
+      <div class="cell fw"><span class="n">23</span><b><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5h10.2l-4-4 2.1-2.1L20 12l-7.7 7.6-2.1-2.1 4-4H4z"/></svg>2</b>前进2</div>
+      <div class="cell bk"><span class="n">24</span><b><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10.5H9.8l4-4-2.1-2.1L4 12l7.7 7.6 2.1-2.1-4-4H20z"/></svg>2</b>后退2</div>
+      <div class="cell"><span class="n">25</span></div>
+      <div class="cell trip"><span class="n">26</span><b>绊倒</b></div>
+      <div class="cell"><span class="n">27</span></div>
+      <div class="cell"><span class="n">28</span></div>
+      <div class="cell"><span class="n">29</span></div>
+      <div class="cell finish">终点</div>
+    </div>
+    <ul class="legend">
+      <li><i style="background:var(--sun)"></i>星星格：拿 1 枚 1 分标记</li>
+      <li><i style="background:#B9B2A8"></i>石头格：绊倒</li>
+      <li><i style="background:#CDEFD9"></i>前进箭头</li>
+      <li><i style="background:#FFD9CF"></i>后退箭头</li>
+    </ul>
+    <table class="kv" style="margin-top:12px">
+      <colgroup><col style="width:16%"><col style="width:26%"><col style="width:58%"></colgroup>
+      <tr><th>格号</th><th>格子</th><th>停在上面会怎样</th></tr>
+      <tr><td class="c">1</td><td>星星 1</td><td>拿 1 枚 1 分标记</td></tr>
+      <tr><td class="c">5</td><td>石头 TRIP</td><td>被绊倒，跳过下一次主要移动</td></tr>
+      <tr><td class="c">7</td><td>箭头 3</td><td>前进 3 格，落到第 10 格</td></tr>
+      <tr><td class="c">11</td><td>箭头 1</td><td>前进 1 格，落到第 12 格</td></tr>
+      <tr><td class="c">13</td><td>星星 1</td><td>拿 1 枚 1 分标记</td></tr>
+      <tr><td class="c">16</td><td>箭头 4</td><td>后退 4 格，回到第 12 格</td></tr>
+      <tr><td class="c">17</td><td>石头 TRIP</td><td>被绊倒</td></tr>
+      <tr><td class="c">23</td><td>箭头 2</td><td>前进 2 格，落到第 25 格</td></tr>
+      <tr><td class="c">24</td><td>箭头 2</td><td>后退 2 格，回到第 22 格</td></tr>
+      <tr><td class="c">26</td><td>石头 TRIP</td><td>被绊倒</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px"><b>说明</b>：规则书只写了“停在箭头格就按箭头方向移动对应格数”<a class="cite" href="#s-vn">9</a>，没有给格号。上表的格号和方向是按官方版图实拍逐格数出来的：起点算第 0 格，最后一格是第 29 格，一共 30 格<a class="cite" href="#s-gd">10</a>。实物版图的下排是从右往左跑的，所以照片里朝右的箭头其实是后退。</p>
+
+    <div class="grid2" style="margin-top:6px">
+      <div class="panel">
+        <h3>二代 · 扭扭赛道 Twisty Twirl <span class="tag t2">二代</span></h3>
+        <p>整体和温和赛道差不多，区别是第 13、14 格是“扭扭格”。<b>本场第一个经过扭扭格的选手</b>抽 1 张扭扭卡并公开执行，有的效果当场生效，有的持续到本场结束<a class="cite" href="#s-v4">4</a><a class="cite" href="#s-v3">14</a>。</p>
+        <div class="mini" role="img" aria-label="扭扭赛道示意：第13、14格是扭扭格"><span>…</span><span>11</span><span>12</span><span class="tw">13 扭</span><span class="tw">14 扭</span><span>15</span><span>16</span><span>…</span></div>
+        <p style="margin:0">13 张扭扭卡的完整效果见<a href="#twists">扭扭卡</a>一节。</p>
+      </div>
+      <div class="panel">
+        <h3>二代 · 螺旋世界 Whirly World <span class="tag t2">二代</span></h3>
+        <p>赛道上有螺旋格，停在螺旋格上会被传送到螺旋的另一端：可能一下冲出很远，也可能直接被送回后面<a class="cite" href="#s-v4">4</a>。</p>
+        <p style="margin:0">玩家试玩里提到停上去“一下前进五步”，但具体有几组螺旋、各自连到哪一格，目前公开资料里没有逐格信息，这里不做推测<a class="cite" href="#s-v3">14</a>。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 视图：选手 ===== -->
+<section id="racers">
+  <div class="wrap">
+    <div class="sec-head"><h2>72 名选手</h2><p>一代 36 名 + 二代 36 名，可以按代数、类型筛选，也可以搜索</p></div>
+    <div class="pair">
+      <figure class="photo"><img src="assets/cards_3.jpg" alt="一代选手卡实拍：天才、双胞胎、船长"><figcaption>一代选手卡：上面是名字和插画，下面是能力原文和一句标语。图中是天才、双胞胎、船长<a class="cite" href="#s-gd">10</a></figcaption></figure>
+      <figure class="photo"><img src="assets/meeples.jpg" alt="一代木质选手棋子，中间是体积最大的巨婴"><figcaption>一代木质棋子。中间绿色底座的大块头是巨婴，比其他棋子都大<a class="cite" href="#s-gd">10</a></figcaption></figure>
+    </div>
+    <div class="note"><b>怎么读这些卡</b>：一代技能按 2025 美版卡牌英文原文翻译<a class="cite" href="#s-jp">8</a>，补充说明和风味文字来自规则书<a class="cite" href="#s-vn">9</a>。二代官方还没公开规则书，官网商品页目前只有占位文字<a class="cite" href="#s-cmyk2">32</a>，技能来自中文博主对英文规则书的逐条解读<a class="cite" href="#s-v5">5</a><a class="cite" href="#s-v6">6</a>。中文名用的是国内玩家视频里的常用译名<a class="cite" href="#s-v10">20</a><a class="cite" href="#s-v9">19</a><a class="cite" href="#s-v8">18</a><a class="cite" href="#s-v7">26</a><a class="cite" href="#s-v5">5</a><a class="cite" href="#s-v6">6</a>，正式中文版可能不同。二代英文名：字幕里清楚的直接写；字幕不完整、按读音补全的标“推断”；没有线索的留空。类型标签是本页按技能效果做的归类，不是官方分类。</div>
+    <div class="fbar">
+      <div class="frow" role="group" aria-label="按代数筛选"><span>代数</span>
+        <button class="fbtn gb" type="button" data-v="all" aria-pressed="true">全部 72</button>
+        <button class="fbtn gb" type="button" data-v="1" aria-pressed="false">一代 36</button>
+        <button class="fbtn gb" type="button" data-v="2" aria-pressed="false">二代 36</button>
+      </div>
+      <div class="frow" role="group" aria-label="按类型筛选"><span>类型</span>
+        <button class="fbtn tg" type="button" data-v="all" aria-pressed="true">全部类型</button><button class="fbtn tg" type="button" data-v="加速" aria-pressed="false">加速 21</button><button class="fbtn tg" type="button" data-v="拖后腿" aria-pressed="false">拖后腿 9</button><button class="fbtn tg" type="button" data-v="绊倒" aria-pressed="false">绊倒 9</button><button class="fbtn tg" type="button" data-v="淘汰" aria-pressed="false">淘汰 5</button><button class="fbtn tg" type="button" data-v="传送换位" aria-pressed="false">传送换位 8</button><button class="fbtn tg" type="button" data-v="拿分" aria-pressed="false">拿分 7</button><button class="fbtn tg" type="button" data-v="骰子" aria-pressed="false">骰子 13</button><button class="fbtn tg" type="button" data-v="复制" aria-pressed="false">复制 6</button><button class="fbtn tg" type="button" data-v="连锁触发" aria-pressed="false">连锁触发 10</button><button class="fbtn tg" type="button" data-v="特殊" aria-pressed="false">特殊 3</button>
+      </div>
+      <div class="search"><label for="rq">搜索</label><input id="rq" type="search" placeholder="名字、英文名或技能关键词，如 绊倒、Banana" autocomplete="off"></div>
+      <p class="count" id="rcount" aria-live="polite">显示 72 / 72 名选手</p>
+    </div>
+    <div class="empty" id="rempty"><p>没有符合条件的选手，换个关键词或类型试试。</p><button class="fbtn" id="rreset" type="button">清除筛选</button></div>
+    <div class="rgrid" id="rgrid">
+      <article class="rc" data-g="1" data-t="加速 骰子" data-s="炼金术士  alchemist 当我的主要移动掷出 1 或 2 时，我可以改为移动 4 格。  永远在追寻把“此物”变成“彼物”的古老秘密。 加速 骰子 一代"><div class="hd"><span class="gen g1">一代</span><h4>炼金术士</h4><span class="en">Alchemist</span></div><p class="ab">当我的主要移动掷出 1 或 2 时，我可以改为移动 4 格。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：永远在追寻把“此物”变成“彼物”的古老秘密。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span><span class="chip">骰子</span></div></article>
+      <article class="rc" data-g="1" data-t="绊倒" data-s="芭芭雅嘎  baba yaga 绊倒停到我所在格的任何选手；我停到别人所在格时，也绊倒对方。 和决斗大师同格时可以决斗，但决斗大师照样被绊倒；催眠师把我拉过去，催眠师也会被绊倒。 这处房产跑得飞快。 绊倒 一代"><div class="hd"><span class="gen g1">一代</span><h4>芭芭雅嘎</h4><span class="en">Baba Yaga</span></div><p class="ab">绊倒停到我所在格的任何选手；我停到别人所在格时，也绊倒对方。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　和决斗大师同格时可以决斗，但决斗大师照样被绊倒；催眠师把我拉过去，催眠师也会被绊倒。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：这处房产跑得飞快。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">绊倒</span></div></article>
+      <article class="rc" data-g="1" data-t="绊倒" data-s="香蕉  banana 我绊倒任何经过我的选手。 跳蛙跳过香蕉也算经过，同样会被绊倒（按规则书对“经过”的定义推导，规则书未单列此条）。 和你我一样，一点都不能吃。 绊倒 一代"><div class="hd"><span class="gen g1">一代</span><h4>香蕉</h4><span class="en">Banana</span></div><p class="ab">我绊倒任何经过我的选手。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　跳蛙跳过香蕉也算经过，同样会被绊倒（按规则书对“经过”的定义推导，规则书未单列此条）。<a class="cite" href="#s-v7">26</a></p><p class="fl">风味：和你我一样，一点都不能吃。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">绊倒</span></div></article>
+      <article class="rc" data-g="1" data-t="加速" data-s="飞艇  blimp 在赛道第二个弯道之前开始回合时，我的主要移动 +3；在该弯道或之后，主要移动 −1。  为飞翔而造，为爆炸而生。 加速 一代"><div class="hd"><span class="gen g1">一代</span><h4>飞艇</h4><span class="en">Blimp</span></div><p class="ab">在赛道第二个弯道之前开始回合时，我的主要移动 +3；在该弯道或之后，主要移动 −1。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：为飞翔而造，为爆炸而生。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="1" data-t="拖后腿" data-s="半人马  centaur 当我经过一名选手时，对方移动 −2（后退 2 格）。 不会被踢到起点之后。 关键来了（原文 here’s the kicker，和“踢”双关）。 拖后腿 一代"><div class="hd"><span class="gen g1">一代</span><h4>半人马</h4><span class="en">Centaur</span></div><p class="ab">当我经过一名选手时，对方移动 −2（后退 2 格）。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　不会被踢到起点之后。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：关键来了（原文 Here’s the kicker，和“踢”双关）。<a class="cite" href="#s-vn">9</a><a class="cite" href="#s-v7">26</a></p><div class="ft"><span class="chip">拖后腿</span></div></article>
+      <article class="rc" data-g="1" data-t="加速" data-s="啦啦队长  cheerleader 在我的主要移动前，我可以让排在最后的选手移动 2 格；这样做时，我移动 1 格。 多名选手并列最后要一起移动，我仍只走 1 格；如果我自己就是最后，先走 2 格再走 1 格，算两次移动。 一团纯粹的热情。 加速 一代"><div class="hd"><span class="gen g1">一代</span><h4>啦啦队长</h4><span class="en">Cheerleader</span></div><p class="ab">在我的主要移动前，我可以让排在最后的选手移动 2 格；这样做时，我移动 1 格。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　多名选手并列最后要一起移动，我仍只走 1 格；如果我自己就是最后，先走 2 格再走 1 格，算两次移动。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：一团纯粹的热情。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="1" data-t="加速" data-s="教练  coach 和我同格的所有选手主要移动 +1，包括我自己。  当你是某种蜥蜴时，相信自己就更重要了。 加速 一代"><div class="hd"><span class="gen g1">一代</span><h4>教练</h4><span class="en">Coach</span></div><p class="ab">和我同格的所有选手主要移动 +1，包括我自己。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：当你是某种蜥蜴时，相信自己就更重要了。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="1" data-t="复制" data-s="盗版猫 又译 模仿猫 copy cat 我拥有当前领先选手的能力；并列领先时由我挑选。 持续复制，不只在自己回合；和被复制者能力冲突时（比如巨婴）以对方为准；不复制“比赛开始前”类能力。 和另一只猫很像，但又不一样。 复制 一代"><div class="hd"><span class="gen g1">一代</span><h4>盗版猫</h4><span class="en">Copy Cat</span></div><p class="al">又译 模仿猫</p><p class="ab">我拥有当前领先选手的能力；并列领先时由我挑选。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　持续复制，不只在自己回合；和被复制者能力冲突时（比如巨婴）以对方为准；不复制“比赛开始前”类能力。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：和另一只猫很像，但又不一样。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">复制</span></div></article>
+      <article class="rc" data-g="1" data-t="骰子 连锁触发" data-s="骰子商人 又译 骰贩子 dicemonger 任何人每回合都可以重掷一次主要移动骰；其他选手这样做时，我移动 1 格。  他的职业是靠掷 d100 随机表选出来的。 骰子 连锁触发 一代"><div class="hd"><span class="gen g1">一代</span><h4>骰子商人</h4><span class="en">Dicemonger</span></div><p class="al">又译 骰贩子</p><p class="ab">任何人每回合都可以重掷一次主要移动骰；其他选手这样做时，我移动 1 格。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：他的职业是靠掷 d100 随机表选出来的。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">骰子</span><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="1" data-t="骰子 加速" data-s="决斗大师 又译 决斗者 duelist 有选手和我同格时，我可以喊“决斗！”：双方各掷骰，点数高的一方移动 2 格，平局算我赢。 一回合内可以多次决斗，不在自己回合也行；但不能打断正在进行的动作，比如插在别人掷骰和移动之间。 手里有把细剑，看什么都像一场决斗。 骰子 加速 一代"><div class="hd"><span class="gen g1">一代</span><h4>决斗大师</h4><span class="en">Duelist</span></div><p class="al">又译 决斗者</p><p class="ab">有选手和我同格时，我可以喊“决斗！”：双方各掷骰，点数高的一方移动 2 格，平局算我赢。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　一回合内可以多次决斗，不在自己回合也行；但不能打断正在进行的动作，比如插在别人掷骰和移动之间。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：手里有把细剑，看什么都像一场决斗。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">骰子</span><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="1" data-t="复制" data-s="彩蛋  egg 比赛开始前，从牌库抽 3 张新选手牌，选 1 张，我拥有它的能力。 仍使用彩蛋的棋子；能获得“比赛开始前”类能力。 你真该看看那只鸡。 复制 一代"><div class="hd"><span class="gen g1">一代</span><h4>彩蛋</h4><span class="en">Egg</span></div><p class="ab">比赛开始前，从牌库抽 3 张新选手牌，选 1 张，我拥有它的能力。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　仍使用彩蛋的棋子；能获得“比赛开始前”类能力。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：你真该看看那只鸡。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">复制</span></div></article>
+      <article class="rc" data-g="1" data-t="传送换位" data-s="人字拖  flip flop 我可以不掷主要移动骰，改为与另一名选手互换位置。 互换算传送，不算移动；双方同时换位，不会短暂同格。 永远在寻找失散的双胞胎兄弟。 传送换位 一代"><div class="hd"><span class="gen g1">一代</span><h4>人字拖</h4><span class="en">Flip Flop</span></div><p class="ab">我可以不掷主要移动骰，改为与另一名选手互换位置。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　互换算传送，不算移动；双方同时换位，不会短暂同格。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：永远在寻找失散的双胞胎兄弟。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">传送换位</span></div></article>
+      <article class="rc" data-g="1" data-t="骰子" data-s="天才  genius 我可以预测主要移动会掷出的点数；猜对了，本回合结束后我再进行一个回合。  但在爱情里是个傻瓜。 骰子 一代"><div class="hd"><span class="gen g1">一代</span><h4>天才</h4><span class="en">Genius</span></div><p class="ab">我可以预测主要移动会掷出的点数；猜对了，本回合结束后我再进行一个回合。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：但在爱情里是个傻瓜。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">骰子</span></div></article>
+      <article class="rc" data-g="1" data-t="拖后腿" data-s="黏黏怪 又译 黏糊怪 gunk 其他选手主要移动 −1。 减的是移动格数，不是骰面点数：6 不会变成 5，也不妨碍狗腿子触发。 还挺爱抱抱的。 拖后腿 一代"><div class="hd"><span class="gen g1">一代</span><h4>黏黏怪</h4><span class="en">Gunk</span></div><p class="al">又译 黏糊怪</p><p class="ab">其他选手主要移动 −1。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　减的是移动格数，不是骰面点数：6 不会变成 5，也不妨碍狗腿子触发。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：还挺爱抱抱的。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">拖后腿</span></div></article>
+      <article class="rc" data-g="1" data-t="加速" data-s="野兔  hare 我的主要移动 +2；回合开始时如果我独自领先，就跳过主要移动。  他唯一跑不过的，是自己的傲慢。 加速 一代"><div class="hd"><span class="gen g1">一代</span><h4>野兔</h4><span class="en">Hare</span></div><p class="ab">我的主要移动 +2；回合开始时如果我独自领先，就跳过主要移动。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：他唯一跑不过的，是自己的傲慢。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="1" data-t="连锁触发" data-s="杠精 又译 起哄者 heckler 当一名选手回合结束时，离他回合开始的位置不超过 1 格，我移动 2 格。 对刚从绊倒中站起来的选手也生效。 这是建设性批评。 连锁触发 一代"><div class="hd"><span class="gen g1">一代</span><h4>杠精</h4><span class="en">Heckler</span></div><p class="al">又译 起哄者</p><p class="ab">当一名选手回合结束时，离他回合开始的位置不超过 1 格，我移动 2 格。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　对刚从绊倒中站起来的选手也生效。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：这是建设性批评。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="1" data-t="拖后腿" data-s="巨婴  huge baby 除起点外，任何人都不能和我同格；要发生时，改为把该选手放到我身后一格。 被放到我身后不算移动，视为直接停在那一格。 她已经 30 岁了。 拖后腿 一代"><div class="hd"><span class="gen g1">一代</span><h4>巨婴</h4><span class="en">Huge Baby</span></div><p class="ab">除起点外，任何人都不能和我同格；要发生时，改为把该选手放到我身后一格。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　被放到我身后不算移动，视为直接停在那一格。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：她已经 30 岁了。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">拖后腿</span></div></article>
+      <article class="rc" data-g="1" data-t="传送换位" data-s="催眠师  hypnotist 在我的主要移动前，我可以把一名选手传送到我的格子。  这段假的背景故事，是他自己植入的。 传送换位 一代"><div class="hd"><span class="gen g1">一代</span><h4>催眠师</h4><span class="en">Hypnotist</span></div><p class="ab">在我的主要移动前，我可以把一名选手传送到我的格子。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：这段假的背景故事，是他自己植入的。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">传送换位</span></div></article>
+      <article class="rc" data-g="1" data-t="拖后腿 连锁触发" data-s="毛毛虫  inchworm 其他选手主要移动掷出 1 时，对方跳过这次移动，我移动 1 格。 和船长同场时，我先前进 1 格，然后才轮到船长。 给她一寸，她就只拿一寸。 拖后腿 连锁触发 一代"><div class="hd"><span class="gen g1">一代</span><h4>毛毛虫</h4><span class="en">Inchworm</span></div><p class="ab">其他选手主要移动掷出 1 时，对方跳过这次移动，我移动 1 格。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　和船长同场时，我先前进 1 格，然后才轮到船长。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：给她一寸，她就只拿一寸。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">拖后腿</span><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="1" data-t="连锁触发" data-s="狗腿子 又译 随从 lackey 其他选手主要移动掷出 6 时，在对方移动前我先移动 2 格。  你开心，他就开心。 连锁触发 一代"><div class="hd"><span class="gen g1">一代</span><h4>狗腿子</h4><span class="en">Lackey</span></div><p class="al">又译 随从</p><p class="ab">其他选手主要移动掷出 6 时，在对方移动前我先移动 2 格。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：你开心，他就开心。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="1" data-t="加速" data-s="跳蛙 又译 跳跳蛙 leaptoad 移动时，我跳过有其他选手的格子。  常常被人从下往上看见。 加速 一代"><div class="hd"><span class="gen g1">一代</span><h4>跳蛙</h4><span class="en">Leaptoad</span></div><p class="al">又译 跳跳蛙</p><p class="ab">移动时，我跳过有其他选手的格子。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：常常被人从下往上看见。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="1" data-t="加速" data-s="大长腿  legs 我可以不掷主要移动骰，直接移动 5 格。 这仍算主要移动，会被黏黏怪减速，也能吃到教练的加成。 也有胳膊，但谁在乎呢。 加速 一代"><div class="hd"><span class="gen g1">一代</span><h4>大长腿</h4><span class="en">Legs</span></div><p class="ab">我可以不掷主要移动骰，直接移动 5 格。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　这仍算主要移动，会被黏黏怪减速，也能吃到教练的加成。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：也有胳膊，但谁在乎呢。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="1" data-t="拿分" data-s="小可怜 又译 可爱的失败者 lovable loser 在我的主要移动前，如果我独自垫底，拿 1 枚 1 分标记。  失败者学院的全班第一。这可不是好事。 拿分 一代"><div class="hd"><span class="gen g1">一代</span><h4>小可怜</h4><span class="en">Lovable Loser</span></div><p class="al">又译 可爱的失败者</p><p class="ab">在我的主要移动前，如果我独自垫底，拿 1 枚 1 分标记。<a class="cite" href="#s-jp">8</a></p><p class="fl">风味：失败者学院的全班第一。这可不是好事。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">拿分</span></div></article>
+      <article class="rc" data-g="1" data-t="骰子" data-s="魔术师  magician 我可以重掷主要移动骰，最多 2 次。 必须用最后一次的结果。 他还会放火球术。 骰子 一代"><div class="hd"><span class="gen g1">一代</span><h4>魔术师</h4><span class="en">Magician</span></div><p class="ab">我可以重掷主要移动骰，最多 2 次。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　必须用最后一次的结果。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：他还会放火球术。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">骰子</span></div></article>
+      <article class="rc" data-g="1" data-t="特殊" data-s="智多星  mastermind 在我的第一个回合开始时，预测哪名选手会获胜；猜对了比赛立即结束，我获得第 2 名。 预测自己获胜并猜中，就能同时拿第 1 和第 2 名。 他唯一办不成的计划，是让爸妈复合。 特殊 一代"><div class="hd"><span class="gen g1">一代</span><h4>智多星</h4><span class="en">Mastermind</span></div><p class="ab">在我的第一个回合开始时，预测哪名选手会获胜；猜对了比赛立即结束，我获得第 2 名。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　预测自己获胜并猜中，就能同时拿第 1 和第 2 名。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：他唯一办不成的计划，是让爸妈复合。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">特殊</span></div></article>
+      <article class="rc" data-g="1" data-t="淘汰" data-s="大嘴巴  m.o.u.t.h. 当我停在恰好有一名其他选手的格子上时，对方被淘汰出本场比赛。 吃到没人能拿第 2 名时，本场的银奖章没人拿，直接移除。 “用于满足饥饿的咀嚼孔”（mastication orifice utilized toward hunger），首字母拼成 mouth。 淘汰 一代"><div class="hd"><span class="gen g1">一代</span><h4>大嘴巴</h4><span class="en">M.O.U.T.H.</span></div><p class="ab">当我停在恰好有一名其他选手的格子上时，对方被淘汰出本场比赛。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　吃到没人能拿第 2 名时，本场的银奖章没人拿，直接移除。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：“用于满足饥饿的咀嚼孔”（Mastication Orifice Utilized Toward Hunger），首字母拼成 MOUTH。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">淘汰</span></div></article>
+      <article class="rc" data-g="1" data-t="加速" data-s="派对之王  party animal 在我的主要移动前，所有选手朝我移动 1 格；每有一名其他选手和我同格，我的主要移动 +1。 巨婴挤进我这一格时，这格的所有人都被推回 1 格。 有人给一只动物戴了顶帽子，就变成这样了。 加速 一代"><div class="hd"><span class="gen g1">一代</span><h4>派对之王</h4><span class="en">Party Animal</span></div><p class="ab">在我的主要移动前，所有选手朝我移动 1 格；每有一名其他选手和我同格，我的主要移动 +1。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　巨婴挤进我这一格时，这格的所有人都被推回 1 格。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：有人给一只动物戴了顶帽子，就变成这样了。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="1" data-t="加速 绊倒" data-s="火箭科学家  rocket scientist 掷出主要移动骰后，我可以改为移动双倍点数；这样做的话，我会被绊倒。 先掷骰，再决定要不要“点火”。 兼职脑外科医生。 加速 绊倒 一代"><div class="hd"><span class="gen g1">一代</span><h4>火箭科学家</h4><span class="en">Rocket Scientist</span></div><p class="ab">掷出主要移动骰后，我可以改为移动双倍点数；这样做的话，我会被绊倒。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　先掷骰，再决定要不要“点火”。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：兼职脑外科医生。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">加速</span><span class="chip">绊倒</span></div></article>
+      <article class="rc" data-g="1" data-t="连锁触发" data-s="恋爱脑  romantic 当任何人停在恰好有另一名选手的格子上时，我移动 2 格。 两名选手一起移动时（比如吸盘鱼跟着走）会触发两次。 这个物种的最后一只。 连锁触发 一代"><div class="hd"><span class="gen g1">一代</span><h4>恋爱脑</h4><span class="en">Romantic</span></div><p class="ab">当任何人停在恰好有另一名选手的格子上时，我移动 2 格。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　两名选手一起移动时（比如吸盘鱼跟着走）会触发两次。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：这个物种的最后一只。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="1" data-t="连锁触发" data-s="蹭蹭怪  scoocher 另一名选手的能力生效时，我移动 1 格。 黏黏怪每次 −1、骰子商人每次重掷、跳蛙每跳过一格、魔术师每次重掷（即使没采用）都各算一次。 哦，我就从你旁边蹭过去一下。 连锁触发 一代"><div class="hd"><span class="gen g1">一代</span><h4>蹭蹭怪</h4><span class="en">Scoocher</span></div><p class="ab">另一名选手的能力生效时，我移动 1 格。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　黏黏怪每次 −1、骰子商人每次重掷、跳蛙每跳过一格、魔术师每次重掷（即使没采用）都各算一次。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：哦，我就从你旁边蹭过去一下。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="1" data-t="拿分" data-s="西西弗斯  sisyphus 比赛开始前，我拿 4 枚 1 分标记；主要移动掷出 6 时，不移动，改为传送回起点并失去 1 枚。 掷出 6 超过 4 次时，只要还有分就继续扣；传送回起点后，我仍照常进行主要移动。 保持谦逊，继续苦干。 拿分 一代"><div class="hd"><span class="gen g1">一代</span><h4>西西弗斯</h4><span class="en">Sisyphus</span></div><p class="ab">比赛开始前，我拿 4 枚 1 分标记；主要移动掷出 6 时，不移动，改为传送回起点并失去 1 枚。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　掷出 6 超过 4 次时，只要还有分就继续扣；传送回起点后，我仍照常进行主要移动。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：保持谦逊，继续苦干。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">拿分</span></div></article>
+      <article class="rc" data-g="1" data-t="连锁触发" data-s="船长  skipper 任何人主要移动掷出 1 时，下一个轮到我行动。 我行动完后从我左手边继续；如果我又掷出 1，就再轮到我。 方向盘是假的，他也只是和大家一样往前走。 连锁触发 一代"><div class="hd"><span class="gen g1">一代</span><h4>船长</h4><span class="en">Skipper</span></div><p class="ab">任何人主要移动掷出 1 时，下一个轮到我行动。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　我行动完后从我左手边继续；如果我又掷出 1，就再轮到我。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：方向盘是假的，他也只是和大家一样往前走。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="1" data-t="拖后腿" data-s="强迫症  stickler 其他选手必须正好走到终点所需的格数才能冲线；超出就不能移动。 包括能力带来的移动：比如决斗大师在终点前一格赢了决斗（移动 2），也冲不了线。 没人拜托，他就自己校对了这本规则书。 拖后腿 一代"><div class="hd"><span class="gen g1">一代</span><h4>强迫症</h4><span class="en">Stickler</span></div><p class="ab">其他选手必须正好走到终点所需的格数才能冲线；超出就不能移动。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　包括能力带来的移动：比如决斗大师在终点前一格赢了决斗（移动 2），也冲不了线。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：没人拜托，他就自己校对了这本规则书。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">拖后腿</span></div></article>
+      <article class="rc" data-g="1" data-t="连锁触发" data-s="吸盘鱼  suckerfish 和我同格的选手移动时，我可以跟着移到对方的新格子。 一旦跟着走就得走完对方整次移动；可以靠这个冲线。 有被抛弃焦虑。 连锁触发 一代"><div class="hd"><span class="gen g1">一代</span><h4>吸盘鱼</h4><span class="en">Suckerfish</span></div><p class="ab">和我同格的选手移动时，我可以跟着移到对方的新格子。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　一旦跟着走就得走完对方整次移动；可以靠这个冲线。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：有被抛弃焦虑。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="1" data-t="传送换位" data-s="电灯泡  又译 第三者  third wheel 在我的主要移动前，我可以传送到任意恰好有 2 名选手的格子。 传送后照常进行主要移动。 在找自己的另一半。 传送换位 一代"><div class="hd"><span class="gen g1">一代</span><h4>电灯泡</h4><span class="en">Third Wheel</span></div><p class="al">又译 第三者</p><p class="ab">在我的主要移动前，我可以传送到任意恰好有 2 名选手的格子。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　传送后照常进行主要移动。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：在找自己的另一半。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">传送换位</span></div></article>
+      <article class="rc" data-g="1" data-t="复制" data-s="双胞胎  twin 比赛开始前，我可以选一名赢过之前比赛的选手，用他的能力参赛。 仍使用双胞胎的棋子；也能获得“比赛开始前”类能力。 和谁都不是亲戚，只是长得和大家一模一样。 复制 一代"><div class="hd"><span class="gen g1">一代</span><h4>双胞胎</h4><span class="en">Twin</span></div><p class="ab">比赛开始前，我可以选一名赢过之前比赛的选手，用他的能力参赛。<a class="cite" href="#s-jp">8</a></p><p class="nt"><b>补充</b>　仍使用双胞胎的棋子；也能获得“比赛开始前”类能力。<a class="cite" href="#s-vn">9</a></p><p class="fl">风味：和谁都不是亲戚，只是长得和大家一模一样。<a class="cite" href="#s-vn">9</a></p><div class="ft"><span class="chip">复制</span></div></article>
+      <article class="rc" data-g="2" data-t="淘汰" data-s="咬痕  bite mark 当我的主要移动掷出 1 或 2 时，我变身为狼人版大嘴；所有被我超过的选手都会被淘汰。 有专属模型，变身时替换棋子，本场剩余时间保持变身；变身在移动开始前完成，所以当回合就能淘汰被超过的选手。 遭狼人噬咬，变成一张靠巫术繁殖、专为饕餮而生的巨口（和一代大嘴巴一样，英文风味文字的首字母拼出名字）。 淘汰 二代"><div class="hd"><span class="gen g2">二代</span><h4>咬痕</h4><span class="en">Bite Mark</span></div><p class="ab">当我的主要移动掷出 1 或 2 时，我变身为狼人版大嘴；所有被我超过的选手都会被淘汰。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　有专属模型，变身时替换棋子，本场剩余时间保持变身；变身在移动开始前完成，所以当回合就能淘汰被超过的选手。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：遭狼人噬咬，变成一张靠巫术繁殖、专为饕餮而生的巨口（和一代大嘴巴一样，英文风味文字的首字母拼出名字）。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">淘汰</span></div></article>
+      <article class="rc" data-g="2" data-t="加速" data-s="笨笨狗  blunderdog 当我是最后一名时，主要移动掷骰点数 ×3；不是最后一名时，主要移动改为向后移动。 向后移动不翻三倍；遇到双重反转改为向前；其他效果改变格数时，按改变后的总格数算。 在失败者学院里常年垫底，就算这样，依旧烂得不行。 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>笨笨狗</h4><span class="en">Blunderdog</span></div><p class="ab">当我是最后一名时，主要移动掷骰点数 ×3；不是最后一名时，主要移动改为向后移动。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　向后移动不翻三倍；遇到双重反转改为向前；其他效果改变格数时，按改变后的总格数算。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：在失败者学院里常年垫底，就算这样，依旧烂得不行。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="骰子" data-s="骗人豹  cheetah 我的主要移动不掷骰，而是偷偷把骰子设成任意点数；如果我右手边的玩家猜中这个点数，我就不能移动。 这不算一次掷骰，不能用来触发各种能力。 “她来自波士顿。”（拿波士顿体育圈的作弊黑历史玩梗） 骰子 二代"><div class="hd"><span class="gen g2">二代</span><h4>骗人豹</h4><span class="en">Cheetah</span><span class="chip">推断</span></div><p class="ab">我的主要移动不掷骰，而是偷偷把骰子设成任意点数；如果我右手边的玩家猜中这个点数，我就不能移动。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　这不算一次掷骰，不能用来触发各种能力。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：“她来自波士顿。”（拿波士顿体育圈的作弊黑历史玩梗）<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">骰子</span></div></article>
+      <article class="rc" data-g="2" data-t="骰子 拖后腿" data-s="评论家  critic 跑在我前面的选手，我可以让他们每回合重掷一次主要移动骰。  因为实话说太多，被 boardgamegeek 论坛封禁。 骰子 拖后腿 二代"><div class="hd"><span class="gen g2">二代</span><h4>评论家</h4><span class="en">Critic</span></div><p class="ab">跑在我前面的选手，我可以让他们每回合重掷一次主要移动骰。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：因为实话说太多，被 BoardGameGeek 论坛封禁。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">骰子</span><span class="chip">拖后腿</span></div></article>
+      <article class="rc" data-g="2" data-t="传送换位" data-s="天后  diva 在我的回合开始时触发换位：字幕能确认的部分是“否则我和最后一名互换位置”，前半句条件字幕缺失，以正式规则为准。 这个效果算传送；有多名选手并列第一或并列垫底时，由我选择交换对象。 自尊心爆棚，只差一座托尼奖。 传送换位 二代"><div class="hd"><span class="gen g2">二代</span><h4>天后</h4><span class="en">Diva</span><span class="chip">推断</span></div><p class="ab">在我的回合开始时触发换位：字幕能确认的部分是“否则我和最后一名互换位置”，前半句条件字幕缺失，以正式规则为准。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　这个效果算传送；有多名选手并列第一或并列垫底时，由我选择交换对象。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：自尊心爆棚，只差一座托尼奖。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">传送换位</span></div></article>
+      <article class="rc" data-g="2" data-t="淘汰 复制" data-s="黑帮替身  doppelgangster 第一个冲线的选手会被淘汰，我获得该选手的能力。 被淘汰者不算完成比赛，拿不到分，也不能触发智多星这类预测获胜的能力；我不能用赛后才触发的能力（如重播选手）；就算触手怪已经用过它的能力，我拿到后照样能用；如果我自己第一个冲线，同样会被淘汰。 “你倒是有自知之明。要是出点什么意外，那就太可惜了。”（黑手党式的委婉威胁） 淘汰 复制 二代"><div class="hd"><span class="gen g2">二代</span><h4>黑帮替身</h4><span class="en">Doppelgangster</span><span class="chip">推断</span></div><p class="ab">第一个冲线的选手会被淘汰，我获得该选手的能力。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　被淘汰者不算完成比赛，拿不到分，也不能触发智多星这类预测获胜的能力；我不能用赛后才触发的能力（如重播选手）；就算触手怪已经用过它的能力，我拿到后照样能用；如果我自己第一个冲线，同样会被淘汰。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：“你倒是有自知之明。要是出点什么意外，那就太可惜了。”（黑手党式的委婉威胁）<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">淘汰</span><span class="chip">复制</span></div></article>
+      <article class="rc" data-g="2" data-t="拿分" data-s="哥特树懒 英文名是“哥特 + 树懒”的造词  我的主要移动 −1；比赛结束时，如果我还没通过第二个弯道，获得 3 分。 停在第二个弯道上也算没通过，照样拿分。 全靠眼线替他奋力奔跑。 拿分 二代"><div class="hd"><span class="gen g2">二代</span><h4>哥特树懒</h4></div><p class="al">英文名是“哥特 + 树懒”的造词</p><p class="ab">我的主要移动 −1；比赛结束时，如果我还没通过第二个弯道，获得 3 分。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　停在第二个弯道上也算没通过，照样拿分。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：全靠眼线替他奋力奔跑。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">拿分</span></div></article>
+      <article class="rc" data-g="2" data-t="加速" data-s="野猪骑士  hog knight 比赛开始时我骑着野猪，主要移动 +2；有选手停在野猪所在格时，那名选手接管这头野猪。 我有两个棋子；野猪不算选手，只给骑手 +2；骑野猪的选手可以被绊倒；这是“比赛开始前”能力，黑帮替身抢不走野猪；替补复制我的能力时，一个人可以同时骑两头野猪。 严格恪守猪之骑士准则。 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>野猪骑士</h4><span class="en">Hog Knight</span><span class="chip">推断</span></div><p class="ab">比赛开始时我骑着野猪，主要移动 +2；有选手停在野猪所在格时，那名选手接管这头野猪。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　我有两个棋子；野猪不算选手，只给骑手 +2；骑野猪的选手可以被绊倒；这是“比赛开始前”能力，黑帮替身抢不走野猪；替补复制我的能力时，一个人可以同时骑两头野猪。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：严格恪守猪之骑士准则。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="加速" data-s="跃蛙   回合结束时，如果我正好在某名选手身后一格，我获得一个额外回合。 那一格有多名选手也同样生效。 就像玩跳蛙游戏，只不过更湿一点。 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>跃蛙</h4></div><p class="ab">回合结束时，如果我正好在某名选手身后一格，我获得一个额外回合。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　那一格有多名选手也同样生效。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：就像玩跳蛙游戏，只不过更湿一点。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="拿分 绊倒" data-s="旅馆   选手停到我的格子上时，要付给我 1 分；付不起就被绊倒。 欢迎客人自行换零钱。 根本不是这个游戏的角色，照样收租（致敬《大富翁》）。 拿分 绊倒 二代"><div class="hd"><span class="gen g2">二代</span><h4>旅馆</h4></div><p class="ab">选手停到我的格子上时，要付给我 1 分；付不起就被绊倒。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　欢迎客人自行换零钱。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：根本不是这个游戏的角色，照样收租（致敬《大富翁》）。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">拿分</span><span class="chip">绊倒</span></div></article>
+      <article class="rc" data-g="2" data-t="加速 淘汰" data-s="伊卡洛斯  icarus 我的主要移动 +3；主要移动掷出 6 时，我被淘汰。  栽在了父子心结上（和一代西西弗斯同属希腊神话组）。 加速 淘汰 二代"><div class="hd"><span class="gen g2">二代</span><h4>伊卡洛斯</h4><span class="en">Icarus</span></div><p class="ab">我的主要移动 +3；主要移动掷出 6 时，我被淘汰。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：栽在了父子心结上（和一代西西弗斯同属希腊神话组）。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">加速</span><span class="chip">淘汰</span></div></article>
+      <article class="rc" data-g="2" data-t="绊倒" data-s="绊王者 字幕写作“半王者”，英文听作“king trooper”；按技能（绊倒领先者）推测是“绊”字  在我的回合开始时，我可以绊倒领先的选手。  历史路漫漫，终将绊倒不公，走向正义。 绊倒 二代"><div class="hd"><span class="gen g2">二代</span><h4>绊王者</h4></div><p class="al">字幕写作“半王者”，英文听作“king trooper”；按技能（绊倒领先者）推测是“绊”字</p><p class="ab">在我的回合开始时，我可以绊倒领先的选手。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：历史路漫漫，终将绊倒不公，走向正义。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">绊倒</span></div></article>
+      <article class="rc" data-g="2" data-t="传送换位 绊倒" data-s="触手怪  kraken 每场比赛一次，在我的回合开始时，我可以把所有其他选手传送到我的格子，并绊倒他们。 所有选手同时传送，不会触发“停在格子上”类能力。 想必味道很不错。 传送换位 绊倒 二代"><div class="hd"><span class="gen g2">二代</span><h4>触手怪</h4><span class="en">Kraken</span></div><p class="ab">每场比赛一次，在我的回合开始时，我可以把所有其他选手传送到我的格子，并绊倒他们。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　所有选手同时传送，不会触发“停在格子上”类能力。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：想必味道很不错。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">传送换位</span><span class="chip">绊倒</span></div></article>
+      <article class="rc" data-g="2" data-t="拖后腿" data-s="破坏者  le saboteur 其他选手的主要移动掷出 3 时，改为向后移动。 双重反向时改为向前；其他效果改变格数时按改变后的数值后退；炫技者只要任意一次掷出 3，就要以全部移动值后退；骰子先生的结果里只要有 3，即使没选它也要后退。 倘若他给你香肠，千万别接。 拖后腿 二代"><div class="hd"><span class="gen g2">二代</span><h4>破坏者</h4><span class="en">Le Saboteur</span><span class="chip">推断</span></div><p class="ab">其他选手的主要移动掷出 3 时，改为向后移动。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　双重反向时改为向前；其他效果改变格数时按改变后的数值后退；炫技者只要任意一次掷出 3，就要以全部移动值后退；骰子先生的结果里只要有 3，即使没选它也要后退。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：倘若他给你香肠，千万别接。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">拖后腿</span></div></article>
+      <article class="rc" data-g="2" data-t="加速" data-s="鼹鼠  mole 如果我相邻一格内没有其他选手，我可以不掷主要移动骰，直接移动 6 格。 这仍算主要移动。 赛道维护人员的噩梦。 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>鼹鼠</h4><span class="en">Mole</span><span class="chip">推断</span></div><p class="ab">如果我相邻一格内没有其他选手，我可以不掷主要移动骰，直接移动 6 格。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　这仍算主要移动。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：赛道维护人员的噩梦。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="骰子 传送换位 绊倒" data-s="魔法运动员  magical athlete 主要移动掷骰后按点数生效：1＝我移动 7 格；2＝排最后的选手传送到我这；3＝我传送到另一名选手处并绊倒对方；4＝我移动 4 格并额外获得一个回合；5＝领先的选手后退 5 格；6＝我移动 6 格，并绊倒所有我经过的选手。 掷 2 的传送同时发生；有其他能力要结算时，先结算我的效果，再按回合顺序结算其他选手；掷 2 时多名最后都传送过来；掷 3 时目标格有多人则全部绊倒；掷 5 时并列第一都要后退。 并无关联。（和游戏同名的选手） 骰子 传送换位 绊倒 二代"><div class="hd"><span class="gen g2">二代</span><h4>魔法运动员</h4><span class="en">Magical Athlete</span><span class="chip">推断</span></div><p class="ab">主要移动掷骰后按点数生效：1＝我移动 7 格；2＝排最后的选手传送到我这；3＝我传送到另一名选手处并绊倒对方；4＝我移动 4 格并额外获得一个回合；5＝领先的选手后退 5 格；6＝我移动 6 格，并绊倒所有我经过的选手。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　掷 2 的传送同时发生；有其他能力要结算时，先结算我的效果，再按回合顺序结算其他选手；掷 2 时多名最后都传送过来；掷 3 时目标格有多人则全部绊倒；掷 5 时并列第一都要后退。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：并无关联。（和游戏同名的选手）<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">骰子</span><span class="chip">传送换位</span><span class="chip">绊倒</span></div></article>
+      <article class="rc" data-g="2" data-t="骰子" data-s="骰子先生   我的主要移动一次掷全部 6 颗骰子，从中任选一个重复出现的点数。 会借用其他玩家的骰子；如果 1–6 正好各一颗，我就不能移动；判定能力触发时，所有骰子都算“已掷出”。 别跟他提二十面骰，他的预算早就见底了。 骰子 二代"><div class="hd"><span class="gen g2">二代</span><h4>骰子先生</h4></div><p class="ab">我的主要移动一次掷全部 6 颗骰子，从中任选一个重复出现的点数。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　会借用其他玩家的骰子；如果 1–6 正好各一颗，我就不能移动；判定能力触发时，所有骰子都算“已掷出”。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：别跟他提二十面骰，他的预算早就见底了。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">骰子</span></div></article>
+      <article class="rc" data-g="2" data-t="复制" data-s="缝合怪   我的主要移动掷出 1 或 2 时，抽一张选手卡并获得它的能力。 在移动前获得；多次掷出 1 或 2 可以不断叠加；不能用比赛之外触发的能力；复制我的选手拿不到我叠加来的能力；能力冲突时（比如骰子先生和骗人豹）由我选用哪条。 进来的时候记得签访客登记簿。 复制 二代"><div class="hd"><span class="gen g2">二代</span><h4>缝合怪</h4></div><p class="ab">我的主要移动掷出 1 或 2 时，抽一张选手卡并获得它的能力。<a class="cite" href="#s-v5">5</a></p><p class="nt"><b>补充</b>　在移动前获得；多次掷出 1 或 2 可以不断叠加；不能用比赛之外触发的能力；复制我的选手拿不到我叠加来的能力；能力冲突时（比如骰子先生和骗人豹）由我选用哪条。<a class="cite" href="#s-v5">5</a></p><p class="fl">风味：进来的时候记得签访客登记簿。<a class="cite" href="#s-v5">5</a></p><div class="ft"><span class="chip">复制</span></div></article>
+      <article class="rc" data-g="2" data-t="骰子 连锁触发" data-s="复仇女神  nemesis 其他选手掷主要移动骰时，我也可以一起掷；点数相同，我就移动对应格数。  女神复仇，说干就干。 骰子 连锁触发 二代"><div class="hd"><span class="gen g2">二代</span><h4>复仇女神</h4><span class="en">Nemesis</span></div><p class="ab">其他选手掷主要移动骰时，我也可以一起掷；点数相同，我就移动对应格数。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：女神复仇，说干就干。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">骰子</span><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="2" data-t="加速" data-s="富二代  nepo baby 本场比赛我直接从赛道第一个弯道起步。  老爹手握加速器，老妈就是终点线。 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>富二代</h4><span class="en">Nepo Baby</span><span class="chip">推断</span></div><p class="ab">本场比赛我直接从赛道第一个弯道起步。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：老爹手握加速器，老妈就是终点线。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="拖后腿" data-s="故障   在我前方的选手主要移动 −1，并且所有能力失效。 只是经过我的选手不受 −1；超越我的选手立刻失去全部能力，所以狼人版大嘴淘汰不了我；重播选手这类赛后能力照常生效。 文件或目录已损坏，无法读取（错误码 cmyk1099）。 拖后腿 二代"><div class="hd"><span class="gen g2">二代</span><h4>故障</h4></div><p class="ab">在我前方的选手主要移动 −1，并且所有能力失效。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　只是经过我的选手不受 −1；超越我的选手立刻失去全部能力，所以狼人版大嘴淘汰不了我；重播选手这类赛后能力照常生效。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：文件或目录已损坏，无法读取（错误码 CMYK1099）。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">拖后腿</span></div></article>
+      <article class="rc" data-g="2" data-t="加速" data-s="追猎者  overtaker 每有一名选手在我前方，我的主要移动 +1。 已经冲线的选手不计入（英文转写读音更接近 overtake）。 “他来找你了，芭芭拉。”（恐怖片《活死人之夜》台词） 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>追猎者</h4><span class="en">Overtaker</span><span class="chip">推断</span></div><p class="ab">每有一名选手在我前方，我的主要移动 +1。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　已经冲线的选手不计入（英文转写读音更接近 overtake）。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：“他来找你了，芭芭拉。”（恐怖片《活死人之夜》台词）<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="骰子 连锁触发" data-s="派对扫兴鬼  party pooper 所有掷出的 6 都必须重掷；每当有人重掷，我前进 1 格。 适用于所有掷骰，不只是主要移动。 业主委员会混进了一只动物，就变成这样了。 骰子 连锁触发 二代"><div class="hd"><span class="gen g2">二代</span><h4>派对扫兴鬼</h4><span class="en">Party Pooper</span><span class="chip">推断</span></div><p class="ab">所有掷出的 6 都必须重掷；每当有人重掷，我前进 1 格。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　适用于所有掷骰，不只是主要移动。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：业主委员会混进了一只动物，就变成这样了。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">骰子</span><span class="chip">连锁触发</span></div></article>
+      <article class="rc" data-g="2" data-t="绊倒 加速" data-s="攀滚企鹅   每当其他选手经过我时，我被绊倒；我被绊倒时不跳过主要移动，而是让掷骰点数翻倍。 主要移动结束后我解除绊倒状态。 只要到了冰雪关卡，我直接起飞。 绊倒 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>攀滚企鹅</h4></div><p class="ab">每当其他选手经过我时，我被绊倒；我被绊倒时不跳过主要移动，而是让掷骰点数翻倍。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　主要移动结束后我解除绊倒状态。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：只要到了冰雪关卡，我直接起飞。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">绊倒</span><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="特殊" data-s="重播选手   我的第一场比赛结束后，我作为该玩家的额外选手参加余下所有比赛。 之后你同时操控两名选手：轮到你时先选一名完整结算回合，再操作另一名。 她是很多人的下饭老剧。 特殊 二代"><div class="hd"><span class="gen g2">二代</span><h4>重播选手</h4></div><p class="ab">我的第一场比赛结束后，我作为该玩家的额外选手参加余下所有比赛。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　之后你同时操控两名选手：轮到你时先选一名完整结算回合，再操作另一名。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：她是很多人的下饭老剧。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">特殊</span></div></article>
+      <article class="rc" data-g="2" data-t="骰子 加速" data-s="炫技者   掷完主要移动骰后可以继续掷，把每次的点数累加到移动值；一旦某次点数小于或等于上一次，就不能移动。 停止掷骰后才执行一次主要移动，不是每掷一次走一次。 一次令人捏把汗的悬吊特技。 骰子 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>炫技者</h4></div><p class="ab">掷完主要移动骰后可以继续掷，把每次的点数累加到移动值；一旦某次点数小于或等于上一次，就不能移动。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　停止掷骰后才执行一次主要移动，不是每掷一次走一次。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：一次令人捏把汗的悬吊特技。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">骰子</span><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="传送换位" data-s="灵魂伴侣   比赛开始前，选定一名对手的选手；我的回合开始时如果和他相距 5 格以内，我传送到他所在的格子。 可以向前或向后传送。 桌游和伴侣才是绝配（monogamy 同时是一款成人桌游的名字）。 传送换位 二代"><div class="hd"><span class="gen g2">二代</span><h4>灵魂伴侣</h4></div><p class="ab">比赛开始前，选定一名对手的选手；我的回合开始时如果和他相距 5 格以内，我传送到他所在的格子。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　可以向前或向后传送。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：桌游和伴侣才是绝配（monogamy 同时是一款成人桌游的名字）。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">传送换位</span></div></article>
+      <article class="rc" data-g="2" data-t="加速 淘汰" data-s="飙车狂   我的玩家每有 1 分，我的主要移动 +1；回合开始时如果我领先 4 格及以上，我直接被淘汰。  拍卖师诵读《死灵之书》时把它召唤了出来。 加速 淘汰 二代"><div class="hd"><span class="gen g2">二代</span><h4>飙车狂</h4></div><p class="ab">我的玩家每有 1 分，我的主要移动 +1；回合开始时如果我领先 4 格及以上，我直接被淘汰。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：拍卖师诵读《死灵之书》时把它召唤了出来。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">加速</span><span class="chip">淘汰</span></div></article>
+      <article class="rc" data-g="2" data-t="拿分" data-s="玩不起   我的回合开始时，如果其他所有选手都领先我 5 格及以上，本场比赛终止，我获得 3 分。 第一、第二名都拿不到分；但终止时已经冲线的选手照常拿分。 我们本来不想带他玩，可他大发脾气。 拿分 二代"><div class="hd"><span class="gen g2">二代</span><h4>玩不起</h4></div><p class="ab">我的回合开始时，如果其他所有选手都领先我 5 格及以上，本场比赛终止，我获得 3 分。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　第一、第二名都拿不到分；但终止时已经冲线的选手照常拿分。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：我们本来不想带他玩，可他大发脾气。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">拿分</span></div></article>
+      <article class="rc" data-g="2" data-t="拿分 加速" data-s="后爹   位于我左侧的选手主要移动 +2；如果该选手拿到第一名，我获得 3 分。 继子女被淘汰后我会有新的继子女；双选手变体里我必须是玩家最左侧的选手，让另一名选手受益；我冲线或被淘汰后能力失效。 他让你母亲十分开心，而且很会和其他选手相处。 拿分 加速 二代"><div class="hd"><span class="gen g2">二代</span><h4>后爹</h4></div><p class="ab">位于我左侧的选手主要移动 +2；如果该选手拿到第一名，我获得 3 分。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　继子女被淘汰后我会有新的继子女；双选手变体里我必须是玩家最左侧的选手，让另一名选手受益；我冲线或被淘汰后能力失效。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：他让你母亲十分开心，而且很会和其他选手相处。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">拿分</span><span class="chip">加速</span></div></article>
+      <article class="rc" data-g="2" data-t="拿分" data-s="裸奔蕉  streaker 每当我超过任意选手，获得 1 分。 一次移动不管超过几名，都只得 1 分（英文转写读音更接近 streak）。 规则书里没写香蕉不能裸奔。 拿分 二代"><div class="hd"><span class="gen g2">二代</span><h4>裸奔蕉</h4><span class="en">Streaker</span><span class="chip">推断</span></div><p class="ab">每当我超过任意选手，获得 1 分。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　一次移动不管超过几名，都只得 1 分（英文转写读音更接近 streak）。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：规则书里没写香蕉不能裸奔。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">拿分</span></div></article>
+      <article class="rc" data-g="2" data-t="拖后腿 骰子" data-s="绝色美人  stunner 和我相距 1 格以内的其他选手，所有掷骰结果都固定为 1。  你嫉妒吗？ 拖后腿 骰子 二代"><div class="hd"><span class="gen g2">二代</span><h4>绝色美人</h4><span class="en">Stunner</span><span class="chip">推断</span></div><p class="ab">和我相距 1 格以内的其他选手，所有掷骰结果都固定为 1。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：你嫉妒吗？<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">拖后腿</span><span class="chip">骰子</span></div></article>
+      <article class="rc" data-g="2" data-t="特殊" data-s="狸猫换太子 英文名在字幕里只听出“switch”  回合结束时，如果我和另一名选手相距 1 格以内，我可以和对方交换操控权：对方拿走我的卡，我拿走对方的卡。 棋子留在原地；同格有多名选手时由我挑；和缝合怪交换，也能获得他的能力。 来自下半球，也能翻到上面。 特殊 二代"><div class="hd"><span class="gen g2">二代</span><h4>狸猫换太子</h4></div><p class="al">英文名在字幕里只听出“switch”</p><p class="ab">回合结束时，如果我和另一名选手相距 1 格以内，我可以和对方交换操控权：对方拿走我的卡，我拿走对方的卡。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　棋子留在原地；同格有多名选手时由我挑；和缝合怪交换，也能获得他的能力。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：来自下半球，也能翻到上面。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">特殊</span></div></article>
+      <article class="rc" data-g="2" data-t="传送换位" data-s="小尾巴  tail 回合开始时，我可以传送到前方下一名选手身后的格子。 传送后我照样可以进行主要移动。 总爱聊依恋类型。 传送换位 二代"><div class="hd"><span class="gen g2">二代</span><h4>小尾巴</h4><span class="en">Tail</span></div><p class="ab">回合开始时，我可以传送到前方下一名选手身后的格子。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　传送后我照样可以进行主要移动。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：总爱聊依恋类型。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">传送换位</span></div></article>
+      <article class="rc" data-g="2" data-t="绊倒" data-s="水管蛇  the hose 回合结束时掷一颗骰子，我前方在该点数范围内的所有选手都被绊倒。  祈祷你永远别遇上洒水车。 绊倒 二代"><div class="hd"><span class="gen g2">二代</span><h4>水管蛇</h4><span class="en">The Hose</span></div><p class="ab">回合结束时掷一颗骰子，我前方在该点数范围内的所有选手都被绊倒。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：祈祷你永远别遇上洒水车。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">绊倒</span></div></article>
+      <article class="rc" data-g="2" data-t="复制" data-s="替补  understudy 比赛开始前，我复制一名对手选手的能力。 只能复制本场参赛的选手；双选手变体下甚至能复制自己的另一名选手；不能用赛后能力（如重播选手），能用赛前能力，复制野猪骑士时就近找个棋子当野猪。 她的名字印在插页卡片上很好看（暗指平时只是替补）。 复制 二代"><div class="hd"><span class="gen g2">二代</span><h4>替补</h4><span class="en">Understudy</span></div><p class="ab">比赛开始前，我复制一名对手选手的能力。<a class="cite" href="#s-v6">6</a></p><p class="nt"><b>补充</b>　只能复制本场参赛的选手；双选手变体下甚至能复制自己的另一名选手；不能用赛后能力（如重播选手），能用赛前能力，复制野猪骑士时就近找个棋子当野猪。<a class="cite" href="#s-v6">6</a></p><p class="fl">风味：她的名字印在插页卡片上很好看（暗指平时只是替补）。<a class="cite" href="#s-v6">6</a></p><div class="ft"><span class="chip">复制</span></div></article>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 视图：扭扭卡 ===== -->
+<section id="twists">
+  <div class="wrap">
+    <div class="sec-head"><h2>13 张扭扭卡</h2><p>二代新增，在扭扭赛道上触发</p></div>
+    <p>扭扭卡是二代最大的新玩法：抽到哪张，这一场就按哪张的规则来。卡名用的是中文博主的译名，部分字幕不清，按意思整理<a class="cite" href="#s-v4">4</a>。</p>
+    <ul class="twg">
+      <li class="tw rule"><div><h4>什么时候抽</h4><p>扭扭赛道的第 13、14 格是扭扭格。每场比赛只有第一位经过扭扭格的选手抽 1 张并公开；有的效果当场结算，有的持续到本场结束<a class="cite" href="#s-v4">4</a><a class="cite" href="#s-v3">14</a>。</p></div></li>
+      <li class="tw"><div><h4><span class="no">1</span>炼金实验室收容泄露</h4><p>把狼人版大嘴放到起点，当作不属于任何玩家的 NPC。每个回合结束后它自动掷骰移动，被它超过的选手直接淘汰。场上如果有已经变身的咬痕，就由它来当这个 NPC。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">2</span>终点线虫虫泛滥</h4><p>选手停在最后两格中的任意一格时，后退 5 格。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">3</span>传送带启动</h4><p>所有选手传送到起点后的第 1 格，此后所有人的基础移动 +3。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">4</span>全员诅咒</h4><p>每位玩家回合结束后掷一颗骰子，按回合顺序跳过相应数量的玩家。已冲线或被淘汰的选手也要掷；一名玩家控制多名选手时逐个结算。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">5</span>观众渴求混乱</h4><p>再抽 2 张扭扭卡，按顺序结算两张的效果。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">6</span>镜像世界假说实锤</h4><p>整条赛道的行进方向反过来。如果有多名选手都在起点，按回合顺序决定他们的冲线名次。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">7</span>预言池旁禁止奔跑</h4><p>任何选手在主要移动中移动 6 格或以上，直接淘汰。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">8</span>皮纳塔糖果掉落</h4><p>在第一个弯道之后的每个空格上各放一枚分数标记，选手停在有标记的格子就拿走它。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">9</span>随机性随机终止</h4><p>所有玩家各掷一次骰子，本场剩下所有需要掷骰的场合都只能用这次的点数。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">10</span>地上烤鸡</h4><p>排在最后的选手移动 7 格；多名并列最后就都移动，按回合顺序结算。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">11</span>季终决赛</h4><p>第一名和第二名一对一决胜，争夺全部分数。从第二个弯道开始比，由当前第一名先行动。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">12</span>旧货集市</h4><p>所有玩家各抽一名新选手，可以选择换掉当前在场的选手，大家同时决定。<a class="cite" href="#s-v4">4</a></p></div></li>
+      <li class="tw"><div><h4><span class="no">13</span>你踩到时间小恶魔！</h4><p>触发这张卡的选手被淘汰，但会作为该玩家的额外选手参加下一场比赛。<a class="cite" href="#s-v4">4</a></p></div></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===== 视图：变体与混玩 ===== -->
+<section id="variants">
+  <div class="wrap">
+    <div class="sec-head"><h2>变体与混玩</h2><p>人少时每人控两名选手；两盒可以混着玩</p></div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>2 人变体</h3>
+        <ul>
+          <li>翻 8 张选手牌，按 A B B A A B B A 的顺序轮抽；再翻 8 张，按相反顺序再抽一轮，每人共 8 名选手<a class="cite" href="#s-vn">9</a></li>
+          <li>每场两人同时各选 2 名不同选手上场，起点上共有 4 名选手；每人拿 2 颗骰子<a class="cite" href="#s-vn">9</a></li>
+          <li>每名玩家的第一个回合只动一名选手；之后每回合两名选手都动，先后自定，动完一名再动另一名<a class="cite" href="#s-vn">9</a></li>
+          <li>第一场之后，上一场得分少的玩家先手，平局掷骰<a class="cite" href="#s-vn">9</a></li>
+          <li>写着“其他选手”的能力，也包括你自己的另一名选手<a class="cite" href="#s-vn">9</a></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>3 人双选手变体</h3>
+        <ul>
+          <li>翻 6 张选手牌正常蛇形轮抽，一共抽 4 轮，每轮换人先选，每人共 8 名选手<a class="cite" href="#s-vn">9</a></li>
+          <li>每场每人同时选 2 名不同选手，起点上共 6 名选手；每人拿 2 颗骰子<a class="cite" href="#s-vn">9</a></li>
+          <li>你的回合里两名选手都要行动，顺序自定，一名完整结算后再动另一名<a class="cite" href="#s-vn">9</a></li>
+        </ul>
+        <h3>两代在这里的差别</h3>
+        <ul>
+          <li>一代初版规则：每回合自己决定两名选手的先后<a class="cite" href="#s-pdf">13</a>（原文 “in the order you want”）</li>
+          <li>一代 2026 年 8 月修订版：开局就定好两名选手的行动顺序，之后固定<a class="cite" href="#s-v4">4</a>（据中文博主对修订版规则书的解读，修订版原文未能核到）</li>
+          <li>二代：回到自己决定先后<a class="cite" href="#s-v4">4</a>（博主解读，转写原句为“操控自己的选手依次行动”）</li>
+        </ul>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="panel">
+        <h3>两盒混玩</h3>
+        <p>所有盒子都能单独玩，也能混着玩，选手卡和版图可以随意混用<a class="cite" href="#s-wm">1</a>。混玩时每场比赛用不同的赛道，一代加二代按这个顺序跑<a class="cite" href="#s-wm">1</a><a class="cite" href="#s-v4">4</a>：</p>
+        <ol style="margin:0;padding-left:22px">
+          <li>温和赛道 Mild Mile（一代）</li>
+          <li>狂野赛道 Wild Wilds（一代）</li>
+          <li>扭扭赛道 Twisty Twirl（二代）</li>
+          <li>螺旋世界 Whirly World（二代）</li>
+        </ol>
+        <p style="margin-top:10px">只玩一盒时，也可以只用一面赛道或者自己调整顺序，开局前商量好就行<a class="cite" href="#s-vn">9</a>。</p>
+      </div>
+      <div class="panel">
+        <h3>几个人玩最好</h3>
+        <div class="meter">
+          <div><b>2–3 人</b><span class="bar"><i class="on"></i><i></i><i></i></span><p>能玩，但场上选手少，技能互动和连锁变少；可以用双选手变体<a class="cite" href="#s-lp">7</a><a class="cite" href="#s-gb">12</a></p></div>
+          <div><b>4 人</b><span class="bar"><i class="on"></i><i class="on"></i><i></i></span><p>技能碰撞已经够频繁<a class="cite" href="#s-lp">7</a></p></div>
+          <div><b>5–6 人</b><span class="bar"><i class="on"></i><i class="on"></i><i class="on"></i></span><p>最佳人数，场上挤满选手，连锁不断<a class="cite" href="#s-lp">7</a><a class="cite" href="#s-bgb">25</a></p></div>
+        </div>
+        <p style="margin-top:12px">没有单人模式<a class="cite" href="#s-lp">7</a>。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 视图：版本与选购 ===== -->
+<section id="buy">
+  <div class="wrap">
+    <div class="sec-head"><h2>版本与选购</h2><p>认清版本，别把自制扩展当官方内容</p></div>
+    <div class="vgrid">
+      <div class="ver o"><h3>原版（2002–2003）</h3><p class="who">Grimpeur（日本）/ Z-Man Games 英文版</p><p>25 个角色，用筹码竞价选角，4 人玩 5 场、5 人玩 4 场；早已绝版<a class="cite" href="#s-zm">11</a><a class="cite" href="#s-lp">7</a></p></div>
+      <div class="ver r"><h3>一代 · CMYK 英文版（2025）</h3><p class="who">CMYK</p><p>36 名选手、木质棋子；美国零售价 29.99 美元，2025 年 11 月前后出货<a class="cite" href="#s-gd">10</a></p></div>
+      <div class="ver r"><h3>简体中文《胡闹运动会》</h3><p class="who">Asmodee（艾赐魔袋）</p><p>正版简中，店铺售价约 271 元（抓取时）<a class="cite" href="#s-tb">16</a>；B 站开箱视频称原价 240 元<a class="cite" href="#s-bili">23</a></p></div>
+      <div class="ver r"><h3>繁体中文《搞怪運動會》</h3><p class="who">Asmodee 台湾</p><p>网购价 NT$990；商品页的适龄同时写了 6+ 和 8+<a class="cite" href="#s-tw">15</a></p></div>
+      <div class="ver r"><h3>其他语言</h3><p class="who">各地出版方</p><p>法语版 Athlètes de Compète（IELLO）<a class="cite" href="#s-iello">30</a>，捷克语版 Magičtí atleti（Asmodee 捷克，TLAMA 有售）<a class="cite" href="#s-tl2">31</a></p></div>
+      <div class="ver g"><h3>二代 Second Wind</h3><p class="who">CMYK · 设计 Christian Kudahl、Richard Garfield</p><p>2026 年 8 月在一代修订版规则书里露面，9 月有播客报道公布<a class="cite" href="#s-wm">1</a><a class="cite" href="#s-pc">3</a>；10 月官网出现商品页，标价 29.99 美元，但还没有介绍、图片和规则书<a class="cite" href="#s-cmyk2">32</a>；目前没有查到官方中文版的消息</p></div>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="panel">
+        <h3>选购提醒</h3>
+        <ul>
+          <li>简中版认准 Asmodee 正版<a class="cite" href="#s-tb">16</a><a class="cite" href="#s-bili">23</a>。2026 年 5 月 NGA 上有玩家说这款游戏当时没有官方代理、市面中文版都是盗印，并提醒认准红盒新版，别买成老版；同一帖里几天后就有人确认简中正版已上架<a class="cite" href="#s-nga">22</a></li>
+          <li>有店铺把“火热连胜扩”和一代捆绑出售<a class="cite" href="#s-tbm">27</a><a class="cite" href="#s-jd">28</a>。“火热连胜”看起来是 Hot Streak 的直译，而 Hot Streak 是 CMYK 2025 年的另一款独立竞速游戏<a class="cite" href="#s-lp">7</a>，不是官方扩展（推断）</li>
+          <li>官方一代只有 36 名选手，评测时也没有官方扩展的消息<a class="cite" href="#s-gd">10</a><a class="cite" href="#s-lp">7</a>；“180 角色版”“8 人扩”“事件扩”这类组合商品<a class="cite" href="#s-tbm">27</a>不在官方产品之列，应是玩家自制或拼凑的内容（推断）</li>
+          <li>二代：有店铺标“38 个新角色”<a class="cite" href="#s-tb2">24</a>（该商品链接现已跳转，无法复核），和官方“与一代数量相同”的说法对不上<a class="cite" href="#s-wm">1</a>（二代正好也是 36 名<a class="cite" href="#s-v4">4</a>）；抖音上的“二代 DIY 版”另加了自制道具卡和事件卡<a class="cite" href="#s-v3">14</a></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>评测怎么说</h3>
+        <ul>
+          <li>优点：技能连锁接连出现，笑点密集；规则简单，几十秒就能教会<a class="cite" href="#s-lp">7</a><a class="cite" href="#s-tw">15</a></li>
+          <li>优点：木质棋子和 70 年代卡通风美术很讨喜，配件用纸袋装，减少塑料<a class="cite" href="#s-gd">10</a><a class="cite" href="#s-gb">12</a></li>
+          <li>缺点：比赛中能做的决策很少，运气成分重，追求策略的玩家会觉得空<a class="cite" href="#s-lp">7</a></li>
+          <li>部分技能的边界情况规则书没写清，官方建议商量着来，谈不拢就掷骰<a class="cite" href="#s-lp">7</a><a class="cite" href="#s-gd">10</a></li>
+        </ul>
+        <h3>线上玩</h3>
+        <ul>
+          <li>Tabletop Simulator 有社区制作的模组，能自动结算技能<a class="cite" href="#s-lp">7</a></li>
+          <li>国内的桌思游想 App 在 v4.26.0 上线了「胡闹运动会」<a class="cite" href="#s-app">29</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 视图：出处 ===== -->
+<section id="sources">
+  <div class="wrap">
+    <div class="sec-head"><h2>出处</h2><p>编号对应正文里的方框数字，点击可以跳回这里</p></div>
+    <div class="note method"><b>资料说明</b>：一代规则以官方规则书的全文翻译<a class="cite" href="#s-vn">9</a>和官方 PDF<a class="cite" href="#s-pdf">13</a>为准，选手能力用美版卡牌原文<a class="cite" href="#s-jp">8</a>。二代官方还没公开规则书（截至 10 月 25 日，官网商品页只有占位文字、没有图片<a class="cite" href="#s-cmyk2">32</a>），除了首次露面的规则书页面<a class="cite" href="#s-wm">1</a>，选手、扭扭卡和细则修订都来自中文博主对英文规则书的解读<a class="cite" href="#s-v4">4</a><a class="cite" href="#s-v5">5</a><a class="cite" href="#s-v6">6</a>，正式版本可能有出入。价格是抓取页面时的数字，会变动。狂野赛道的格号和奖杯分值是按官方实拍照片读出来的<a class="cite" href="#s-gd">10</a>。</div>
+    <ol class="src">
+      <li id="s-wm"><span class="no">1</span><div><div class="tt">Teasers for Heat, Magical Athlete, Dixit, and Secret Museum</div><div class="mt">W. Eric Martin 个人博客　2026-08-20</div><div class="use">用于：二代首次露面经过、CMYK 对二代规格的说明、两盒混玩的赛道顺序</div><a href="https://www.wericmartin.com/teasers-for-heat-magical-athlete-dixit-secret-museum/" target="_blank" rel="noopener noreferrer">https://www.wericmartin.com/teasers-for-heat-magical-athlete-dixit-secret-museum/</a></div></li>
+      <li id="s-sp"><span class="no">2</span><div><div class="tt">Magical Athlete krijgt nieuwe editie: Second Wind</div><div class="mt">SpelopTafel（荷兰桌游新闻）　2026-08-21</div><div class="use">用于：二代消息出自 Alex Hague 上传的更新版规则书</div><a href="https://www.speloptafel.nl/magical-athlete-krijgt-nieuwe-editie-second-wind/" target="_blank" rel="noopener noreferrer">https://www.speloptafel.nl/magical-athlete-krijgt-nieuwe-editie-second-wind/</a></div></li>
+      <li id="s-pc"><span class="no">3</span><div><div class="tt">155 Clank! Podcast, the Devon Dice Episode</div><div class="mt">Devon Dice Presents 播客（Apple 播客节目页）　2026-09-13</div><div class="use">用于：节目新闻栏目列出“Magical Athlete: Second Wind announced”</div><a href="https://podcasts.apple.com/us/podcast/155-clank-podcast-the-devon-dice-episode/id1740380886?i=1000789294963" target="_blank" rel="noopener noreferrer">https://podcasts.apple.com/us/podcast/155-clank-podcast-the-devon-dice-episode/id1740380886?i=1000789294963</a></div></li>
+      <li id="s-v4"><span class="no">4</span><div><div class="tt">胡闹运动会2新规则书详解｜新赛道、扭扭卡 胡闹2VS胡闹1</div><div class="mt">抖音 · 桌游小宇宙　2026-10-09</div><div class="use">用于：两代配件对比、混玩规则、扭扭赛道和螺旋世界、13 张扭扭卡、细则修订、双选手变体变化</div><a href="https://www.iesdouyin.com/share/video/7694166302847470911" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7694166302847470911</a></div></li>
+      <li id="s-v5"><span class="no">5</span><div><div class="tt">《胡闹运动会2》36个角色全解析&amp;梗指南（上）</div><div class="mt">抖音 · 桌游小宇宙　2026-10-02</div><div class="use">用于：二代第 1–18 名选手的技能、补充说明和风味文字</div><a href="https://www.iesdouyin.com/share/video/7691806792501808424" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7691806792501808424</a></div></li>
+      <li id="s-v6"><span class="no">6</span><div><div class="tt">《胡闹运动会2》36个角色全解析&amp;梗指南（下）</div><div class="mt">抖音 · 桌游小宇宙　2026-10-04</div><div class="use">用于：二代第 19–36 名选手的技能、补充说明和风味文字</div><a href="https://www.iesdouyin.com/share/video/7692434950993218870" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7692434950993218870</a></div></li>
+      <li id="s-lp"><span class="no">7</span><div><div class="tt">Magical Athlete Review</div><div class="mt">Lets Play Games（英国桌游博客）　2026-05-05</div><div class="use">用于：原版历史、各人数体验、单人模式、线上模组、Hot Streak、评价</div><a href="https://letsplaygames.uk/magical-athlete-review/" target="_blank" rel="noopener noreferrer">https://letsplaygames.uk/magical-athlete-review/</a></div></li>
+      <li id="s-jp"><span class="no">8</span><div><div class="tt">All Magical Athlete Racers</div><div class="mt">JetPunk 用户测验（2025 美版卡牌原文）　2026-09-15</div><div class="use">用于：一代 36 名选手的英文能力原文</div><a href="https://www.jetpunk.com/user-quizzes/2338585/all-magical-athlete-racers" target="_blank" rel="noopener noreferrer">https://www.jetpunk.com/user-quizzes/2338585/all-magical-athlete-racers</a></div></li>
+      <li id="s-vn"><span class="no">9</span><div><div class="tt">Hướng Dẫn Chơi (Luật) Magical Athlete</div><div class="mt">Thế Giới Board Game（一代规则书越南语全文翻译）　2026-08-15</div><div class="use">用于：一代完整规则：准备、轮抽、比赛、术语、细则、狂野赛道格子、选手注释与风味、2 人/3 人变体</div><a href="https://thegioiboardgame.vn/blogs/luat-boardgame/huong-dan-choi-luat-magical-athlete-duong-dua-bung-no-phep-thuat-hon-mang" target="_blank" rel="noopener noreferrer">https://thegioiboardgame.vn/blogs/luat-boardgame/huong-dan-choi-luat-magical-athlete-duong-dua-bung-no-phep-thuat-hon-mang</a></div></li>
+      <li id="s-gd"><span class="no">10</span><div><div class="tt">Wacky Racing in ‘Magical Athlete’</div><div class="mt">GeekDad · Jonathan H. Liu　2025-11-04</div><div class="use">用于：配件清单、版图与奖杯实拍（两面各 30 格）、售价与出货时间、选手卡与棋子照片</div><a href="https://geekdad.com/2025/11/wacky-racing-in-magical-athlete/" target="_blank" rel="noopener noreferrer">https://geekdad.com/2025/11/wacky-racing-in-magical-athlete/</a></div></li>
+      <li id="s-zm"><span class="no">11</span><div><div class="tt">Magical Athlete Rulebook（Z-Man Games 英文规则书 PDF）</div><div class="mt">device.report 存档（©2002 Grimpeur / ©2010 Z-Man Games）</div><div class="use">用于：原版 25 个角色、筹码竞价选角、各场比赛分值</div><a href="https://device.report/m/78eeed31b7fb2806cf60d273db8bb107f449e2c007f907414c6dae8e8179bf12.pdf" target="_blank" rel="noopener noreferrer">https://device.report/m/78eeed31b7fb2806cf60d273db8bb107f449e2c007f907414c6dae8e8179bf12.pdf</a></div></li>
+      <li id="s-gb"><span class="no">12</span><div><div class="tt">Keep on Running</div><div class="mt">The Giant Brain · Iain McAllister　2026-04-19</div><div class="use">用于：2003 原版、GMT 复刻未成、CMYK 取得版权交给 Garfield、美术、两条赛道</div><a href="https://giantbrain.co.uk/2026/04/19/keep-on-running/?amp=1" target="_blank" rel="noopener noreferrer">https://giantbrain.co.uk/2026/04/19/keep-on-running/?amp=1</a></div></li>
+      <li id="s-pdf"><span class="no">13</span><div><div class="tt">How to play MAGICAL ATHLETE（CMYK 官方英文规则书 PDF）</div><div class="mt">Gamer's HQ 托管</div><div class="use">用于：官方准备步骤（温和赛道面朝上、奖杯按大小叠放）、官方规则页插图</div><a href="https://gamers-hq.de/media/pdf/g0/6d/14/How-to-play-MAGICAL-ATHLETE.pdf" target="_blank" rel="noopener noreferrer">https://gamers-hq.de/media/pdf/g0/6d/14/How-to-play-MAGICAL-ATHLETE.pdf</a></div></li>
+      <li id="s-v3"><span class="no">14</span><div><div class="tt">上一秒领跑，下一秒绊倒丨桌游胡闹运动会2</div><div class="mt">抖音（二代 DIY 版试玩）　2026-10-21</div><div class="use">用于：扭扭卡抽取时机、螺旋格示例；视频自称 DIY 版，另加了自制道具卡和事件卡</div><a href="https://www.iesdouyin.com/share/video/7698972977244705147" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7698972977244705147</a></div></li>
+      <li id="s-tw"><span class="no">15</span><div><div class="tt">搞怪運動會 Magical Athlete</div><div class="mt">GoKids 玩樂小子 + Asmodee 台湾商品页</div><div class="use">用于：繁中版名称、售价、人数、时长、适龄</div><a href="https://www.gokids.com.tw/product/detail2767" target="_blank" rel="noopener noreferrer">https://www.gokids.com.tw/product/detail2767</a></div></li>
+      <li id="s-tb"><span class="no">16</span><div><div class="tt">Asmodee正版胡闹运动会简体中文版</div><div class="mt">淘宝 · 芝锐玩具专营店</div><div class="use">用于：简中正版商品与售价（抓取时 271 元）</div><a href="https://pcdetail.taobao.com/OEx4K3VZOFpkb2dvZC9aY0F0TXREZz09.html" target="_blank" rel="noopener noreferrer">https://pcdetail.taobao.com/OEx4K3VZOFpkb2dvZC9aY0F0TXREZz09.html</a></div></li>
+      <li id="s-tl"><span class="no">17</span><div><div class="tt">Magical Athlete</div><div class="mt">TLAMA games</div><div class="use">用于：设计师、机制分类、复杂度 1.2</div><a href="https://www.tlamagames.com/en/board-games/magical-athlete/" target="_blank" rel="noopener noreferrer">https://www.tlamagames.com/en/board-games/magical-athlete/</a></div></li>
+      <li id="s-v8"><span class="no">18</span><div><div class="tt">《胡闹运动会》全角色技能讲解！（下）</div><div class="mt">抖音　2026-07-06</div><div class="use">用于：一代中文译名；认为飞艇适合普通赛道</div><a href="https://www.iesdouyin.com/share/video/7659336643984494066" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7659336643984494066</a></div></li>
+      <li id="s-v9"><span class="no">19</span><div><div class="tt">《胡闹运动会》全角色技能讲解！（中）</div><div class="mt">抖音　2026-07-02</div><div class="use">用于：一代中文译名；认为大长腿适合普通赛道</div><a href="https://www.iesdouyin.com/share/video/7657793319367755123" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7657793319367755123</a></div></li>
+      <li id="s-v10"><span class="no">20</span><div><div class="tt">《胡闹运动会》全角色技能讲解！（上）</div><div class="mt">抖音　2026-06-29</div><div class="use">用于：一代中文译名</div><a href="https://www.iesdouyin.com/share/video/7656736333004950474" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7656736333004950474</a></div></li>
+      <li id="s-v1"><span class="no">21</span><div><div class="tt">胡闹运动会规则 #桌游 #MagicalAthlete</div><div class="mt">抖音　2026-06-21</div><div class="use">用于：“进入 BGG 聚会游戏榜前十”的说法</div><a href="https://www.iesdouyin.com/share/video/7653674013432404358" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7653674013432404358</a></div></li>
+      <li id="s-nga"><span class="no">22</span><div><div class="tt">大家有没有适合和弟弟妹妹们玩的四人桌游推荐？</div><div class="mt">NGA 玩家社区　2026-07-16</div><div class="use">用于：当时没有官方代理、中文版多为盗印、认准红盒新版</div><a href="https://bbs.nga.cn/read.php?forder_by=postdatedesc&amp;page=e&amp;tid=46804201" target="_blank" rel="noopener noreferrer">https://bbs.nga.cn/read.php?forder_by=postdatedesc&amp;page=e&amp;tid=46804201</a></div></li>
+      <li id="s-bili"><span class="no">23</span><div><div class="tt">新桌游，胡闹运动会，简单开箱内容（第1150期）</div><div class="mt">哔哩哔哩　2026-09-17</div><div class="use">用于：A 社出版、原价 240 元、2–6 人、6+、30 分钟</div><a href="https://www.bilibili.com/video/BV1NYeM6pELA/" target="_blank" rel="noopener noreferrer">https://www.bilibili.com/video/BV1NYeM6pELA/</a></div></li>
+      <li id="s-tb2"><span class="no">24</span><div><div class="tt">魔法运动员2 Magical Athlete 中英文版</div><div class="mt">淘宝 · 紫湖玩具专营店（图片搜索结果）　2026-10-21</div><div class="use">用于：商品图标注“38 个新角色”；链接已失效，2026-10-25 复查时跳转到其他商品页</div><a href="https://mobile-phone.taobao.com/chanpin/8b9968f4e400d81b573e240a899f4233.html" target="_blank" rel="noopener noreferrer">https://mobile-phone.taobao.com/chanpin/8b9968f4e400d81b573e240a899f4233.html</a></div></li>
+      <li id="s-bgb"><span class="no">25</span><div><div class="tt">How to Play Magical Athlete</div><div class="mt">BoardGamesBot（第三方聚合站）</div><div class="use">用于：BGG 7.8 分、重度 1.2/5、最佳 6 人（该页的技能说明有误，未采用）</div><a href="https://www.boardgamesbot.com/magical-athlete/how-to-play" target="_blank" rel="noopener noreferrer">https://www.boardgamesbot.com/magical-athlete/how-to-play</a></div></li>
+      <li id="s-v7"><span class="no">26</span><div><div class="tt">极简讲规｜《魔法运动员》36个角色技能全解析&amp;梗指南</div><div class="mt">抖音 · 桌游小宇宙　2026-03-04</div><div class="use">用于：一代中文译名、跳蛙越过香蕉也算经过、半人马风味的双关</div><a href="https://www.iesdouyin.com/share/video/7613083869927034112" target="_blank" rel="noopener noreferrer">https://www.iesdouyin.com/share/video/7613083869927034112</a></div></li>
+      <li id="s-tbm"><span class="no">27</span><div><div class="tt">桌游运动 热卖推荐</div><div class="mt">淘宝（中国澳门站）　2026-10-11</div><div class="use">用于：“180角色版+双版图+事件扩+火热连胜扩+8人扩”等组合商品</div><a href="https://mo.world.taobao.com/product/%E6%A1%8C%E6%B8%B8%E8%BF%90%E5%8A%A8.htm?pvids=20000-3269168&amp;sort=sales-des" target="_blank" rel="noopener noreferrer">https://mo.world.taobao.com/product/%E6%A1%8C%E6%B8%B8%E8%BF%90%E5%8A%A8.htm?pvids=20000-3269168&amp;sort=sales-des</a></div></li>
+      <li id="s-jd"><span class="no">28</span><div><div class="tt">魔法桌游排行榜</div><div class="mt">京东　2026-10-22</div><div class="use">用于：“中文豪华版（八人扩+火热连击拓）”等组合商品</div><a href="https://www.jd.com/phb/key_623355e34a756ddb957f.html" target="_blank" rel="noopener noreferrer">https://www.jd.com/phb/key_623355e34a756ddb957f.html</a></div></li>
+      <li id="s-app"><span class="no">29</span><div><div class="tt">桌思游想 App</div><div class="mt">App Store　2026-10-20</div><div class="use">用于：v4.26.0 上线「胡闹运动会」</div><a href="https://apps.apple.com/cn/app/%E6%A1%8C%E6%80%9D%E6%B8%B8%E6%83%B3/id6451014013" target="_blank" rel="noopener noreferrer">https://apps.apple.com/cn/app/%E6%A1%8C%E6%80%9D%E6%B8%B8%E6%83%B3/id6451014013</a></div></li>
+      <li id="s-iello"><span class="no">30</span><div><div class="tt">Athlètes de Compète (Magical Athlete)</div><div class="mt">IELLO</div><div class="use">用于：法语版名称与出版方</div><a href="https://iello.fr/jeux/athletes-de-compete-magical-athlete/" target="_blank" rel="noopener noreferrer">https://iello.fr/jeux/athletes-de-compete-magical-athlete/</a></div></li>
+      <li id="s-tl2"><span class="no">31</span><div><div class="tt">Magičtí atleti (Magical Athlete CZ)</div><div class="mt">TLAMA games</div><div class="use">用于：捷克语版名称</div><a href="https://www.tlamagames.info/en/board-games/magicti-atleti/" target="_blank" rel="noopener noreferrer">https://www.tlamagames.info/en/board-games/magicti-atleti/</a></div></li>
+      <li id="s-cmyk2"><span class="no">32</span><div><div class="tt">Magical Athlete: Second Wind</div><div class="mt">CMYK 官网商品页（Shopify 商品数据 created 2026-10-06、published 2026-10-07）　2026-10-25 抓取</div><div class="use">用于：二代设计师、美术、标价；商品页仍是占位状态（介绍为“TK”、无图片、未列入站点地图）</div><a href="https://www.cmyk.games/products/magical-athlete-second-wind" target="_blank" rel="noopener noreferrer">https://www.cmyk.games/products/magical-athlete-second-wind</a></div></li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer class="end">
+  <div class="lane" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="wrap"><p>整理于 2026 年 10 月 25 日。二代的内容以 CMYK 正式发布的版本为准，正式中文版的译名和细节可能和本页不同。</p></div>
+</footer>
+
+<script>
+(function(){
+  try{
+    var grid=document.getElementById('rgrid');
+    if(!grid){return;}
+    var cards=[].slice.call(grid.querySelectorAll('.rc'));
+    var cnt=document.getElementById('rcount');
+    var empty=document.getElementById('rempty');
+    var q=document.getElementById('rq');
+    var state={g:'all',t:'all',q:''};
+    function apply(){
+      var n=0, kw=state.q.trim().toLowerCase();
+      cards.forEach(function(c){
+        var ok=(state.g==='all'||c.getAttribute('data-g')===state.g)
+          &&(state.t==='all'||(' '+c.getAttribute('data-t')+' ').indexOf(' '+state.t+' ')>-1)
+          &&(!kw||c.getAttribute('data-s').indexOf(kw)>-1);
+        c.hidden=!ok;
+        if(ok){n++;}
+      });
+      if(cnt){cnt.textContent='显示 '+n+' / '+cards.length+' 名选手';}
+      if(empty){empty.classList.toggle('on',n===0);}
+    }
+    function setGroup(sel,key,val){
+      [].forEach.call(document.querySelectorAll(sel),function(b){
+        b.setAttribute('aria-pressed',b.getAttribute('data-v')===val?'true':'false');
+      });
+      state[key]=val;
+    }
+    function bind(sel,key){
+      [].forEach.call(document.querySelectorAll(sel),function(b){
+        b.addEventListener('click',function(){setGroup(sel,key,b.getAttribute('data-v'));apply();});
+      });
+    }
+    bind('.fbtn.gb','g');
+    bind('.fbtn.tg','t');
+    if(q){q.addEventListener('input',function(){state.q=q.value;apply();});}
+    var rs=document.getElementById('rreset');
+    if(rs){rs.addEventListener('click',function(){
+      setGroup('.fbtn.gb','g','all');
+      setGroup('.fbtn.tg','t','all');
+      if(q){q.value='';}
+      state.q='';
+      apply();
+      if(q){q.focus();}
+    });}
+    apply();
+  }catch(e){}
+})();
+</script>
+</body>
+</html>
