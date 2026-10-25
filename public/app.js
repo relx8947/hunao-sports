@@ -3056,7 +3056,7 @@
   }
   function showRevealOverlay(picks) {
     const cards = picks.map((p, k) => `<div class="flip ${p.seat === you ? 'mine' : ''}" style="--k:${k}"><div class="face">${rcard(p.rid, { mini: true })}</div><div class="face back"></div><div class="who" style="color:${PCOL[p.seat % 6]}">${esc(vs.players[p.seat].name)}${p.seat === you ? '（你）' : ''}</div></div>`).join('');
-    showOverlay(`<div class="ov-box card"><h2>第 ${vs.raceNo} 场 · 选手登场</h2><p class="sub">${TRACKS[vs.track].name}</p><div class="reveal-grid">${cards}</div><div style="height:30px"></div></div>`, 'reveal');
+    showOverlay(`<div class="ov-box ${phoneDraft() ? 'pickig reveal' : 'card'}"><h2>第 ${vs.raceNo} 场 · 选手登场</h2><p class="sub">${TRACKS[vs.track].name}</p><div class="reveal-grid">${cards}</div><div style="height:30px"></div></div>`, 'reveal');
   }
   /* ---------- WP-C：单场结算 / 终局庆祝 ---------- */
   // 单场结算停留由 timing.js 统一定义（WP-A）；旧版没有这个常量时按 4.5 秒
@@ -3384,6 +3384,40 @@
     }
     detail();
   }
+  // 手机选择类弹层（跳蚤市场 / 复制 / 孵蛋…）：头像格 + 固定技能栏 + 底部确认，与选秀、出战同款
+  function showChoosePhone(o) {
+    const n = o.items.length;
+    let sel = n === 1 && o.canPick ? o.items[0].v : null;
+    const cards = o.items.map((it, k) => rcard(it.rid, { cls: o.canPick ? 'pickable deal' : 'dim', k }).replace('class="rcard', `data-v="${esc(it.v)}" class="rcard`)).join('');
+    showOverlay(`<div class="ov-box pickig${n === 1 ? ' one' : ''}" style="--cols:${n === 3 ? 3 : n <= 4 ? 2 : 3};--lc:${Math.min(n, 4)}"><h2>${esc(o.title)}</h2><p class="sub">${esc(o.sub)}</p>
+      <div class="ov-cards pg-cards" id="pickCards">${cards}</div><div class="draft-detail pg-detail" id="pickDetail"></div>${o.status ? '<div class="pick-status" id="pickStatus"></div>' : ''}</div>`, o.kind);
+    overlayDecision = o.decision;
+    if (o.status) updatePickStatus(o.d);
+    const send = (v) => { if (answer(o.d, v)) { Sound.card(); if (o.after) o.after(); } };
+    const detail = () => {
+      const box = $('#pickDetail');
+      if (!box) return;
+      for (const c of $$('#pickCards .rcard')) c.classList.toggle('sel', c.dataset.v === sel);
+      const it = o.items.find((i) => i.v === sel), r = it && R[it.rid];
+      let info, btn;
+      if (r) {
+        box.style.setProperty('--rc', rcol(it.rid));
+        info = `<div class="dd-art">${art(it.rid)}</div><div class="dd-tx"><div class="dd-name"><b>${esc(r.name)}</b><span class="sk">${esc(r.skill)}</span></div><p>${esc(r.text)}</p>${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>`;
+      } else info = `<span>${o.canPick ? '点一下头像，查看技能' : o.answered ? '你已决定' : '请稍候'}</span>`;
+      if (o.answered || o.sending) btn = `<button class="dd-btn" disabled><b>${o.sending ? '提交中…' : '已确认'}</b><small>等待其他人</small></button>`;
+      else if (!o.canPick) btn = '<button class="dd-btn" disabled><b>请稍候</b><small>同步中</small></button>';
+      else if (!it) btn = `<button class="dd-btn" disabled><b>${esc(o.verb)}</b><small>先点一个头像</small></button>`;
+      else btn = `<button class="dd-btn go" data-send="${esc(it.v)}"><b>${esc(it.t)}</b>${it.s ? `<small>${esc(it.s)}</small>` : ''}</button>`;
+      const extra = o.canPick && o.extra.length ? `<div class="pg-extra">${o.extra.map((e) => `<button class="dd-btn alt" data-send="${esc(e.v)}"><b>${esc(e.label)}</b></button>`).join('')}</div>` : '';
+      box.className = 'draft-detail pg-detail' + (r ? '' : ' empty');
+      box.innerHTML = `<div class="dd-info">${info}</div>${btn}${extra}`;
+      for (const b of $$('[data-send]', box)) b.onclick = () => send(b.dataset.send);
+    };
+    for (const el of $$('#pickCards .rcard')) {
+      el.onclick = o.canPick ? () => { sel = el.dataset.v; Sound.click(); detail(); } : () => { denyCue(); nudge(el); };
+    }
+    detail();
+  }
   // 出战 / 选择浮层里的卡牌放不下时分页
   function fitOverlayCards(fresh) {
     const box = $('#overlay .ov-cards');
@@ -3404,6 +3438,15 @@
     // 只有一张候选时，主操作就是「复制它 / 孵出它」，不用让人去猜要点卡牌
     const verb = d.kind === 'twin' ? '复制' : d.kind === 'egg' ? '孵出' : '选';
     const main = cardOpts.length === 1 ? `<button class="btn primary big wpc-main" data-v="${esc(cardOpts[0].v)}"><span class="ico">${icon(d.kind === 'twin' ? 'copy' : 'check')}</span>${verb}「${esc(R[cardOpts[0].v].name)}」</button>` : '';
+    if (phoneDraft() && cardOpts.length && cardOpts.length <= 6) {
+      const one = cardOpts.length === 1;
+      return showChoosePhone({
+        d, kind: 'choose', decision: d.id, title, sub, canPick: true, verb: verb === '选' ? '选 TA' : verb,
+        items: cardOpts.map((o) => ({ v: o.v, rid: o.v, t: one ? `${verb}「${R[o.v].name}」` : '选 TA', s: one ? '' : R[o.v].name })),
+        extra: d.options.filter((o) => !R[o.v]).map((o) => ({ v: o.v, label: o.label })),
+        after: () => hideOverlay(),
+      });
+    }
     const extra = main + d.options.filter((o) => !R[o.v]).map((o) => `<button class="btn" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
     showOverlay(`<div class="ov-box card"><h2>${esc(title)}</h2><p class="sub">${esc(sub)}</p><div class="ov-cards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div><div class="ov-actions">${extra}</div></div>`, 'choose');
     overlayDecision = d.id;
@@ -3949,10 +3992,12 @@
     const key = `${box.clientWidth}x${box.clientHeight}|${getComputedStyle(box).display}`;
     if (box.dataset.eq === key) return;
     const keep = box.innerHTML;
-    box.style.removeProperty('--ch');
+    box.style.removeProperty('--ch'); box.style.removeProperty('--th');
     box.innerHTML = galleryCards(RACERS_ALL);
-    let mx = 0;
-    for (const c of box.children) mx = Math.max(mx, c.offsetHeight);
+    let mx = 0, tx = 0;
+    for (const c of box.children) { mx = Math.max(mx, c.offsetHeight); const t = c.querySelector('.txt'); if (t) tx = Math.max(tx, t.offsetHeight); }
+    // 文字区统一成最长那张的高度，图区拿剩下的空间：每张卡的图和字都同样大，版面对称
+    box.style.setProperty('--th', `${tx}px`);
     box.innerHTML = keep;
     // 每页放得下的整行数固定；剩余高度平均分给每行，卡片刚好铺满弹窗，图片区随之变大
     const cs = getComputedStyle(box), gap = parseFloat(cs.rowGap) || 0;
@@ -5141,6 +5186,14 @@
       swap && R[swap.card] ? rcard(swap.card, { cls: canPick ? 'pickable deal' : 'dim', k: 1 }).replace('class="rcard', 'data-v="swap" class="rcard') : '',
     ].join('') : '';
     const sub = sending ? '正在提交，等待服务器确认…' : connection !== 'ready' ? '断线中，重连同步后可重新选择' : canPick ? '左边留着场上的运动员，右边换成新抽到的（技能一起换）' : answered ? '你已决定，等待其他人…' : '其他玩家正在暗中决定…';
+    if (phoneDraft()) {
+      const items = [];
+      if (mineOpts && !answered) {
+        if (curId && keep) items.push({ v: 'keep', rid: curId, t: skSplit(keep.label)[0], s: skSplit(keep.label)[1] || '留着场上的运动员' });
+        if (swap && R[swap.card]) items.push({ v: 'swap', rid: swap.card, t: skSplit(swap.label)[0], s: skSplit(swap.label)[1] || '换成新抽到的' });
+      }
+      return showChoosePhone({ d, kind: 'pick', decision: key, title: '变数卡 · 跳蚤市场', sub, canPick, answered, sending, verb: '确认', items, extra: [], status: true });
+    }
     showOverlay(`<div class="ov-box card v2-swapmeet"><h2>变数卡 · 跳蚤市场</h2><p class="sub">${esc(sub)}</p>
       <div class="ov-cards" id="pickCards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div>
       ${canPick ? `<div class="ov-actions">${keep ? `<button class="btn" data-v="keep">${esc(keep.label)}</button>` : ''}${swap ? `<button class="btn primary" data-v="swap">${esc(swap.label)}</button>` : ''}</div>` : ''}

@@ -501,7 +501,9 @@ input { font: inherit; color: inherit; }
 .flip .back { transform: rotateY(180deg); border: 2.5px solid var(--ink); border-radius: 16px; background: repeating-conic-gradient(var(--pink) 0 15deg, var(--yellow) 15deg 30deg, var(--green) 30deg 45deg, var(--blue) 45deg 60deg); box-shadow: var(--shadow-sm); }
 @keyframes flipIn { from { transform: rotateY(180deg); } }
 .flip .rcard { --w: 150px; }
-.flip .rcard .txt { min-height: 0; }
+.flip .rcard { height: 100%; display: flex; flex-direction: column; }
+.flip .rcard .art { flex: none; }
+.flip .rcard .txt { flex: 1 1 auto; min-height: 0; }
 .flip .who { position: absolute; left: 0; right: 0; bottom: -26px; font-weight: 900; font-size: 13px; }
 .pick-status { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
 .pick-status > span { padding: 4px 12px; border-radius: 99px; border: 2px solid var(--ink); background: var(--paper); font-weight: 800; font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
@@ -2009,11 +2011,11 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 @media (max-width: 1000px) and (orientation: portrait) { .modal-gallery .gallery .rcard { display: grid; align-content: stretch; } .modal-gallery .gallery .rcard .art { height: auto; } .modal-gallery .gallery .rcard .txt { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; } .modal-gallery .gallery .rcard .txt > * { max-width: 100%; } }
 @media (max-width: 1000px) and (orientation: landscape) { .modal-gallery .gallery .rcard { display: grid; align-content: start; } .modal-gallery .gallery .rcard .art { height: auto; } }
 /* 桌面图鉴：4 列宽卡，文字折行少，统一卡高后每页仍有 8~12 张 */
-@media (min-width: 1001px) {
+@media (min-width: 1001px), (min-width: 761px) and (min-height: 501px) and (orientation: landscape) {
   .modal-gallery .gallery { grid-template-columns: repeat(4, minmax(0, 1fr)); justify-items: stretch; }
-  .modal-gallery .gallery .rcard { --w: 100%; width: 100%; }
-  .modal-gallery .gallery .rcard .art { flex: 1 0 auto; height: 90px; }
-  .modal-gallery .gallery .rcard .txt { padding: 8px 10px 9px; min-height: 0; }
+  .modal-gallery .gallery .rcard { --w: 100%; width: 100%; display: flex; flex-direction: column; }
+  .modal-gallery .gallery .rcard .art { flex: 1 1 0; height: auto; min-height: 90px; }
+  .modal-gallery .gallery .rcard .txt { flex: none; box-sizing: border-box; height: var(--th, auto); padding: 8px 10px 9px; min-height: 0; }
   .modal-gallery .gallery .rcard .tx { font-size: 12.5px; line-height: 1.42; }
 }
 /* 手机竖屏列表：头像列收窄，把宽度让给技能文字 */
@@ -2716,10 +2718,27 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 @media (max-height: 520px) and (orientation: landscape) {
   #overlay .ov-box.pickig { display: grid; width: min(760px, 100%); grid-template-columns: minmax(0, 1fr) 260px; grid-template-rows: auto auto minmax(0, 1fr) auto; column-gap: 10px; padding: 8px 10px; }
   #overlay .pickig h2, #overlay .pickig .sub { grid-column: 1 / -1; }
-  #overlay .pickig #pickCards.pg-cards { grid-column: 1; grid-row: 3; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 156px; align-content: center; }
+  #overlay .pickig #pickCards.pg-cards { grid-column: 1; grid-row: 3; grid-template-columns: repeat(var(--lc, 4), minmax(0, 112px)); justify-content: center; grid-auto-rows: 156px; align-content: center; }
   #overlay .pickig .draft-detail { grid-column: 2; grid-row: 3; }
+  #overlay .pickig .pg-detail { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  #overlay .pickig .pg-detail .dd-info { height: auto; flex: 1 1 0; min-height: 52px; padding: 6px 8px; }
+  #overlay .pickig .pg-detail > .dd-btn { height: 40px; }
+  #overlay .pickig .pg-detail:has(.pg-extra) { display: grid; grid-template-columns: minmax(0, 1fr) 92px; grid-template-rows: minmax(0, 1fr) 40px; gap: 6px; }
+  #overlay .pickig .pg-detail:has(.pg-extra) .dd-info { grid-column: 1 / -1; }
+  #overlay .pickig .pg-extra .dd-btn { height: 40px; min-height: 0; }
   #overlay .pickig .pick-status { grid-column: 1 / -1; }
 }
+
+/* 手机选择类弹层：次要按钮、单张候选、选手登场 */
+.dd-btn.alt { background: #B9A8E8; }
+#overlay .pickig .pg-extra { display: flex; gap: 8px; }
+#overlay .pickig .pg-extra .dd-btn { flex: 1 1 0; height: 44px; }
+#overlay .pickig.one #pickCards .rcard { grid-column: 1 / -1; justify-self: center; width: 50%; }
+#overlay .pickig.reveal .reveal-grid { margin-top: 4px; gap: 30px 10px; }
+@media (max-height: 520px) and (orientation: landscape) { #overlay .ov-box.pickig.reveal { display: flex; flex-direction: column; align-items: center; width: min(760px, 100%); } #overlay .pickig.reveal .reveal-grid { flex-wrap: nowrap; } }
+#overlay .pickig.reveal .rcard .nm, #overlay .pickig.reveal .rcard .tx, #overlay .pickig.reveal .rcard .sk + * { color: var(--ink); }
+#overlay .pickig.reveal .rcard .sk { color: #fff; }
+#overlay .pickig.reveal .flip .who { left: 50%; right: auto; transform: translateX(-50%); white-space: nowrap; padding: 1px 8px; border-radius: 99px; background: #fff; font-size: 12px; font-weight: 900; }
 
 /* 竖屏赛道是主角：底部行动面板压到最矮，名次差距那一行收起（名次在玩家栏里也看得到） */
 .board.tall .tc-gap { display: none; }
