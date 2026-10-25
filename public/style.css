@@ -2066,3 +2066,179 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   .modal-gallery .gallery .rcard .txt { padding: 6px 9px 7px; }
   .modal-gallery .gallery .rcard .tx { font-size: 12px; line-height: 1.4; }
 }
+
+/* =====================================================================
+   底部与弹层重构（B 底部操作区 / C 决策弹层 / D 遮罩与按钮风格）
+   - 底部 dock：只留 Skin 双行按钮（金黄主 / 浅紫辅），居中；无白卡
+   - 决策：86% 深色遮罩 + 内容悬浮；选目标时遮罩留出棋盘并高亮
+   - 浮层 / 弹窗统一遮罩色，按钮换 .sk-btn 风格
+   ===================================================================== */
+:root { --scrim: rgba(22, 18, 38, .86); --dock-min: 76px; --dk-fs: 16px; }
+
+/* ---------- 按钮：行内变体、加载态 ---------- */
+.sk-btn { min-height: 44px; }
+.sk-btn.inl { flex-direction: row; gap: .5em; }
+.sk-btn.inl .sk-t, .sk-btn .sk-t .ico { display: inline-flex; align-items: center; gap: .4em; }
+.sk-btn .ico { width: 1.1em; height: 1.1em; flex: none; }
+.sk-btn.is-loading::after { content: ""; position: absolute; right: .55em; top: .55em; width: .8em; height: .8em; border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+.sk-btn.sm { font-size: 13px; padding: .42em .95em .45em; min-width: 0; }
+.sk-btn.sm .sk-t { font-size: 1.12em; }
+
+/* ---------- 底部 dock：无白卡，居中按钮 ---------- */
+.dock { min-height: var(--dock-min); padding: 6px 0 2px; align-items: flex-start; }
+#dock .prompt:not(.decision) {
+  min-height: 0; padding: 0; gap: 12px; flex-wrap: nowrap; justify-content: center; overflow: visible;
+  background: none; border: 0; border-radius: 0; box-shadow: none;
+  animation: dockIn .3s var(--ease);
+}
+#dock .prompt:not(.decision)::before { content: none; }
+#dock .prompt:not(.decision) .p-ava { width: 40px; height: 40px; }
+#dock .prompt:not(.decision) .p-txt { flex: 0 1 300px; padding-top: 0; text-align: left; }
+#dock .prompt:not(.decision) .p-txt b { font-size: 15px; }
+#dock .prompt:not(.decision) .p-txt span { font-size: 12.5px; }
+#dock .prompt:not(.decision) .p-opts { flex: 0 1 auto; width: auto; max-height: none; overflow: visible; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 6px 14px; }
+#dock .prompt .p-opts .sk-btn { font-size: var(--dk-fs); white-space: nowrap; }
+#dock .prompt .p-opts .sk-btn.sm { font-size: calc(var(--dk-fs) - 3px); }
+#dock .prompt.wait .p-txt b::after { content: none; }
+#dock .prompt:not(.decision) .timer { left: 0; right: auto; bottom: -4px; border-radius: 3px; }
+#dock .prompt.locked .sk-btn { opacity: .55; }
+#dock .sk-btn.dock-wait { cursor: default; opacity: .72; filter: grayscale(.45); }
+#dock .sk-btn.dock-wait .sk-t::after { content: ""; display: inline-block; width: 1.1em; text-align: left; vertical-align: bottom; overflow: hidden; animation: dots 1.2s steps(4) infinite; }
+#dock .prompt.wpc-done, #dock .prompt.wpc-done.boost { background: none; animation: dockIn .3s var(--ease); }
+#dock .roll-btn, .sk-btn.wpc-skip { animation: dkGlow 1.8s ease-in-out infinite; }
+@keyframes dkGlow { 50% { filter: drop-shadow(0 0 9px rgba(255, 197, 61, .95)); } }
+/* 手机竖屏：提示句由顶部提示框承担，dock 里的文案保留在 DOM 但不显示 */
+@media (max-width: 600px) and (orientation: portrait) {
+  :root { --dock-min: 72px; --dk-fs: 15px; }
+  #dock .prompt:not(.decision) > .p-txt, #dock .prompt:not(.decision) > .p-ava { display: none; }
+}
+/* 横屏手机 / 矮屏：只留按钮 */
+@media (max-height: 460px) {
+  :root { --dock-min: 56px; --dk-fs: 13px; }
+  .dock { padding-top: 2px; }
+  #dock .prompt:not(.decision) > .p-txt, #dock .prompt:not(.decision) > .p-ava { display: none; }
+  .sk-btn { min-height: 40px; }
+}
+
+/* ---------- 决策：86% 深色遮罩 + 悬浮内容 ---------- */
+#dock .prompt.decision {
+  position: fixed; inset: 0; z-index: 46; width: auto; max-width: none; min-height: 0; margin: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; flex-wrap: nowrap; gap: clamp(8px, 2.4vh, 20px);
+  padding: calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  background: var(--scrim); border: 0; border-radius: 0; box-shadow: none; overflow: hidden;
+  pointer-events: none; color: #fff;
+  animation: dcFade .25s ease both;
+}
+#dock .prompt.decision > .p-opts { pointer-events: auto; }
+#dock .prompt.decision::before { content: none; }
+@keyframes dcFade { from { opacity: 0; } }
+@keyframes dcRise { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+#dock .prompt.decision > .dc-stage { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: clamp(6px, 1.6vh, 12px); max-width: min(600px, 100%); min-height: 0; text-align: center; animation: dcRise .35s var(--ease) both; }
+#dock .prompt.decision .p-ava { width: clamp(40px, 8vh, 60px); height: clamp(40px, 8vh, 60px); margin: 0; border-color: var(--c); box-shadow: 0 0 0 2px #fff, 0 4px 14px rgba(0, 0, 0, .45); background: #fff; }
+#dock .prompt.decision .p-txt { flex: none; padding: 0; min-width: 0; max-width: 100%; text-align: center; }
+#dock .prompt.decision .p-txt b {
+  display: block; white-space: normal; overflow: visible; text-overflow: clip; font-size: clamp(19px, 3.4vh + 6px, 30px); line-height: 1.28; font-weight: 900; color: #fff; letter-spacing: .02em;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .5), 0 0 14px rgba(0, 0, 0, .55);
+}
+#dock .prompt.decision .p-txt span { display: block; white-space: normal; overflow: visible; margin-top: 6px; font-size: clamp(13px, 1.9vh + 4px, 16px); line-height: 1.5; font-weight: 700; color: rgba(255, 255, 255, .84); }
+#dock .prompt.decision .p-opts { flex: none; width: auto; max-width: min(640px, 100%); max-height: none; overflow: visible; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 6px 16px; animation: dcRise .4s var(--ease) .06s both; }
+#dock .prompt.decision .p-opts .sk-btn { min-width: 8.6em; }
+#dock .prompt.decision .p-opts .sk-btn.sm { min-width: 0; }
+#dock .prompt.decision .timer { position: absolute; left: 0; bottom: 0; right: auto; height: 5px; border-radius: 0 3px 3px 0; background: #FF6B57; box-shadow: 0 0 10px rgba(255, 107, 87, .8); pointer-events: none; }
+#dock .prompt.decision .timer.urgent { background: #FFD84F; }
+
+/* 遮罩里的骰子：滚动 → 落定；结果大字「前进 N 格」 */
+.dc-art { display: flex; align-items: center; justify-content: center; gap: clamp(8px, 2vw, 16px); }
+.dc-die { display: block; width: clamp(64px, 17vh, 118px); transform-origin: 50% 70%; animation: dcDie .72s cubic-bezier(.2, 1.3, .35, 1) calc(var(--k, 0) * 90ms) both; }
+.dc-art.many { gap: min(1.6vw, 12px); max-width: 100%; }
+.dc-art.many .dc-die { width: min(10vh, 12.5vw, 76px); }
+.dc-die svg.sk { filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .5)); }
+@keyframes dcDie {
+  0% { opacity: 0; transform: translateY(-46px) rotate(-340deg) scale(.5); }
+  45% { opacity: 1; transform: translateY(8px) rotate(24deg) scale(1.1); }
+  70% { transform: translateY(-5px) rotate(-8deg) scale(.98); }
+  100% { transform: none; }
+}
+.dc-big {
+  font-size: clamp(26px, 5.4vh, 42px); font-weight: 900; letter-spacing: .06em; line-height: 1.1; color: #FFD84F;
+  -webkit-text-stroke: 3px #231F33; paint-order: stroke fill; text-shadow: 0 4px 0 rgba(0, 0, 0, .45);
+  animation: dcBig .5s var(--ease) .42s both;
+}
+@keyframes dcBig { from { opacity: 0; transform: scale(.6); } 60% { transform: scale(1.12); } }
+.dc-nums { display: grid; grid-template-columns: repeat(6, auto); gap: clamp(6px, 1.6vw, 12px); justify-content: center; }
+.dc-num { position: relative; width: clamp(50px, 13vw, 66px); padding: 0; border: 0; background: none; cursor: pointer; border-radius: 14px; touch-action: manipulation; transition: transform .25s var(--ease), filter .15s; }
+.dc-num svg.sk { filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .5)); }
+.dc-num b { position: absolute; right: -2px; bottom: -4px; min-width: 20px; padding: 0 5px; border-radius: 99px; background: #FFD84F; color: #231F33; border: 2px solid #231F33; font-size: 12px; line-height: 16px; text-align: center; font-weight: 900; }
+.dc-num:hover { transform: translateY(-3px) rotate(-4deg); filter: brightness(1.06); }
+.dc-num:active { transform: translateY(1px) scale(.95); }
+.dc-num:focus-visible { outline: 3px solid #4D9DF7; outline-offset: 3px; }
+.dc-num:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 380px) { .dc-nums { grid-template-columns: repeat(3, auto); } .dc-num { width: 56px; } }
+@media (max-height: 460px) {
+  #dock .prompt.decision { flex-direction: row; flex-wrap: wrap; gap: 6px 22px; }
+  #dock .prompt.decision .p-ava { display: none; }
+  .dc-die { width: clamp(44px, 14vh, 70px); }
+  .dc-nums { grid-template-columns: repeat(6, auto); }
+  .dc-num { width: 44px; }
+  #dock .prompt.decision .p-txt b { font-size: 17px; }
+  #dock .prompt.decision .p-txt span { margin-top: 2px; font-size: 12px; }
+}
+
+/* 选目标：遮罩留出棋盘，棋盘上的可选格 / 棋子黄环呼吸，按钮收在下方 */
+#dock .prompt.decision.pick-board { background: none; justify-content: flex-end; gap: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+#dock .prompt.decision.pick-board::before {
+  content: ""; position: fixed; left: var(--sx, 0); top: var(--sy, 0); width: var(--sw, 0); height: var(--sh, 0);
+  background: none; padding: 0; border-radius: 12px; box-shadow: 0 0 0 150vmax var(--scrim); pointer-events: none; z-index: -1; animation: none;
+}
+#dock .prompt.decision.pick-board > .dc-stage {
+  max-width: min(640px, 100%); padding: 8px 16px 9px; border-radius: 16px; gap: 2px;
+  background: rgba(22, 18, 38, .9); box-shadow: 0 0 0 1.5px rgba(255, 216, 79, .55), 0 6px 18px rgba(0, 0, 0, .5);
+}
+#dock .prompt.decision.pick-board .p-ava { display: none; }
+#dock .prompt.decision.pick-board .p-txt b { font-size: clamp(15px, 2.4vh + 6px, 20px); line-height: 1.3; }
+#dock .prompt.decision.pick-board .p-txt span { margin-top: 1px; font-size: clamp(11.5px, 1.6vh + 3px, 13.5px); line-height: 1.35; }
+#dock .prompt.decision.pick-board .p-opts { gap: 4px 10px; }
+#dock .prompt.decision.pick-board .p-opts .sk-btn { font-size: 14px; min-width: 0; }
+#dock .prompt.decision.pick-board .p-opts .sk-btn.sm { font-size: 12.5px; }
+@media (max-height: 460px) {
+  #dock .prompt.decision.pick-board { flex-direction: row; justify-content: center; align-items: flex-end; flex-wrap: nowrap; gap: 10px; }
+  #dock .prompt.decision.pick-board > .dc-stage { flex: 0 1 46%; }
+  #dock .prompt.decision.pick-board .p-opts { flex: 0 1 50%; justify-content: flex-start; }
+}
+#board.spot .cell:not(.pick) { filter: brightness(.5) saturate(.6); }
+#board.spot .cell.pick { animation: dcCell 1.1s ease-in-out infinite; filter: none; }
+#board.spot .cell.pick > rect:first-child { stroke: #FFD84F; stroke-width: 6; }
+#board.spot .token:not(.selectable) { opacity: .45; filter: grayscale(.35); }
+#board.spot .token.selectable { z-index: 12; filter: drop-shadow(0 0 calc(7 * var(--u)) #FFD84F); }
+#board.spot .token.selectable .body { animation: dcTok 1.1s ease-in-out infinite; }
+@keyframes dcCell { 50% { transform: scale(1.1); filter: brightness(1.15) drop-shadow(0 0 7px #FFD84F); } }
+@keyframes dcTok { 0%, 100% { box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 0 0 calc(5 * var(--u)) #FFD84F; } 50% { box-shadow: 0 0 0 calc(2 * var(--u)) var(--ink), 0 0 0 calc(10 * var(--u)) rgba(255, 216, 79, .75); } }
+
+/* 骰子区：Skin 骰子 + 「前进 N 格」大字（名字挪到骰子上方） */
+.die.sk-die svg.sk { height: 100%; width: 100%; }
+.die.sk-die .die-cap { top: auto; bottom: 100%; transform: translate(-50%, -4px); }
+.die-n {
+  position: absolute; left: 50%; top: 100%; transform: translate(-50%, calc(4 * var(--u))); white-space: nowrap;
+  font-size: calc(22 * var(--u)); font-weight: 900; letter-spacing: .05em; line-height: 1.1; color: #FFD84F;
+  -webkit-text-stroke: calc(3 * var(--u)) var(--ink); paint-order: stroke fill; text-shadow: calc(2 * var(--u)) calc(3 * var(--u)) 0 rgba(35, 31, 51, .6);
+  animation: dcBig .5s var(--ease) .12s both;
+}
+
+/* ---------- 浮层 / 弹窗：统一深色遮罩，按钮 Skin 化 ---------- */
+.overlay, .modal { background: var(--scrim); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.ov-actions .sk-btn { font-size: 15px; min-width: 0; }
+.wpc-final .ov-actions .sk-btn, .wpc-results .ov-actions .sk-btn { flex: 1 1 0; justify-content: center; }
+.ov-actions .sk-btn .ico { width: 1.2em; height: 1.2em; }
+.ov-actions { padding-bottom: 6px; align-items: flex-start; }
+.wpc-next { min-width: 118px; }
+.wpc-next .cd { background: var(--sk-ink); color: #fff; }
+.modal-head #mClose { background: linear-gradient(180deg, var(--sk-gold-1), var(--sk-gold-2)); border: 2.5px solid var(--sk-ink); box-shadow: 0 3px 0 var(--sk-gold-edge), 0 3px 0 2.5px var(--sk-ink); min-width: 44px; height: 42px; border-radius: 14px; }
+.modal-head #mClose:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--sk-gold-edge), 0 1px 0 2.5px var(--sk-ink); }
+.modal-head #mClose:focus-visible { outline: 3px solid #4D9DF7; outline-offset: 3px; }
+@media (max-height: 460px) { .ov-actions .sk-btn { font-size: 13px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-die, .dc-big, .die-n, #dock .prompt.decision, #dock .prompt.decision > .dc-stage, #dock .prompt.decision .p-opts,
+  #board.spot .cell.pick, #board.spot .token.selectable .body, #dock .roll-btn, .sk-btn.wpc-skip { animation: none; }
+}
+#board.spot .center, #board.spot .turn-card { opacity: .38; transition: opacity .25s; }

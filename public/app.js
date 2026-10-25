@@ -26,6 +26,8 @@
   const icon = (n) => (window.Art && Art.icon ? Art.icon(n) : '');
   const rcol = (id) => (window.Art && Art.color ? Art.color(id) : '#F4EDDF');
   const die = (v) => (window.Art && Art.die ? Art.die(v) : `<svg viewBox="0 0 100 100"><rect x="8" y="8" width="84" height="84" rx="18" fill="#fff" stroke="${INK}" stroke-width="5"/><text x="50" y="66" font-size="44" text-anchor="middle" font-weight="900">${v}</text></svg>`);
+  // 骰子区 / 决策遮罩用原创矢量骰子（Skin.dice），缺 skin.js 时退回 art.js 的骰面
+  const sdie = (v, st = 'idle') => (window.Skin && Skin.dice ? Skin.dice(v, st) : die(v));
   function fillIcons(root = document) {
     for (const el of $$('[data-icon]', root)) if (!el.dataset.filled) { el.innerHTML = icon(el.dataset.icon); el.dataset.filled = '1'; }
   }
@@ -1978,7 +1980,7 @@
     switch (e.t) {
       case 'rollOff': {
         const who = e.reason === 'draft' ? '选秀顺序' : '第一场先手';
-        const html = `<div class="roll-off">${e.rolls.map((r) => `<div class="ro"><div class="die land">${die(r.v)}</div><span style="color:${PCOL[r.seat % 6]}">${esc(vs.players[r.seat].name)}</span></div>`).join('')}</div>`;
+        const html = `<div class="roll-off">${e.rolls.map((r) => `<div class="ro"><div class="die land">${sdie(r.v)}</div><span style="color:${PCOL[r.seat % 6]}">${esc(vs.players[r.seat].name)}</span></div>`).join('')}</div>`;
         if (vs.phase === 'draft' || vs.phase === 'pick') { showMiniOverlay(`<h2>掷骰决定${who}</h2>${html}`); Sound.dice(); await pause(1200); } else { setDice(html); Sound.dice(); await pause(1200); }
         break;
       }
@@ -2100,13 +2102,13 @@
         const r = vr(e.rid);
         const cap = `${r ? esc(vs.players[r.seat].name) : ''}${e.reroll ? ' 重掷' : ''}`;
         const T = Timing.ROLL[e.ai ? 'ai' : 'human'];
-        setDice(`<div class="die rolling">${die(1 + Math.floor(Math.random() * 6))}</div>`, '掷骰中');
+        setDice(`<div class="die rolling sk-die">${sdie(1 + Math.floor(Math.random() * 6), { tilt: Math.round(Math.random() * 50 - 25) })}</div>`, '掷骰中');
         Sound.dice();
-        const spin = setInterval(() => { if (epoch !== animationEpoch) return; const d = $('#diceZone .die.rolling'); if (d) d.innerHTML = die(1 + Math.floor(Math.random() * 6)); }, 90);
+        const spin = setInterval(() => { if (epoch !== animationEpoch) return; const d = $('#diceZone .die.rolling'); if (d) d.innerHTML = sdie(1 + Math.floor(Math.random() * 6), { tilt: Math.round(Math.random() * 50 - 25) }); }, 90);
         animationIntervals.add(spin);
         await pause(T.spin);
         clearInterval(spin); animationIntervals.delete(spin);
-        setDice(`<div class="die land" style="--c:${r ? PCOL[r.seat % 6] : INK}">${die(e.value)}<div class="die-cap">${cap}</div></div>`, `掷出 ${e.value} 点`);
+        setDice(`<div class="die land sk-die" style="--c:${r ? PCOL[r.seat % 6] : INK}">${sdie(e.value, 'win')}<div class="die-cap">${cap}</div><div class="die-n" aria-hidden="true">前进 ${e.value} 格</div></div>`, `掷出 ${e.value} 点，前进 ${e.value} 格`);
         // 「叮」响在点数落到棋子上的那一刻：后面跟着 calc 的，由 calc 的飞点落地时响；没有加减值的，定格的骰点就是最终点数
         if (!fast && !calcFollows(e)) playSfx('diceLand', e.value);
         await pause(T.land);
@@ -2114,7 +2116,7 @@
       }
       case 'calc': {
         const mods = e.mods.map((m) => `<span class="m ${m.v < 0 ? 'neg' : 'pos'}">${esc(m.label)} ${m.v > 0 ? '+' : ''}${m.v}</span>`).join('');
-        setDice(`<div class="calc"><div class="die" style="width:calc(56*var(--u));height:calc(56*var(--u))">${e.base <= 6 ? die(e.base) : ''}</div>${e.base > 6 ? `<b>${e.base}</b>` : ''}${mods}<span>=</span><span class="eq">${e.total}</span></div>`, `主移动 ${e.total} 格`);
+        setDice(`<div class="calc"><div class="die" style="width:calc(56*var(--u));height:calc(56*var(--u))">${e.base <= 6 ? sdie(e.base) : ''}</div>${e.base > 6 ? `<b>${e.base}</b>` : ''}${mods}<span>=</span><span class="eq">${e.total}</span></div>`, `主移动 ${e.total} 格`);
         await pause(e.ai ? 320 : 500);
         // 结果小标签从骰子区飞到要走的棋子身上
         if (!flyChip($('#diceZone .calc .eq'), e.rid, e.total, () => playSfx('diceLand', e.total)) && !fast) playSfx('diceLand', e.total);
@@ -2273,7 +2275,7 @@
         break;
       }
       case 'duel': {
-        setDice(`<div class="duel-dice"><div class="die land">${die(e.ra)}<div class="die-cap">${esc(rname(e.a))}</div></div><b class="vs">VS</b><div class="die land">${die(e.rb)}<div class="die-cap">${esc(rname(e.b))}</div></div></div>`);
+        setDice(`<div class="duel-dice"><div class="die land">${sdie(e.ra)}<div class="die-cap">${esc(rname(e.a))}</div></div><b class="vs">VS</b><div class="die land">${sdie(e.rb)}<div class="die-cap">${esc(rname(e.b))}</div></div></div>`);
         Sound.duel();
         commentary(e.text);
         await pause(1400);
@@ -2742,6 +2744,7 @@
     ov.innerHTML = html;
     overlayKind = kind;
     fillIcons(ov);
+    skinButtons(ov);
     return ov;
   }
   function hideOverlay(instant) {
@@ -2944,6 +2947,7 @@
       if (!again || again.dataset.navigation !== type) {
         control.innerHTML = `<button class="btn primary big wpc-again" id="again" data-navigation="${type}"><span class="ico">${icon(type === 'again' ? 'play' : spectator ? 'eye' : 'users')}</span><span class="lbl">${spectator ? '再看一局' : '再来一局'}</span></button>`;
         again = $('#again', control);
+        skinButtons(control);
         again.onclick = () => {
           Sound.click();
           if (navigate(type, again)) { again.classList.add('is-loading'); $('.lbl', again).textContent = type === 'again' ? '正在重开…' : spectator ? '正在准备…' : '正在回大厅…'; }
@@ -3085,8 +3089,68 @@
   }
 
   /* ================= 决策面板 ================= */
+  /* ---------- 底部与弹层重构：双行按钮（Skin 风格）与决策遮罩 ---------- */
+  // 「标题（说明）」「标题：说明」拆成双行；「就用 5」「就走 7 格」写成「确认移动 / 前进 N 格」
+  function skSplit(label) {
+    const t = String(label == null ? '' : label).trim();
+    let m = /^就(?:用|走)\s*(\d+)(?:\s*格)?$/.exec(t);
+    if (m) return ['确认移动', `前进 ${m[1]} 格`];
+    m = /^走\s*(\d+)\s*格$/.exec(t);
+    if (m) return [`走 ${m[1]}`, `前进 ${m[1]} 格`];
+    m = /^(.{1,10}?)[（(](.{1,16})[）)]\s*$/.exec(t) || /^(.{1,8}?)[：:]\s*(.{1,14})$/.exec(t);
+    return m ? [m[1].trim(), m[2].trim()] : [t, ''];
+  }
+  function skBtn(title, sub, kind, attrs = '', cls = '', aria = '') {
+    const label = aria || (sub ? `${title}，${sub}` : title);
+    return `<button type="button" class="sk-btn ${kind === 'secondary' ? 'secondary' : 'primary'}${cls ? ` ${cls}` : ''}" ${attrs} aria-label="${esc(label)}"><b class="sk-t">${esc(title)}</b>${sub ? `<small class="sk-s">${esc(sub)}</small>` : ''}</button>`;
+  }
+  const NEG_OPT = /^(no|_no|_skip|skip|none)$/;
+  const NEG_LABEL = /^(算了|不了|不用|先不用|不跟|不复制|稳一点|放弃|不决斗|不要)/;
+  // 一个决策选项 → 双行按钮。primary 为 undefined 时按「否定词→辅，其余第一个→主」判断
+  function optBtn(o, k, { d, primary, cls = '' } = {}) {
+    let [t, s] = skSplit(o.label);
+    if (d && d.kind === 'reroll' && o.v === 'keep') [t, s] = ['确认移动', `前进 ${d.roll} 格`];
+    const neg = NEG_OPT.test(String(o.v)) || NEG_LABEL.test(String(o.label));
+    const main = primary != null ? primary : !neg && (k === 0 || o.v === 'yes' || o.v === 'keep');
+    return skBtn(t, s, main ? 'primary' : 'secondary', `data-v="${esc(o.v)}"`, cls, s ? `${t}，${s}` : t);
+  }
+  // 决策弹层里的数字选项：扁平骰面，数字用 aria-label
+  const numBtn = (o) => `<button type="button" class="dc-num" data-v="${esc(o.v)}" title="${esc(o.label || o.v)}" aria-label="${esc(`选 ${o.v}`)}">${window.Skin ? Skin.dice(Number(o.v) >= 1 && Number(o.v) <= 6 ? Number(o.v) : 1, 'flat') : ''}<b>${esc(o.v)}</b></button>`;
+  // 决策遮罩上方的骰子：rolls 里每个数字一颗
+  function decisionArt(d) {
+    if (!window.Skin || !d) return '';
+    const dice = Array.isArray(d.dice) && d.dice.length ? d.dice : (typeof d.roll === 'number' && d.roll >= 1 && d.roll <= 6 ? [d.roll] : []);
+    if (!dice.length) return '';
+    const counts = {};
+    for (const v of dice) counts[v] = (counts[v] || 0) + 1;
+    const many = dice.length > 1;
+    const cells = dice.map((v, i) => `<span class="dc-die ${many ? (counts[v] > 1 ? 'dup' : 'dim') : ''}" style="--k:${i}">${Skin.dice(v, many ? (counts[v] > 1 ? 'win' : 'dim') : 'win')}</span>`).join('');
+    const cap = d.kind === 'reroll' ? `前进 ${d.roll} 格` : d.kind === 'showoff' ? `已累计 ${d.sum ?? '?'} 格` : many ? '' : `掷出 ${dice[0]}`;
+    return `<div class="dc-art ${many ? 'many' : ''}" role="img" aria-label="${esc(many ? `掷出 ${dice.join(' ')}` : `点数 ${dice[0]}`)}">${cells}</div>${cap ? `<div class="dc-big" aria-hidden="true">${esc(cap)}</div>` : ''}`;
+  }
+  // 选目标类决策：把棋盘的位置告诉遮罩，让它留出一个「洞」
+  function syncSpot() {
+    const p = $('#dock .prompt.pick-board');
+    const b = $('#board');
+    if (!p || !b) return;
+    const r = b.getBoundingClientRect();
+    p.style.setProperty('--sx', `${Math.round(r.left)}px`);
+    p.style.setProperty('--sy', `${Math.round(r.top)}px`);
+    p.style.setProperty('--sw', `${Math.round(r.width)}px`);
+    p.style.setProperty('--sh', `${Math.round(r.height)}px`);
+  }
+  // 浮层 / 弹窗里的老按钮统一换成 Skin 双行按钮风格（含图标的保持单行横排）
+  function skinButtons(root) {
+    for (const b of root.querySelectorAll('.ov-actions .btn, .modal-foot .btn')) {
+      if (b.classList.contains('sk-btn')) continue;
+      const main = b.classList.contains('primary');
+      b.classList.remove('btn', 'big', 'small', 'primary', 'hot', 'blue', 'green');
+      b.classList.add('sk-btn', 'inl', main ? 'primary' : 'secondary');
+    }
+  }
+
   function clearPromptLive() {
-    $('#board').classList.remove('picking-cell');
+    $('#board').classList.remove('picking-cell', 'spot');
     for (const el of $$('#tokens .token.selectable')) el.classList.remove('selectable');
     for (const el of $$('#trackSvg .cell.pick')) { el.classList.remove('pick'); el.onclick = null; }
     tokenPick = null;
@@ -3236,7 +3300,7 @@
       const host = room && room.host === me.id;
       const spectator = isSpectator();
       const again = againType();
-      dock.innerHTML = promptHtml({ seat: you, mine: false, title: '比赛结束', sub: spectator && !host ? '等房主开启下一场 AI 对局…' : '四场胡闹已落幕', opts: `<button class="btn" data-x="show">查看成绩</button>${host ? `<button class="btn primary" data-x="again" data-navigation="${again}" ${navigationPending ? 'disabled' : ''}>${spectator ? '再看一局' : '再来一局'}</button>` : ''}<button class="btn" data-x="home">回到首页</button>` });
+      dock.innerHTML = promptHtml({ seat: you, mine: false, title: '比赛结束', sub: spectator && !host ? '等房主开启下一场 AI 对局…' : '四场胡闹已落幕', opts: `${skBtn('查看成绩', '', 'secondary', 'data-x="show"')}${host ? skBtn(spectator ? '再看一局' : '再来一局', '', 'primary', `data-x="again" data-navigation="${again}" ${navigationPending ? 'disabled' : ''}`) : ''}${skBtn('回到首页', '', 'secondary', 'data-x="home"')}` });
       $('.prompt', dock).classList.remove('wait');
       for (const b of $$('#dock [data-x]')) {
         b.onclick = () => {
@@ -3278,6 +3342,7 @@
     yourTurnPing(d.id);
     let opts = '';
     let sub = '';
+    let inline = false; // 掷骰按钮留在底部，其余决策走遮罩
     const r = vs.racers.find((x) => x.seat === you);
     switch (d.kind) {
       case 'draft':
@@ -3285,15 +3350,16 @@
         addTimer();
         return;
       case 'roll':
-        opts = `<button class="btn roll-btn" data-v="roll"><span class="ico">${icon('dice')}</span>掷骰子</button>`;
+        opts = skBtn('掷骰子', '根据点数前进', 'primary', 'data-v="roll"', 'roll-btn');
+        inline = true;
         sub = r ? `${R[r.rid].name} 在第 ${r.pos} 格${hasKeyboard.matches ? ' · 按空格也能掷' : ''}` : '';
         break;
       case 'genius':
-        opts = `<div class="num-opts">${d.options.map((o) => `<button class="btn" data-v="${o.v}" title="${o.v}">${o.v}</button>`).join('')}</div>`;
+        opts = `<div class="dc-nums">${d.options.map(numBtn).join('')}</div>`;
         sub = '猜中了本回合结束后再来一回合';
         break;
       case 'reroll':
-        opts = d.options.map((o) => `<button class="btn ${o.v === 'keep' ? 'primary' : ''}" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+        opts = d.options.map((o, k) => optBtn(o, k, { d, primary: o.v === 'keep' })).join('');
         sub = r ? `现在在第 ${r.pos} 格` : '';
         break;
       case 'egg':
@@ -3317,9 +3383,9 @@
         }
         const tokOpts = d.options.filter((o) => Object.values(map).includes(o.v));
         const plain = d.options.filter((o) => !Object.values(map).includes(o.v));
-        opts = plain.map((o, k) => `<button class="btn ${k === 0 ? 'primary' : ''}" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+        opts = plain.map((o, k) => optBtn(o, k, { d })).join('');
         if (tokOpts.length) {
-          opts += tokOpts.map((o) => `<button class="btn small" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+          opts += tokOpts.map((o) => optBtn(o, 1, { d, primary: false, cls: 'sm' })).join('');
           for (const rid of Object.keys(map)) { const el = $(`#tokens .token[data-rid="${rid}"]`); if (el) el.classList.add('selectable'); }
           tokenPick = { map, fn: (v) => answer(d, v) };
           sub = '也可以直接点赛道上闪烁的棋子';
@@ -3328,7 +3394,7 @@
       }
       case 'thirdwheel': {
         $('#board').classList.add('picking-cell');
-        opts = d.options.map((o) => `<button class="btn ${o.v === '_no' ? '' : 'small'}" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+        opts = d.options.map((o, k) => optBtn(o, k, { d, primary: false, cls: o.v === '_no' ? '' : 'sm' })).join('');
         for (const o of d.options) {
           if (!o.v.startsWith('s')) continue;
           const c = $(`#trackSvg .cell[data-p="${o.v.slice(1)}"]`);
@@ -3348,9 +3414,13 @@
         ({ opts, sub } = v2NumberPrompt(d));
         break;
       default:
-        opts = d.options.map((o, k) => `<button class="btn ${k === 0 ? 'primary' : ''}" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+        opts = d.options.map((o, k) => optBtn(o, k, { d })).join('');
     }
-    dock.innerHTML = promptHtml({ seat: you, mine: true, title: d.title, sub, opts });
+    // 选目标类：棋盘上有闪烁的棋子 / 格子 → 遮罩留出棋盘，按钮收到下方
+    const pickBoard = !!tokenPick || !!$('#trackSvg .cell.pick');
+    if (pickBoard) $('#board').classList.add('spot');
+    dock.innerHTML = promptHtml({ seat: you, mine: true, title: d.title, sub, opts, dec: { kind: d.kind, overlay: !inline, pickBoard, art: inline ? '' : decisionArt(d) } });
+    syncSpot();
     for (const b of $$('#dock [data-v]')) {
       b.onclick = () => {
         Sound.click();
@@ -3358,7 +3428,7 @@
       };
     }
     addTimer();
-    if (hasKeyboard.matches) focusFirst('#dock .prompt.mine .btn.primary, #dock .prompt.mine [data-v]', `dock:${d.id}`);
+    if (hasKeyboard.matches) focusFirst('#dock .prompt.mine .sk-btn.primary, #dock .prompt.mine [data-v]', `dock:${d.id}`);
   }
   function renderDonePrompt(dock, r) {
     const humansDone = vs.players.every((p) => p.ai || (() => { const x = vs.racers.find((y) => y.seat === p.seat); return !x || x.finished || x.out; })());
@@ -3370,7 +3440,7 @@
     else if (humansDone) {
       title = '你的选手跑完了';
       sub = `${what} · 剩下的交给 AI`;
-      opts = `<button class="btn primary wpc-skip ${sending ? 'is-loading' : ''}" data-x="skip" ${sending || connection !== 'ready' ? 'disabled' : ''}><span class="ico">${icon('bolt')}</span><span class="lbl">${sending ? '正在快进…' : '快进到结算'}</span></button>`;
+      opts = `<button type="button" class="sk-btn primary wpc-skip ${sending ? 'is-loading' : ''}" data-x="skip" aria-label="快进到结算，剩下的交给 AI" ${sending || connection !== 'ready' ? 'disabled' : ''}><b class="sk-t"><span class="ico">${icon('bolt')}</span><span class="lbl">${sending ? '正在快进…' : '快进到结算'}</span></b><small class="sk-s">剩下的交给 AI</small></button>`;
     } else { title = '你的选手跑完了'; sub = `${what} · 等其他真人选手跑完后可以快进`; }
     // AI 每走一步都会重排底栏：内容没变就不重建，避免提示条反复弹入
     const key = `${gameId}:${vs.raceNo}:${title}:${sub}:${sending}:${connection}`;
@@ -3390,11 +3460,39 @@
     };
   }
 
-  function promptHtml({ seat, mine, title, sub, opts, busy, cls }) {
+  // dec: { kind, overlay, pickBoard, art }。overlay=true → 86% 深色遮罩 + 内容悬浮；
+  // 没有选项（等待他人 / 提交中）→ 禁用的「等待中」按钮；其余（掷骰、赛后按钮）→ 底部居中的双行按钮。
+  // .p-txt.dock-msg 保留（文案来源不变）：手机竖屏被顶部提示框接管而隐藏，桌面 / 横屏仍显示为一行字。
+  function promptHtml({ seat, mine, title, sub, opts, busy, cls, dec }) {
     const r = vs.racers.find((x) => x.seat === seat);
     const c = PCOL[seat % 6] || '#ccc';
     const ava = r && vs.phase === 'race' ? art(r.rid) : '';
-    return `<div class="prompt ${mine ? 'mine' : 'wait'} ${busy ? 'busy' : ''} ${cls || ''}" style="--c:${c}">${ava ? `<div class="p-ava">${ava}</div>` : ''}<div class="p-txt" title="${esc(sub ? `${title}\n${sub}` : title)}"><b>${esc(title)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>${opts ? `<div class="p-opts">${opts}</div>` : ''}<div class="timer" hidden></div></div>`;
+    const overlay = !!(mine && opts && dec && dec.overlay);
+    let kids = opts;
+    if (!opts && mine) kids = ''; // 自己的暗选等：交给遮罩里的卡牌，dock 不摆「等待中」
+    else if (!opts) {
+      const who = vs.players[seat]?.name;
+      kids = busy
+        ? skBtn('请稍候', /提交/.test(title) ? '正在提交' : '正在重连', 'secondary', 'disabled aria-disabled="true"', 'dock-wait')
+        : skBtn('等待中', who || '请稍候', 'secondary', 'disabled aria-disabled="true"', 'dock-wait');
+    }
+    const kind = dec && dec.kind ? ` dc-${dec.kind}` : '';
+    const pb = overlay && dec.pickBoard;
+    const state = overlay ? ` decision${kind}${pb ? ' pick-board' : ''}` : '';
+    const txt = `<div class="p-txt dock-msg" title="${esc(sub ? `${title}\n${sub}` : title)}"><b>${esc(title)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>`;
+    const stage = overlay
+      ? `<div class="dc-stage">${ava ? `<div class="p-ava">${ava}</div>` : ''}${pb ? '' : dec.art || ''}${txt}</div>`
+      : `${ava ? `<div class="p-ava">${ava}</div>` : ''}${txt}`;
+    const html = `<div class="prompt ${mine ? 'mine' : 'wait'} ${busy ? 'busy' : ''} ${cls || ''}${state}" style="--c:${c}" ${overlay ? `role="group" aria-label="${esc(title)}"` : ''}>${stage}${kids ? `<div class="p-opts">${kids}</div>` : ''}<div class="timer" hidden></div></div>`;
+    // 文案钩子：另一个提示框从 #dock 的 data 属性 / 事件取同一句话
+    const dock = $('#dock');
+    if (dock) {
+      dock.dataset.title = title || '';
+      dock.dataset.sub = sub || '';
+      dock.dataset.mine = mine ? '1' : '0';
+      window.dispatchEvent(new CustomEvent('hn:prompt', { detail: { title: title || '', sub: sub || '', mine: !!mine, kind: dec && dec.kind || null, overlay } }));
+    }
+    return html;
   }
   function addTimer() {
     clearInterval(timerTicker); timerTicker = null;
@@ -3839,6 +3937,19 @@
       if (document.activeElement?.matches('input, textarea, button, select, a, [contenteditable="true"]')) return;
       const b = $('#dock .roll-btn');
       if (b && !b.disabled) { e.preventDefault(); b.click(); }
+    });
+    // 决策遮罩的键盘：Esc = 放弃 / 不用，数字键 = 选对应数字或第 N 个按钮，Enter = 主按钮（焦点不在按钮上时）
+    document.addEventListener('keydown', (e) => {
+      const p = $('#dock .prompt.decision');
+      if (!p || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!$('#modal').hidden || !$('#overlay').hidden) return;
+      if (document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) return;
+      const btns = $$('[data-v]', p).filter((x) => !x.disabled);
+      let t = null;
+      if (e.key === 'Escape') t = btns.find((x) => NEG_OPT.test(x.dataset.v)) || (btns.length === 2 ? btns[1] : null);
+      else if (/^[1-9]$/.test(e.key)) t = p.querySelector('.dc-nums') ? btns.find((x) => x.dataset.v === e.key) : btns[Number(e.key) - 1];
+      else if (e.key === 'Enter' && !document.activeElement?.matches('button, a')) t = btns.find((x) => x.classList.contains('primary'));
+      if (t) { e.preventDefault(); t.click(); }
     });
   }
 
@@ -4332,7 +4443,7 @@
           await pause(1000);
           return true;
         }
-        setDice(`<div class="die land v2-mdie">${die(e.value)}<div class="die-cap">狼人怪</div></div>`, `狼人怪掷出 ${e.value}`);
+        setDice(`<div class="die land v2-mdie">${sdie(e.value)}<div class="die-cap">狼人怪</div></div>`, `狼人怪掷出 ${e.value}`);
         Sound.dice();
         await pause(420);
         let i = 0;
@@ -4350,7 +4461,7 @@
       }
       case 'curse': {
         const r = seatRacer(e.seat);
-        setDice(`<div class="die land v2-curse">${die(e.value)}<div class="die-cap">诅咒魔杖</div></div>`, `诅咒魔杖掷出 ${e.value}`);
+        setDice(`<div class="die land v2-curse">${sdie(e.value)}<div class="die-cap">诅咒魔杖</div></div>`, `诅咒魔杖掷出 ${e.value}`);
         Sound.dice();
         if (r) floater(r.rid, `跳过 ${e.value} 人`, 'bad');
         commentary(e.text);
@@ -4361,7 +4472,7 @@
         const st = v2Of();
         (st.fixedRoll ||= {})[e.seat] = e.value;
         const r = seatRacer(e.seat);
-        setDice(`<div class="die land v2-fixed">${die(e.value)}<div class="die-cap">${esc(pname(vs.players[e.seat]))} 定格</div></div>`, `骰子定格 ${e.value}`);
+        setDice(`<div class="die land v2-fixed">${sdie(e.value)}<div class="die-cap">${esc(pname(vs.players[e.seat]))} 定格</div></div>`, `骰子定格 ${e.value}`);
         Sound.dice();
         if (r) floater(r.rid, `骰子定格 ${e.value}`);
         renderV2();
@@ -4394,7 +4505,7 @@
         await pause(1500);
         return true;
       case 'voided':
-        setDice(`<div class="die land v2-void">${die(e.value || 6)}<i aria-hidden="true"></i><div class="die-cap">作废</div></div>`, `${e.value || 6} 点作废`);
+        setDice(`<div class="die land v2-void">${sdie(e.value || 6)}<i aria-hidden="true"></i><div class="die-cap">作废</div></div>`, `${e.value || 6} 点作废`);
         if (e.rid) floater(e.rid, `${e.value || 6} 点作废，重掷`, 'bad');
         Sound.blocked();
         await pause(750);
@@ -4403,7 +4514,7 @@
         const dice = Array.isArray(e.dice) ? e.dice : [];
         const counts = {};
         for (const v of dice) counts[v] = (counts[v] || 0) + 1;
-        setDice(`<div class="v2-rolls n${dice.length}">${dice.map((v, i) => `<div class="die land ${counts[v] > 1 ? 'dup' : ''}" style="--k:${i}">${die(v)}</div>`).join('')}</div>`, `掷出 ${dice.join(' ')}`);
+        setDice(`<div class="v2-rolls n${dice.length}">${dice.map((v, i) => `<div class="die land ${counts[v] > 1 ? 'dup' : ''}" style="--k:${i}">${sdie(v)}</div>`).join('')}</div>`, `掷出 ${dice.join(' ')}`);
         Sound.dice();
         commentary(e.text);
         await pause(1100);
@@ -4593,8 +4704,8 @@
     const map = {};
     for (const o of d.options) if (R[o.v] && vr(o.v) && tokenOf(o.v)) map[o.v] = o.v;
     const pick = d.options.filter((o) => map[o.v]), rest = d.options.filter((o) => !map[o.v]);
-    const opts = pick.map((o) => `<button class="btn small" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('')
-      + rest.map((o) => `<button class="btn" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+    const opts = pick.map((o) => optBtn(o, 1, { d, primary: false, cls: 'sm' })).join('')
+      + rest.map((o, k) => optBtn(o, k, { d })).join('');
     if (pick.length) {
       for (const rid of Object.keys(map)) tokenOf(rid).classList.add('selectable');
       tokenPick = { map, fn: (v) => answer(d, v) };
@@ -4603,7 +4714,7 @@
     return { opts, sub: pick.length ? `${tip ? `${tip} · ` : ''}也可以直接点赛道上闪烁的棋子` : tip };
   }
   function v2ButtonPrompt(d) {
-    const opts = d.options.map((o, k) => `<button class="btn ${k === 0 ? 'primary' : ''}" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+    const opts = d.options.map((o, k) => optBtn(o, k, { d })).join('');
     let sub = V2_SUB[d.kind] || '';
     if (d.kind === 'tail' && d.target != null) {
       const c = $(`#trackSvg .cell[data-p="${d.target}"]`);
@@ -4620,7 +4731,7 @@
     return { opts, sub };
   }
   function v2NumberPrompt(d) {
-    const opts = `<div class="num-opts">${d.options.map((o) => `<button class="btn" data-v="${esc(o.v)}" title="${esc(o.label)}">${esc(o.v)}</button>`).join('')}</div>`;
+    const opts = `<div class="dc-nums">${d.options.map(numBtn).join('')}</div>`;
     return { opts, sub: V2_SUB[d.kind] || '' };
   }
   // 跳蚤市场（同时决策）：两张卡二选一——留下场上的，或换成新抽的
@@ -4650,7 +4761,7 @@
     for (const el of $$('#overlay [data-v]')) {
       el.onclick = canPick ? () => { if (answer(d, el.dataset.v)) { Sound.card(); el.classList.add('chosen'); } } : () => { denyCue(); nudge(el); };
     }
-    if (canPick) focusFirst('#overlay .ov-actions .btn.primary', `pick:${d.id}`);
+    if (canPick) focusFirst('#overlay .ov-actions .sk-btn.primary', `pick:${d.id}`);
   }
   function renderSwapMeetDock(dock, d, mine) {
     const key = `swapmeet:${gameId}:${d.id}:${mine}`;
@@ -4680,12 +4791,13 @@
     initHome();
     initLobby();
     initGameBar();
+    if (window.ResizeObserver) new ResizeObserver(syncSpot).observe($('#board'));
     initEmotes();
     if (window.Music) Music.follow(musicScene);
     for (const b of $$('[data-open]')) b.addEventListener('click', () => { Sound.click(); openModal(b.dataset.open); });
     for (const b of $$('[data-sound]')) b.addEventListener('click', () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); });
     renderSoundToggles();
-    window.addEventListener('resize', () => { checkLayout(); renderStandings(); hideTip(); refitPagers(); fitRooms(); });
+    window.addEventListener('resize', () => { syncSpot(); checkLayout(); renderStandings(); hideTip(); refitPagers(); fitRooms(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && queue.length > 1) fast = true; });
     showScreen(new URLSearchParams(location.search).get('room') ? 'lobby' : 'home');
     connect();
