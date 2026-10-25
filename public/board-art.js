@@ -38,7 +38,7 @@
     } else if (type === 'arrow') {
       g += `<g transform="scale(${f(k)})">${arrowShape(n, ang)}</g>`;
     }
-    return `<g transform="translate(${f(cx)} ${f(cy)})">${g}</g>`;
+    return `<g class="sptile" transform="translate(${f(cx)} ${f(cy)})">${g}</g>`;
   }
 
   /* ---------- 中央场景 ---------- */

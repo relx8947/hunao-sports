@@ -1139,6 +1139,42 @@
     5: [[-14, -28], [14, -28], [-14, 0], [14, 0], [0, 28]],
     6: [[-14, -28], [14, -28], [-14, 0], [14, 0], [-14, 28], [14, 28]],
   };
+  // 道具格上有人站着时，棋子下移让出格子上沿，原图块缩成小角标叠在最上层（宽屏竖条 / 竖屏偏右）
+  const SLOTS_WIDE_SP = {
+    1: [[0, 12]], 2: [[-14, 12], [14, 12]], 3: [[-14, 8], [14, 8], [0, 26]],
+    4: [[-14, 8], [14, 8], [-14, 26], [14, 26]],
+    5: [[-14, 6], [14, 6], [-14, 22], [14, 22], [0, 32]],
+    6: [[-14, 6], [14, 6], [-14, 22], [14, 22], [-14, 34], [14, 34]],
+  };
+  const isTileCell = (p) => { const sp = vs && TRACKS[vs.track] && TRACKS[vs.track].spaces[p]; return !!sp && (sp.type === 'star' || sp.type === 'rock' || sp.type === 'arrow'); };
+  function syncCellBadges(occupied) {
+    const layer = $('#tokens'), want = new Set();
+    for (const p of occupied) if (p > 0 && p < FIN && isTileCell(p)) want.add(p);
+    for (const g of $$('#trackSvg .cell.occ')) if (!want.has(Number(g.dataset.p))) g.classList.remove('occ');
+    for (const b of $$('#tokens .cbadge')) if (!want.has(Number(b.dataset.p))) b.remove();
+    const [W, H] = VB();
+    for (const p of want) {
+      const cell = $(`#trackSvg .cell[data-p="${p}"]`), src = cell && $('.sptile', cell);
+      if (!src) continue;
+      cell.classList.add('occ');
+      const rc = cellRect(p), wide = layout === 'wide';
+      const x = wide ? rc.x + rc.w / 2 : rc.x + 20, y = wide ? rc.y + 20 : rc.y + rc.h / 2;
+      let b = $(`#tokens .cbadge[data-p="${p}"]`);
+      if (!b) {
+        b = document.createElement('div');
+        b.className = 'cbadge'; b.dataset.p = p;
+        b.innerHTML = '<svg viewBox="-26 -26 52 52"></svg>';
+        layer.appendChild(b);
+      }
+      const inner = $('svg', b);
+      if (inner.dataset.sig !== `${trackKeySig()}:${p}`) {
+        inner.innerHTML = src.innerHTML;
+        inner.dataset.sig = `${trackKeySig()}:${p}`;
+      }
+      b.style.left = `${x / W * 100}%`; b.style.top = `${y / H * 100}%`;
+    }
+  }
+  const trackKeySig = () => `${vs && vs.track}:${layout}`;
   function tokenEl(r) {
     let el = $(`#tokens .token[data-rid="${r.rid}"]`);
     if (!el) {
@@ -1206,10 +1242,11 @@
           dx = (k % per - (cnt - 1) / 2) * gap + (rows > 1 ? (row ? gap / 4 : -gap / 4) : 0);
           dy = rows > 1 ? (row ? 17 : -17) : 0;
         } else {
-          const tbl = layout === 'wide' ? SLOTS_WIDE : SLOTS;
+          const sp = isTileCell(p);
+          const tbl = layout === 'wide' ? (sp ? SLOTS_WIDE_SP : SLOTS_WIDE) : SLOTS;
           const sl = (tbl[Math.min(n, 6)] || tbl[6])[k % 6];
           const f = crowd && layout === 'tall' ? 1.1 : 1;
-          [dx, dy] = layout === 'wide' ? sl : [sl[1] * f, sl[0] * f];
+          [dx, dy] = layout === 'wide' ? sl : [sl[1] * f + (sp ? 15 : 0), sl[0] * f + (sp ? 2 : 0)];
         }
         const el = tokenEl(r);
         if (instant) el.style.transition = 'none';
@@ -1230,6 +1267,7 @@
         if (instant) { void el.offsetWidth; el.style.transition = ''; }
       });
     }
+    syncCellBadges(Object.keys(groups).map(Number).filter((p) => p !== FIN));
     fitTags(placed);
   }
   // 名字签防重叠：从最上层的棋子往下排，名字签会压到更上层的棋子或已显示的名字签就先收起（悬停棋子仍能看是谁）

@@ -2546,3 +2546,8 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 .board.tall .center-track b.ct-en { font-size: calc(36 * var(--u)); }
 /* 对局中：黑底上的英文标题只作淡淡的水印 */
 .center.hud-race .center-track b.ct-en { font-size: calc(30 * var(--u)); color: #fff; opacity: .22; -webkit-text-stroke: 0; text-shadow: none; }
+/* 道具格上有人站着时：原图块淡出，格子上沿换成一枚叠在棋子上方的小图块，大家始终看得懂这格的效果 */
+#trackSvg .cell .sptile { transition: opacity .2s; }
+#trackSvg .cell.occ .sptile { opacity: 0; }
+.cbadge { position: absolute; width: calc(36 * var(--u)); height: calc(36 * var(--u)); margin: calc(-18 * var(--u)) 0 0 calc(-18 * var(--u)); z-index: 12; pointer-events: none; animation: pop .25s var(--ease); filter: drop-shadow(0 calc(1.5 * var(--u)) 0 rgba(0, 0, 0, .35)); }
+.cbadge svg { width: 100%; height: 100%; overflow: visible; }
