@@ -17,7 +17,7 @@
       <div class="home-inner">
         <a id="hallBack" class="hall-back" href="../" hidden aria-label="返回围桌 · 桌游大厅"><span class="ico" data-icon="arrowL" aria-hidden="true"></span>返回大厅</a>
         <header class="logo">
-          <div class="logo-badge">联机试玩版 · 3-6 名选手 · 36 名运动员</div>
+          <div class="logo-badge">联机试玩版 · 3-6 名选手 · 一代 / 二代 / 混合</div>
           <h1 class="logo-text" aria-label="胡闹运动会">
             <span class="lt" style="--i:0">胡</span><span class="lt" style="--i:1">闹</span><span class="lt" style="--i:2">运</span><span class="lt" style="--i:3">动</span><span class="lt" style="--i:4">会</span>
           </h1>
@@ -29,6 +29,13 @@
             <span>你的昵称</span>
             <input id="nameInput" maxlength="12" placeholder="起个响亮的名字" autocomplete="nickname" enterkeyhint="done">
           </label>
+          <div class="mode-pick" id="modePick">
+            <div class="seg mode-seg" id="editionSeg" role="radiogroup" aria-label="游戏模式" aria-describedby="editionHint">
+              <span class="seg-label">模式</span>
+              <button type="button" data-ed="v1" role="radio" aria-checked="true" class="on">一代</button><button type="button" data-ed="v2" role="radio" aria-checked="false" tabindex="-1">二代</button><button type="button" data-ed="mix" role="radio" aria-checked="false" tabindex="-1">混合</button>
+            </div>
+            <p class="mode-hint" id="editionHint">经典 36 名运动员 · 温和与狂野赛道</p>
+          </div>
           <div class="quick-row">
             <button id="quickBtn" class="btn primary big" data-network disabled>
               <span class="ico" data-icon="play"></span>和 AI 开一局
@@ -88,6 +95,13 @@
           <div class="room-label">房间码</div>
           <div class="room-code" id="roomCode" aria-live="polite">----</div>
           <button class="btn small" id="copyLink" type="button"><span class="ico" data-icon="link" aria-hidden="true"></span><span id="copyLinkLabel">复制邀请链接</span></button>
+          <div class="lobby-mode" id="lobbyMode">
+            <div class="seg mode-seg" id="lobbyEdition" role="radiogroup" aria-label="本房间模式" aria-describedby="lobbyEditionHint">
+              <span class="seg-label">模式</span>
+              <button type="button" data-ed="v1" role="radio" aria-checked="true" class="on">一代</button><button type="button" data-ed="v2" role="radio" aria-checked="false" tabindex="-1">二代</button><button type="button" data-ed="mix" role="radio" aria-checked="false" tabindex="-1">混合</button>
+            </div>
+            <p class="mode-hint" id="lobbyEditionHint" aria-live="polite"></p>
+          </div>
           <div class="invite-link" id="inviteLinkBox" hidden>
             <label for="inviteLinkInput">邀请链接</label>
             <input id="inviteLinkInput" readonly aria-describedby="inviteLinkTip">

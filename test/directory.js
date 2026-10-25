@@ -5,6 +5,13 @@ const { launch, state, snapshot } = require('./browser-helper');
 
 const fields = ['code', 'mode', 'status', 'edition', 'hostName', 'playerCount', 'aiCount', 'humanCount', 'onlineCount', 'maxPlayers', 'spectatorCount', 'onlineSpectatorCount', 'canJoin', 'isMember'].sort();
 const button = (page, code) => page.locator(`#roomList button[data-room-code="${code}"]`);
+const EDITION_NAME = { v1: '一代', v2: '二代', mix: '混合' };
+// 目录条目上的模式徽标（加入不需要选模式）
+async function badgeOf(page, code, edition) {
+  const badge = button(page, code).locator('xpath=ancestor::li').locator('.room-list-title .ed-badge');
+  await badge.filter({ hasText: EDITION_NAME[edition] }).waitFor();
+  assert.match(await badge.getAttribute('class'), new RegExp(`ed-${edition}`));
+}
 async function directory(page) {
   const rooms = await page.evaluate(() => window.__testMessages.findLast(message => message.type === 'roomList')?.rooms);
   assert(Array.isArray(rooms), '必须收到真实 roomList 数组');
@@ -14,6 +21,7 @@ async function directory(page) {
     assert.match(room.code, /^[A-Z0-9]{4}$/);
     assert(['play', 'spectator'].includes(room.mode));
     assert(['lobby', 'playing', 'over'].includes(room.status));
+    assert(['v1', 'v2', 'mix'].includes(room.edition), '目录条目必须带合法模式');
     assert.equal(typeof room.hostName, 'string');
     assert.equal(typeof room.canJoin, 'boolean');
     assert.equal(typeof room.isMember, 'boolean');
@@ -103,7 +111,14 @@ async function leaveGame(page) {
     await A.locator('#lobby').waitFor({ state: 'visible' });
     const code = (await A.locator('#roomCode').textContent()).trim();
     assert.match(code, /^[A-Z0-9]{4}$/);
-    await waitRoom(B, code, { mode: 'play', status: 'lobby', hostName: '目录桌面房主', playerCount: 1, aiCount: 0, humanCount: 1, onlineCount: 1, canJoin: true, isMember: false });
+    await waitRoom(B, code, { mode: 'play', status: 'lobby', edition: 'v1', hostName: '目录桌面房主', playerCount: 1, aiCount: 0, humanCount: 1, onlineCount: 1, canJoin: true, isMember: false });
+    assert.deepEqual((await sent(A, 'create')).at(-1), { type: 'create', edition: 'v1' }, '首页默认一代建房');
+    await badgeOf(B, code, 'v1');
+    // 房主在大厅切到二代：目录推送更新模式徽标
+    await A.locator('#lobbyEdition [data-ed="v2"]').click();
+    await waitRoom(B, code, { edition: 'v2', status: 'lobby' });
+    await badgeOf(B, code, 'v2');
+    assert.deepEqual((await sent(A, 'edition')).at(-1), { type: 'edition', edition: 'v2' });
     assert.equal((await sent(B, 'listRooms')).length, initialQueriesB, '建房必须自动推送，不靠刷新或轮询发现');
     assert.equal(await B.locator('#codeInput').inputValue(), '', '目录加入无需输入房间码');
     assert.equal(await button(B, code).isEnabled(), true);
@@ -121,6 +136,9 @@ async function leaveGame(page) {
     assert.deepEqual(humanIds, [joinedA.identity.id, joinedB.identity.id]);
     assert.equal(new Set(humanIds).size, 2, '一次加入不能产生重复席位');
     assert.deepEqual(await sent(B, 'join'), [{ type: 'join', code }], '真实目录点击只发一次 join');
+    assert.equal(joinedB.room.edition, 'v2', '加入者收到房主选的模式');
+    assert.equal(await B.locator('#lobbyEdition .on').getAttribute('data-ed'), 'v2');
+    assert.equal(await B.locator('#lobbyEdition').getAttribute('aria-disabled'), '', '非房主只读');
     assert.equal(await B.locator('#codeInput').inputValue(), '');
     await waitRoom(C, code, { playerCount: 2, humanCount: 2, onlineCount: 2, canJoin: true, isMember: false });
     checkpoints++;
@@ -130,7 +148,8 @@ async function leaveGame(page) {
     await waitRoom(C, code, { playerCount: 3, humanCount: 2, aiCount: 1, onlineCount: 2 });
     await A.locator('#startBtn').click();
     for (const page of [A, B]) await page.locator('#game').waitFor({ state: 'visible' });
-    await waitRoom(C, code, { mode: 'play', status: 'playing', playerCount: 3, humanCount: 2, aiCount: 1, onlineCount: 2, canJoin: false, isMember: false });
+    await waitRoom(C, code, { mode: 'play', status: 'playing', edition: 'v2', playerCount: 3, humanCount: 2, aiCount: 1, onlineCount: 2, canJoin: false, isMember: false });
+    await badgeOf(C, code, 'v2');
     assert.equal(await button(C, code).isDisabled(), true);
     const row = button(C, code).locator('xpath=ancestor::li');
     assert.match(await row.textContent(), /进行中/);
@@ -141,6 +160,7 @@ async function leaveGame(page) {
     assert.equal(ordinaryBefore.game.you, 0);
     assert.equal((await state(B)).game.you, 1);
     assert.equal(ordinaryBefore.game.snap.players.length, 3);
+    assert.equal(ordinaryBefore.game.snap.edition, 'v2', '开局使用房间模式');
     const ordinaryGameId = ordinaryBefore.game.gameId;
     await refresh(C);
     const ordinaryAfter = await state(A);
@@ -155,6 +175,7 @@ async function leaveGame(page) {
     assert.equal(new Set(pages.map(page => page.context())).size, 4);
     const beforeWatchQueries = (await sent(C, 'listRooms')).length;
     await D.locator('#watchCount [data-v="4"]').click();
+    await D.locator('#editionSeg [data-ed="mix"]').click();
     await D.locator('#watchBtn').click();
     await D.waitForFunction(() => window.__testGame?.mode === 'spectator' && window.__testGame?.you === -1);
     const watch = await state(D), watchCode = watch.room.code, watchId = watch.game.gameId;
@@ -163,8 +184,10 @@ async function leaveGame(page) {
     assert.equal(watch.room.seats.length, 4);
     assert(watch.room.seats.every(seat => seat.ai && seat.pid === null));
     assert(watch.game.snap.players.every(player => player.ai));
-    await waitRoom(C, watchCode, { mode: 'spectator', status: 'playing', hostName: '目录全AI房主', playerCount: 4, aiCount: 4, humanCount: 0, onlineCount: 1, spectatorCount: 1, onlineSpectatorCount: 1, canJoin: true, isMember: false });
+    assert.equal(watch.game.snap.edition, 'mix');
+    await waitRoom(C, watchCode, { mode: 'spectator', status: 'playing', edition: 'mix', hostName: '目录全AI房主', playerCount: 4, aiCount: 4, humanCount: 0, onlineCount: 1, spectatorCount: 1, onlineSpectatorCount: 1, canJoin: true, isMember: false });
     assert.equal((await sent(C, 'listRooms')).length, beforeWatchQueries, '观战房自动推送');
+    await badgeOf(C, watchCode, 'mix');
     assert.equal(await button(C, watchCode).isEnabled(), true);
     assert.equal((await button(C, watchCode).textContent()).trim(), '观看');
     assert.equal(await C.locator('#codeInput').inputValue(), '');
@@ -222,6 +245,6 @@ async function leaveGame(page) {
     }
     // 本测试无刷新断线操作；取消、断线或资源失败均非预期，不能过滤冒充零错误。
     assert.equal(app.errors.length, 0, app.errors.join('\n'));
-    console.log(`目录真实浏览器验收通过：${checkpoints} 项；4 独立 context、首次订阅/手动刷新/自动推送、免输码单次加入、进行中禁加入、4 AI 原局观战、在线计数及退出清理；act/auto 0，页面/资源/协议错误 0；截图 ${app.out}`);
+    console.log(`目录真实浏览器验收通过：${checkpoints} 项；4 独立 context、首次订阅/手动刷新/自动推送、免输码单次加入、进行中禁加入、4 AI 原局观战、在线计数及退出清理、目录模式徽标与大厅切换推送；act/auto 0，页面/资源/协议错误 0；截图 ${app.out}`);
   } finally { await app.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

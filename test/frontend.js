@@ -124,6 +124,80 @@ const { decide } = require('../game/ai');
       if (process.env.HUNAO_FRONTEND_SCREENSHOTS) await page.screenshot({ path: `/tmp/hunao-room-directory-${width}.png`, fullPage: true });
     }
     await page.setViewportSize({ width: 390, height: 844 });
+    // 模式：目录条目带模式徽标（未知值按默认一代），加入不需要选模式
+    await emit({ type: 'roomList', rooms: [entry('EDV1'), entry('EDV2', { edition: 'v2' }), entry('EDMX', { edition: 'mix' }), entry('EDXX', { edition: '<img>' })] });
+    for (const [code, name, cls] of [['EDV1', '一代', 'ed-v1'], ['EDV2', '二代', 'ed-v2'], ['EDMX', '混合', 'ed-mix'], ['EDXX', '一代', 'ed-v1']]) {
+      const badge = (await showRoom(code)).locator('xpath=ancestor::li').locator('.room-list-title .ed-badge');
+      assert.equal(await badge.textContent(), name, `${code} 目录模式徽标`);
+      assert.match(await badge.getAttribute('class'), new RegExp(cls));
+    }
+    assert.equal(await page.locator('#roomList img').count(), 0, '非法模式值不能注入标签');
+    await (await showRoom('EDV2')).click();
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'join').at(-1)), { type: 'join', code: 'EDV2' }, '加入房间不带模式');
+    await publishDirectory();
+    // 首页分段选择器：默认一代，选择记到 localStorage；create/quick/watch 都携带当前模式
+    assert.equal(await page.locator('#editionSeg [data-ed="v1"]').getAttribute('aria-checked'), 'true', '默认一代');
+    assert.match(await page.locator('#editionHint').textContent(), /36 名/);
+    const lastSent = type => page.evaluate(type => window.__fakeMessages.filter(m => m.type === type).at(-1), type);
+    for (const ed of ['v2', 'mix', 'v1']) {
+      await page.locator(`#editionSeg [data-ed="${ed}"]`).click();
+      assert.equal(await page.locator(`#editionSeg [data-ed="${ed}"]`).getAttribute('aria-checked'), 'true');
+      assert.equal(await page.locator('#editionSeg [aria-checked="true"]').count(), 1);
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('hn_edition'))), ed);
+      assert.equal(await page.locator('#editionHint').getAttribute('data-ed'), ed);
+      await page.locator('#createBtn').click();
+      assert.deepEqual(await lastSent('create'), { type: 'create', edition: ed });
+      await page.locator('#quickBtn').click();
+      assert.equal((await lastSent('quick')).edition, ed);
+      await page.locator('#watchBtn').click();
+      assert.equal((await lastSent('watch')).edition, ed);
+    }
+    await page.locator('#editionSeg [data-ed="v1"]').focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('#editionSeg .on').getAttribute('data-ed'), 'v2', '方向键切换模式');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.locator('#editionSeg .on').getAttribute('data-ed'), 'v1');
+    // 图鉴筛选：首页一代 → 默认一代 36 名；全部 72；二代 36，仍按一屏分页
+    const galleryState = () => page.evaluate(() => {
+      const box = document.querySelector('#modal .gallery');
+      const on = [...document.querySelectorAll('#modal button[data-gf]')].filter(b => b.getClientRects().length && b.classList.contains('on')).map(b => b.dataset.gf);
+      return { on, cards: box.querySelectorAll('.rcard').length, ids: [...box.querySelectorAll('.rcard')].map(c => c.dataset.id), fits: box.scrollHeight <= box.clientHeight + 1, pager: !document.getElementById('mPager').hidden, title: document.querySelector('#modal h3').textContent };
+    });
+    await page.locator('#home [data-open="gallery"]').click();
+    let gal = await galleryState();
+    assert.deepEqual(gal.on, ['v1']); assert.equal(gal.cards, 36); assert(gal.fits && gal.pager, '图鉴分页仍工作');
+    const v2Ids = await page.evaluate(() => window.RACERS_ALL.filter(r => r.edition === 2).map(r => r.id));
+    await page.locator('#modal .gf-body [data-gf="v2"]').click();
+    gal = await galleryState();
+    assert.deepEqual(gal.on, ['v2']); assert.deepEqual(gal.ids, v2Ids); assert(gal.fits && gal.pager);
+    await page.locator('#mPager [data-pg="1"]').click();
+    await page.locator('#modal .gf-body [data-gf="all"]').click();
+    gal = await galleryState();
+    assert.equal(gal.cards, 72); assert.match(gal.title, /72 名/); assert(gal.fits);
+    assert.match(await page.locator('#mPager .pg-no').textContent(), /^1 \//, '切换筛选回到第一页');
+    await page.locator('#mClose').click();
+    // 地图图鉴按模式列赛道：二代两条、混合四条，含该模式赛程
+    await page.locator('#home [data-open="tracks"]').click();
+    const tabs = () => page.evaluate(() => [...document.querySelectorAll('#tguide [data-tg]')].map(b => b.dataset.tg));
+    assert.deepEqual(await tabs(), ['mild', 'wild']);
+    await page.locator('#tgEds [data-ed="v2"]').click();
+    assert.deepEqual(await tabs(), ['twisty', 'whirly']);
+    assert.match(await page.locator('#tguide .tg-races').textContent(), /第 1 场[\s\S]*第 3 场/);
+    assert.match(await page.locator('#tguide .tg-legend').textContent(), /变数招牌/);
+    await page.locator('#tguide [data-tg="whirly"]').click();
+    assert.match(await page.locator('#tguide .tg-legend').textContent(), /漩涡[\s\S]*4↔6/);
+    assert.equal(await page.locator('#tguide .tg-map svg').count(), 1, '二代赛道留有缩略图位置');
+    await page.locator('#tgEds [data-ed="mix"]').click();
+    assert.deepEqual(await tabs(), ['mild', 'wild', 'twisty', 'whirly']);
+    assert.match(await page.locator('#tguide .tg-races').textContent(), /第 4 场/);
+    await page.locator('#mClose').click();
+    // 规则书：二代变数卡 13 张逐张列出
+    await page.locator('#home [data-open="rules"]').click();
+    const twistNames = await page.evaluate(() => [...document.querySelectorAll('#modal .tw-card .tw-name')].map(e => e.textContent));
+    assert.deepEqual(twistNames, await page.evaluate(() => window.TWISTS.map(t => t.name)));
+    assert.equal(twistNames.length, 13);
+    assert.match(await page.locator('#modal .rules').textContent(), /二代 · 变数卡/);
+    await page.locator('#mClose').click();
     const ordinaryAi = await page.locator('#aiCount .on').getAttribute('data-v');
     const watchAi = await page.locator('#watchCount .on').getAttribute('data-v');
     await page.locator('#nameInput').fill('大厅昵称');
@@ -171,6 +245,35 @@ const { decide } = require('../game/ai');
     await emit({ type: 'room', room: lobbyBeforeDirectory });
     await publishDirectory();
     assert.equal(await page.locator('#lobby').isVisible(), true, 'roomList 不能将房间切回首页');
+    // 大厅模式：房主可切换（发 edition），以服务端 room 广播为准；非房主只读
+    const lobbyEd = () => page.evaluate(() => ({ on: document.querySelector('#lobbyEdition .on')?.dataset.ed, readonly: document.getElementById('lobbyEdition').classList.contains('readonly'), disabled: [...document.querySelectorAll('#lobbyEdition button')].filter(b => b.disabled).map(b => b.dataset.ed), hint: document.getElementById('lobbyEditionHint').textContent }));
+    assert.deepEqual((await lobbyEd()).on, 'v1', '没有 edition 字段时按默认一代显示');
+    assert.equal((await lobbyEd()).readonly, false);
+    await page.locator('#lobbyEdition [data-ed="v2"]').click();
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'edition').at(-1)), { type: 'edition', edition: 'v2' });
+    assert.equal((await lobbyEd()).on, 'v1', '未收到广播前不自行改房间模式');
+    await emit({ type: 'room', room: { ...lobbyBeforeDirectory, edition: 'v2' } });
+    assert.equal((await lobbyEd()).on, 'v2');
+    assert.match((await lobbyEd()).hint, /变数卡/);
+    const editionSends = await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'edition').length);
+    await page.locator('#lobbyEdition [data-ed="v2"]').click();
+    assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'edition').length), editionSends, '点当前模式不重复发送');
+    await emit({ type: 'room', room: { ...lobbyBeforeDirectory, edition: 'mix', host: 'p1' } });
+    let le = await lobbyEd();
+    assert.equal(le.on, 'mix'); assert.equal(le.readonly, true); assert.deepEqual(le.disabled, ['v1', 'v2']);
+    assert.match(le.hint, /房主已选/);
+    await page.locator('#lobbyEdition [data-ed="mix"]').click();
+    assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'edition').length), editionSends, '非房主不能切换');
+    for (const [width, height] of [[360, 740], [390, 664], [852, 393], [1280, 720]]) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const g = await page.evaluate(() => ({ sh: document.scrollingElement.scrollHeight, sw: document.scrollingElement.scrollWidth, ih: innerHeight, iw: innerWidth, seg: document.getElementById('lobbyEdition').getBoundingClientRect().toJSON() }));
+      assert(g.sh <= g.ih + 1 && g.sw <= g.iw + 1, `${width}x${height} 大厅含模式不滚动：${JSON.stringify(g)}`);
+      assert(g.seg.right <= g.iw + 1 && g.seg.bottom <= g.ih + 1 && g.seg.height > 0, `${width}x${height} 模式控件在视口内`);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await emit({ type: 'room', room: lobbyBeforeDirectory });
+    assert.equal((await lobbyEd()).on, 'v1');
     assert.equal(new URL(page.url()).searchParams.get('room'), room.code);
     await emit({ type: 'room', room });
     const game = new Game({ players: room.seats, seed: 73 });
@@ -392,8 +495,10 @@ const { decide } = require('../game/ai');
 
     // 独立观战入口：3–6 AI、默认 4、单独持久化，不改变真人的 AI 对手数。
     assert.equal(await page.locator('#watchBtn').isDisabled(), false);
+    assert.equal(await page.locator('#editionSeg .on').getAttribute('data-ed'), 'v2', '房主在大厅切换的模式记为首页下次默认');
+    await page.locator('#editionSeg [data-ed="v1"]').click();
     await page.locator('#watchBtn').click();
-    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'watch').at(-1)), { type: 'watch', ai: 4 });
+    assert.deepEqual(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'watch').at(-1)), { type: 'watch', ai: 4, edition: 'v1' });
     const aiBefore = await page.locator('#aiCount .on').getAttribute('data-v');
     for (const n of [3, 4, 5, 6]) {
       await page.locator(`#watchCount [data-v="${n}"]`).click();
@@ -643,6 +748,39 @@ const { decide } = require('../game/ai');
     await emit({ type: 'left' });
     assert(actionsBeforeWatch > 0);
 
+    // 二代对局：R 能查到二代运动员（选秀卡、出战卡），场次条换成二代赛道并带模式徽标，缺图不抛错
+    {
+      const v2Game = new Game({ players: room.seats, seed: 91, edition: 'v2' });
+      v2Game.start();
+      await emit({ type: 'room', room: { ...room, edition: 'v2' } });
+      await full(v2Game.snapshot(0), { gameId: 'frontend-v2-game' });
+      await page.locator('#draftCards .rcard').first().waitFor();
+      const v2Names = await page.evaluate(() => Object.fromEntries(window.RACERS_ALL.filter(r => r.edition === 2).map(r => [r.id, r.name])));
+      const draftCards = await page.evaluate(() => [...document.querySelectorAll('#draftCards .rcard')].map(c => ({ id: c.dataset.id, name: c.querySelector('.nm').textContent })));
+      assert(draftCards.length > 0 && draftCards.every(c => v2Names[c.id] === c.name), `二代选秀卡名字来自 RACERS_ALL：${JSON.stringify(draftCards)}`);
+      let guard = 0;
+      while (v2Game.phase === 'draft' && guard++ < 100) { const d = v2Game.pending; v2Game.answer(d.seat, d.id, decide(v2Game, d, d.seat)); }
+      await full(v2Game.snapshot(0), { gameId: 'frontend-v2-game' });
+      await page.locator('#pickCards .rcard').first().waitFor();
+      const pickNames = await page.evaluate(() => [...document.querySelectorAll('#pickCards .rcard')].map(c => ({ id: c.dataset.id, name: c.querySelector('.nm').textContent })));
+      assert(pickNames.length === 4 && pickNames.every(c => v2Names[c.id] === c.name), '二代出战卡渲染正常');
+      assert.equal((await page.evaluate(() => window.__hn())).edition, 'v2');
+      const pills = await page.evaluate(() => [...document.querySelectorAll('#races .race-pill .tn')].map(e => e.textContent));
+      assert.deepEqual(pills, ['扭扭', '漩涡', '扭扭', '漩涡']);
+      const badges = await page.evaluate(() => [...document.querySelectorAll('#races .race-ed, #topTitle .tt-ed')].filter(e => e.getClientRects().length).map(e => e.textContent));
+      assert.deepEqual(badges, ['二代'], '游戏页只显示一枚模式标签');
+      for (const [width, height] of [[360, 740], [393, 852], [390, 664], [852, 393], [1280, 720]]) {
+        await page.setViewportSize({ width, height }); await noOverflow(`二代出战 ${width}x${height}`);
+        const top = await page.evaluate(() => { const t = document.querySelector('#game .topbar'); const r = document.getElementById('races').getBoundingClientRect(), a = document.querySelector('#game .top-actions').getBoundingClientRect(); return { sameRow: Math.abs(r.top - a.top) < 8, overlap: r.right > a.left + 1 && r.bottom > a.top + 1 && a.bottom > r.top + 1, h: t.getBoundingClientRect().height }; });
+        assert(!top.overlap, `${width}x${height} 模式徽标不能挤压顶栏按钮：${JSON.stringify(top)}`);
+        assert(top.sameRow, `${width}x${height} 场次条与按钮仍在同一行：${JSON.stringify(top)}`);
+        const vis = await page.evaluate(() => [...document.querySelectorAll('#races .race-ed, #topTitle .tt-ed')].filter(e => e.getClientRects().length).length);
+        assert.equal(vis, 1, `${width}x${height} 模式标签可见`);
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
+      await emit({ type: 'left' });
+    }
+
     // 独立真实 WS 上下文：别人的建房/改名/加入/观战/离线，通过目录推送直接抵达首页。
     const liveContexts = [];
     try {
@@ -655,6 +793,7 @@ const { decide } = require('../game/ai');
       await Promise.all([ownerPage, directoryPage, watchOwnerPage].map(p => p.waitForFunction(() => document.body.dataset.connection === 'ready')));
       await directoryPage.locator('#roomListStatus').filter({ hasText: '暂无在线房间' }).waitFor();
       await ownerPage.locator('#nameInput').fill('公开大厅房主');
+      await ownerPage.locator('#editionSeg [data-ed="v2"]').click();
       await ownerPage.locator('#createBtn').click();
       await ownerPage.locator('#lobby').waitFor({ state: 'visible' });
       const publicCode = (await ownerPage.locator('#roomCode').textContent()).trim();
@@ -664,11 +803,19 @@ const { decide } = require('../game/ai');
       assert.equal(await directoryPage.locator('#home').isVisible(), true);
       const publicRow = publicButton.locator('xpath=ancestor::li');
       assert.match(await publicRow.textContent(), /公开大厅房主/);
+      // 真实后端：建房带模式 → 目录徽标；房主在大厅切换 → 目录实时更新
+      assert.equal(await ownerPage.locator('#lobbyEdition .on').getAttribute('data-ed'), 'v2');
+      await publicRow.locator('.ed-badge', { hasText: '二代' }).waitFor();
+      await ownerPage.locator('#lobbyEdition [data-ed="mix"]').click();
+      await ownerPage.locator('#lobbyEdition [data-ed="mix"].on').waitFor();
+      await publicRow.locator('.ed-badge', { hasText: '混合' }).waitFor();
       // 同昵称输入保持首页，收到 setName 的 hello 也只能刷新目录。
       await directoryPage.locator('#nameInput').fill('目录来客'); await directoryPage.locator('#nameInput').blur();
       await publicButton.click();
       await directoryPage.locator('#lobby').waitFor({ state: 'visible' });
       assert.equal((await directoryPage.locator('#roomCode').textContent()).trim(), publicCode);
+      assert.equal(await directoryPage.locator('#lobbyEdition .on').getAttribute('data-ed'), 'mix', '加入者看到房主选的模式');
+      assert.equal(await directoryPage.locator('#lobbyEdition').getAttribute('aria-disabled'), '', '非房主只读');
       assert.equal(await ownerPage.locator('#seats .seat:not(.empty)').count(), 2);
       await directoryPage.locator('#leaveLobby').click();
       await directoryPage.locator('#home').waitFor({ state: 'visible' });
@@ -677,12 +824,16 @@ const { decide } = require('../game/ai');
       await ownerPage.close();
       await publicButton.waitFor({ state: 'detached' });
       await directoryPage.locator('#roomListStatus').filter({ hasText: '暂无在线房间' }).waitFor();
+      await watchOwnerPage.locator('#editionSeg [data-ed="mix"]').click();
       await watchOwnerPage.locator('#watchBtn').click();
       await watchOwnerPage.locator('#game').waitFor({ state: 'visible' });
+      await watchOwnerPage.waitForFunction(() => window.__hn().edition === 'mix');
+      await watchOwnerPage.locator('#races .race-ed', { hasText: '混合' }).waitFor();
       const watchCode = (await watchOwnerPage.locator('#spectatorCode').textContent()).match(/[A-Z0-9]{4}/)[0];
       const watchDirectoryButton = directoryPage.locator(`#roomList button[data-room-code="${watchCode}"]`);
       await watchDirectoryButton.waitFor();
       assert.equal(await watchDirectoryButton.textContent(), '观看');
+      await watchDirectoryButton.locator('xpath=ancestor::li').locator('.ed-badge', { hasText: '混合' }).waitFor();
       const watchingBeforeList = await watchOwnerPage.evaluate(() => window.__hn());
       await directoryPage.locator('#refreshRooms').click();
       await directoryPage.locator('#roomList[aria-busy="false"]').waitFor();
@@ -702,7 +853,7 @@ const { decide } = require('../game/ai');
     await emit({ type: 'error', for: 'hello', msg: '身份凭证无效' });
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('hn_me')).token), undefined);
     assert.equal(errors.length, 0, errors.join('\n'));
-    console.log('前端回归通过：/hunao/ 下显示返回大厅且根路径隐藏/公开房间首次订阅/手动刷新/空与多房间/合法code/XSS字面显示/加入与观看与返回/满席与进行中禁用/失败刷新/断线旧列表禁用与重连刷新/隐藏无轮询/活动game隔离/真实WS建房加入离线推送与AI观战 + 普通模式原回归 + 观战3–6AI/独立人数/选秀暗选无个人操作/按序亮牌/真实四场技能与结算/房主移交/replay与retry/旧gameId隔离/断线刷新恢复/320、390、844x390、568x320无溢出');
+    console.log('前端回归通过：/hunao/ 下显示返回大厅且根路径隐藏/公开房间首次订阅/手动刷新/空与多房间/合法code/XSS字面显示/加入与观看与返回/满席与进行中禁用/失败刷新/断线旧列表禁用与重连刷新/隐藏无轮询/活动game隔离/真实WS建房加入离线推送与AI观战 + 普通模式原回归 + 观战3–6AI/独立人数/选秀暗选无个人操作/按序亮牌/真实四场技能与结算/房主移交/replay与retry/旧gameId隔离/断线刷新恢复/320、390、844x390、568x320无溢出 + 模式：首页三选一记忆与 create/quick/watch 携带、目录徽标、大厅房主切换/非房主只读、图鉴筛选分页、地图图鉴按模式、规则书 13 张变数卡、二代快照渲染与顶栏一行');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

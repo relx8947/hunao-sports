@@ -1,6 +1,7 @@
 'use strict';
 // 一屏布局验收：每个界面在每个手机/电脑尺寸下都不能出现页面滚动，内容也不能被裁掉。
 // 手机与电脑各跑一局（房间 → 选秀 → 暗选 → 比赛 → 单场结算 → 总结算），再看一局 AI 观战，
+// 模式：手机打一代、看混合观战；电脑在大厅切到二代再开赛。首页模式选择器、大厅模式行、图鉴筛选、地图图鉴模式切换、规则书变数卡页都单独量。
 // 在每个关键时刻把视口切到各个尺寸逐一量：
 //   1. document.scrollingElement 的 scrollHeight/scrollWidth 不超过视口；
 //   2. 标了 data-fit 的容器和浮层/弹窗内部没有纵向溢出（分页必须真的放得下）；
@@ -11,7 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { launch, step, state } = require('./browser-helper');
 
-const MOBILE = [[360, 740], [375, 667], [393, 852], [430, 932], [393, 700], [375, 560], [844, 390], [667, 375]];
+const MOBILE = [[360, 740], [375, 667], [393, 852], [430, 932], [393, 700], [390, 664], [375, 560], [844, 390], [852, 393], [667, 375]];
 const DESKTOP = [[1920, 1080], [1440, 900], [1366, 768], [1280, 720]];
 const SHOTS = process.env.SHOTS;
 const failures = [];
@@ -30,7 +31,7 @@ async function measure(page, sizes, screen, home, expectOverlay) {
         return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[hidden]');
       };
       const name = (el) => el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`;
-      const boxes = [...document.querySelectorAll('[data-fit], .ov-box, .modal-body, .home-inner, .lobby-inner, .draft')].filter(visible);
+      const boxes = [...document.querySelectorAll('[data-fit], .ov-box, .modal-body, .home-inner, .room-directory, .lobby-inner, .draft')].filter(visible);
       const overflow = boxes.filter((el) => el.scrollHeight > el.clientHeight + 1).map((el) => `${name(el)} ${el.scrollHeight}>${el.clientHeight}`);
       const outside = [...document.querySelectorAll('button, input, a[href]')].filter(visible)
         .filter((el) => !el.closest('#tokens, .parade'))
@@ -64,31 +65,46 @@ async function measure(page, sizes, screen, home, expectOverlay) {
   await page.waitForTimeout(200);
 }
 
-async function openAndMeasure(page, sizes, home, opener, screen) {
+async function openAndMeasure(page, sizes, home, opener, screen, extra = []) {
   const button = page.locator(opener).first();
   if (!(await button.count())) return;
   await button.click();
   await page.locator('#modal .modal-box').waitFor({ state: 'visible' });
   await page.waitForTimeout(400);
   await measure(page, sizes, screen, home);
+  // 弹窗里的筛选/切换后再量一遍（图鉴筛选二代、地图图鉴混合四条、规则书末页变数卡）
+  for (const [name, action] of extra) {
+    await action();
+    await page.waitForTimeout(400);
+    await measure(page, sizes, `${screen}-${name}`, home);
+  }
   await page.locator('#mClose').click();
   await page.locator('#modal').waitFor({ state: 'hidden' });
 }
 
-async function playThrough(app, label, sizes) {
+async function playThrough(app, label, sizes, edition) {
   const home = sizes[0];
   const page = await app.page(`${label}验收`, { width: home[0], height: home[1] });
   await page.waitForTimeout(900);
   await measure(page, sizes, `${label}-home`, home);
-  await openAndMeasure(page, sizes, home, '#home [data-open="rules"]', `${label}-rules`);
-  await openAndMeasure(page, sizes, home, '#home [data-open="gallery"]', `${label}-gallery`);
-  await openAndMeasure(page, sizes, home, '#home [data-open="tracks"]', `${label}-tracks`);
+  // 首页模式选择器：说明文字最长的二代也要一屏放下
+  await page.locator('#editionSeg [data-ed="v2"]').click();
+  await measure(page, sizes, `${label}-home-v2`, home);
+  await page.locator('#editionSeg [data-ed="v1"]').click();
+  const lastPage = async () => { for (let i = 0; i < 20 && await page.locator('#mPager [data-pg="1"]:not([disabled])').count(); i++) await page.locator('#mPager [data-pg="1"]').click(); };
+  await openAndMeasure(page, sizes, home, '#home [data-open="rules"]', `${label}-rules`, [['last', lastPage]]);
+  await openAndMeasure(page, sizes, home, '#home [data-open="gallery"]', `${label}-gallery`, [['v2', () => page.locator('#modal button[data-gf="v2"]:visible').click()]]);
+  await openAndMeasure(page, sizes, home, '#home [data-open="tracks"]', `${label}-tracks`, [['mix', () => page.locator('#tgEds [data-ed="mix"]').click()]]);
 
   await page.locator('#createBtn').click();
   await page.locator('#lobby').waitFor({ state: 'visible' });
   await page.locator('#addAI').click();
   await page.locator('#addAI').click();
   await page.waitForFunction(() => document.querySelectorAll('#seats .seat:not(.empty)').length >= 3);
+  if (edition !== 'v1') {
+    await page.locator(`#lobbyEdition [data-ed="${edition}"]`).click();
+    await page.waitForFunction(ed => window.__testRoom && window.__testRoom.edition === ed, edition);
+  }
   await page.waitForTimeout(400);
   await measure(page, sizes, `${label}-lobby`, home);
   await page.locator('#startBtn').click();
@@ -122,8 +138,11 @@ async function playThrough(app, label, sizes) {
   }
   for (const k of ['draft', 'pick', 'race', 'results', 'final']) if (!captured.has(k)) failures.push(`${label}：没有抓到 ${k} 界面`);
 
+  const played = (await state(page)).game.snap.edition;
+  if (played !== edition) failures.push(`${label}：对局模式 ${played}，应为 ${edition}`);
   await page.locator('#toHome').click();
   await page.locator('#home').waitFor({ state: 'visible' });
+  if (label === 'mobile') await page.locator('#editionSeg [data-ed="mix"]').click();
   await page.locator('#watchBtn').click();
   await page.locator('#game').waitFor({ state: 'visible' });
   await page.waitForFunction(() => window.__hn().phase === 'race' && !document.getElementById('overlay').innerHTML, null, { timeout: 120000 }).catch(() => {});
@@ -134,8 +153,8 @@ async function playThrough(app, label, sizes) {
   const app = await launch();
   try {
     await Promise.all([
-      playThrough(app, 'mobile', MOBILE),
-      playThrough(app, 'desktop', DESKTOP),
+      playThrough(app, 'mobile', MOBILE, 'v1'),
+      playThrough(app, 'desktop', DESKTOP, 'v2'),
     ]);
   } finally {
     await app.close();
