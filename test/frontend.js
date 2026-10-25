@@ -307,11 +307,13 @@ const { clickTop } = require('./browser-helper');
     await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
     // 非 OPEN 时动作不应发送、锁定或展示成功。
     await page.evaluate(() => { window.__fakeSocket.readyState = 3; });
-    await page.locator('#pickCards .pickable').first().click();
+    // 手机出战：点头像只是查看，再点「派 TA 上场」才提交
+    const pickPhone = async () => { await page.locator('#pickCards .pickable').first().click(); await page.locator('#pickDetail .dd-btn.go').click(); };
+    await pickPhone();
     assert.equal((await page.evaluate(() => window.__hn())).locked, false);
     assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'act').length), 0);
     await page.evaluate(() => { window.__fakeSocket.readyState = 1; });
-    await page.locator('#pickCards .pickable').first().click();
+    await pickPhone();
     assert.equal((await page.evaluate(() => window.__hn())).locked, true);
     assert.equal(await page.evaluate(() => window.__fakeMessages.filter(m => m.type === 'act').length), 1);
     // 同 ID 的 full 与别人 done 都不是本人的提交确认。

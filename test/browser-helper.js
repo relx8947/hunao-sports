@@ -213,6 +213,10 @@ async function step(page) {
     if (selector === '#draftCards .rcard.pickable' && await page.evaluate(() => !!document.querySelector('#draft.ig'))) {
       await page.locator('#draftDetail .dd-btn.go').first().click({ timeout: 1500 });
     }
+    // 手机出战：同样先点头像再点「派 TA 上场」
+    if (selector === '#pickCards .rcard.pickable' && await page.evaluate(() => !!document.querySelector('#overlay .pickig'))) {
+      await page.locator('#pickDetail .dd-btn.go').first().click({ timeout: 1500 });
+    }
     const after = await page.evaluate(() => window.__testSent.filter(message => message.type === 'act').length);
     return after > before;
   } catch (error) {

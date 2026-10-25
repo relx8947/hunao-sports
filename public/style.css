@@ -2671,5 +2671,55 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   #game .draft.ig .my-team { padding: 3px 8px; }
 }
 
+/* 手机出战复用选秀的头像格/技能栏样式 */
+#overlay .pickig #pickCards .rcard { --w: 100%; width: 100%; height: 100%; min-height: 0; display: block; border-radius: 12px; box-shadow: 2px 3px 0 var(--ink); }
+#overlay .pickig #pickCards .rcard .art { position: absolute; inset: 0; height: auto; border-bottom: 0; display: block; }
+#overlay .pickig #pickCards .rcard .art svg { position: absolute; left: 0; top: 2px; width: 100%; height: calc(100% - 22px); }
+#overlay .pickig #pickCards .rcard .art .nm {
+  display: block; left: 0; right: 0; top: auto; bottom: 0; padding: 0 2px; border: 0; border-top: 2px solid var(--ink); border-radius: 0;
+  font-size: 12px; line-height: 17px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#overlay .pickig #pickCards .rcard .txt { display: none; }
+#overlay .pickig #pickCards .rcard.taken { pointer-events: auto; cursor: pointer; }
+#overlay .pickig #pickCards .rcard.taken .art .nm { opacity: .55; }
+#overlay .pickig #pickCards .rcard .owner.taken-by { left: 50%; top: 40%; padding: 1px 6px; font-size: 10.5px; line-height: 14px; border-width: 1.5px; }
+#overlay .pickig #pickCards .rcard.pickable:hover, #overlay .pickig #pickCards .rcard.pickable:active { transform: none; box-shadow: 2px 3px 0 var(--ink); }
+#overlay .pickig #pickCards .rcard.sel { z-index: 3; transform: scale(1.05); box-shadow: 0 0 0 3px var(--yellow), 0 0 0 5.5px var(--ink); }
+#overlay .pickig #pickCards .rcard.sel.taken { box-shadow: 0 0 0 3px #fff, 0 0 0 5.5px var(--ink3); }
+#overlay .pickig .draft-detail {
+  flex: none; width: 100%; max-width: 560px; min-height: 104px; display: grid; grid-template-columns: 62px minmax(0, 1fr) 86px; gap: 9px; align-items: center;
+  padding: 8px 9px; background: var(--paper); border: 2.5px solid var(--ink); border-radius: 14px; box-shadow: var(--shadow-sm);
+}
+#overlay .pickig .draft-detail[hidden] { display: none; }
+#overlay .pickig .draft-detail.empty { display: flex; justify-content: center; text-align: center; color: var(--ink2); font-size: 13px; font-weight: 800; }
+#overlay .pickig #pickCards .rcard.sel { transform: none; box-shadow: 0 0 0 3px var(--yellow), 0 0 0 5px var(--ink); }
+#overlay .pickig #pickCards .rcard.sel::after {
+  content: "✓"; position: absolute; right: -4px; top: -5px; z-index: 4; width: 22px; height: 22px; display: grid; place-items: center;
+  border: 2px solid var(--ink); border-radius: 50%; background: var(--yellow); color: var(--ink); font-size: 14px; font-weight: 900; line-height: 1;
+}
+#overlay .pickig #pickCards .rcard.sel.taken::after { background: #fff; color: var(--ink3); }
+#overlay .pickig #pickCards .rcard.taken { filter: grayscale(1) brightness(.75); }
+#overlay .pickig .draft-detail { display: flex; flex-direction: column; align-items: stretch; align-content: stretch; gap: 7px; padding: 0; min-height: 0; background: none; border: 0; box-shadow: none; }
+#overlay .pickig .draft-detail[hidden] { display: none; }
+#overlay .pickig .draft-detail.empty { display: flex; justify-content: flex-start; text-align: left; font-size: inherit; color: inherit; }
+/* —— 手机出战：深色面板，和选秀同款 —— */
+#overlay .ov-box.pickig { width: min(560px, 100%); padding: 14px 10px 10px; background: rgba(22, 18, 34, .94); color: #fff; border-radius: 18px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .08), 0 8px 30px rgba(0, 0, 0, .5); gap: 8px; overflow: hidden; }
+#overlay .pickig h2 { font-size: 19px; letter-spacing: 2px; color: #fff; }
+#overlay .pickig .sub { margin: 0; font-size: 12.5px; color: rgba(255, 255, 255, .75); }
+#overlay .pickig #pickCards.pg-cards { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); grid-auto-rows: 138px; gap: 9px; width: 100%; max-width: none; margin: 0; padding: 4px; overflow: visible; flex: none; }
+#overlay .pickig .draft-detail { flex: none; }
+#overlay .pickig #pickCards .rcard.sel::after { right: 5px; top: 5px; }
+#overlay .pickig #pickCards .rcard, #overlay .pickig .pick-status span { color: var(--ink); }
+#overlay .pickig .pick-status { margin-top: 0; }
+@media (max-height: 700px) and (orientation: portrait) { #overlay .pickig #pickCards.pg-cards { grid-auto-rows: 104px; } }
+@media (max-height: 600px) and (orientation: portrait) { #overlay .pickig #pickCards.pg-cards { grid-auto-rows: 78px; gap: 7px; } #overlay .ov-box.pickig { padding-top: 10px; gap: 6px; } }
+@media (max-height: 520px) and (orientation: landscape) {
+  #overlay .ov-box.pickig { display: grid; width: min(760px, 100%); grid-template-columns: minmax(0, 1fr) 260px; grid-template-rows: auto auto minmax(0, 1fr) auto; column-gap: 10px; padding: 8px 10px; }
+  #overlay .pickig h2, #overlay .pickig .sub { grid-column: 1 / -1; }
+  #overlay .pickig #pickCards.pg-cards { grid-column: 1; grid-row: 3; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 156px; align-content: center; }
+  #overlay .pickig .draft-detail { grid-column: 2; grid-row: 3; }
+  #overlay .pickig .pick-status { grid-column: 1 / -1; }
+}
+
 /* 竖屏赛道是主角：底部行动面板压到最矮，名次差距那一行收起（名次在玩家栏里也看得到） */
 .board.tall .tc-gap { display: none; }

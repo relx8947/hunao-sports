@@ -3339,6 +3339,7 @@
     const hint = idx < 3 ? '后面的比赛分更高，王牌可以留到后面' : '最后一场，全力以赴！';
     const canPick = mineOpts && !answered && !sending && connection === 'ready';
     const cards = mineOpts && !answered ? mineOpts.map((o, k) => rcard(o.v, { cls: canPick ? 'pickable deal' : 'dim', k })).join('') : '';
+    if (phoneDraft()) return showPickOverlayPhone(d, { key, canPick, answered, sending, cards, idx, hint, n: mineOpts && !answered ? mineOpts.length : 0 });
     showOverlay(`<div class="ov-box card"><h2>第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}</h2>
       <p class="sub">冠军 ${GOLD[idx]} 分 · 亚军 ${SILVER[idx]} 分 · ${sending ? '正在提交，等待服务器确认…' : connection !== 'ready' ? '断线中，重连同步后可重新选择' : canPick ? `派谁上场？${hint}` : answered ? '你的出牌已确认，等待其他人…' : '等待其他人出牌…'}</p>
       <div class="ov-cards" id="pickCards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div><div class="pick-status" id="pickStatus"></div></div>`, 'pick');
@@ -3349,6 +3350,39 @@
       el.onclick = canPick ? () => { if (answer(d, el.dataset.id)) { Sound.card(); el.classList.add('chosen'); } } : () => { denyCue(); nudge(el); };
     }
     if (canPick) focusFirst('#pickCards .rcard.pickable:not([hidden])', `pick:${d.id}`);
+  }
+  // 手机出战：和选秀同一套「头像格 + 固定技能栏 + 底部确认」，点头像只查看，点「派 TA 上场」才提交
+  let pSel = null, pSelFor = null;
+  function showPickOverlayPhone(d, o) {
+    if (pSelFor !== d.id) { pSelFor = d.id; pSel = null; }
+    const sub = o.sending ? '正在提交，等待服务器确认…' : connection !== 'ready' ? '断线中，重连同步后可重新选择' : o.answered ? '你的出牌已确认，等待其他人…' : o.canPick ? `冠军 ${GOLD[o.idx]} 分 · 亚军 ${SILVER[o.idx]} 分` : '等待其他人出牌…';
+    showOverlay(`<div class="ov-box pickig" style="--cols:${o.n <= 4 ? 2 : 3}"><h2>第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}</h2><p class="sub">${sub}</p>
+      <div class="ov-cards pg-cards" id="pickCards">${o.cards}</div><div class="draft-detail pg-detail" id="pickDetail"></div><div class="pick-status" id="pickStatus"></div></div>`, 'pick');
+    overlayDecision = o.key;
+    updatePickStatus(d);
+    const detail = () => {
+      const box = $('#pickDetail');
+      if (!box) return;
+      for (const c of $$('#pickCards .rcard')) c.classList.toggle('sel', c.dataset.id === pSel);
+      const r = pSel && R[pSel];
+      let info, btn;
+      if (r) {
+        box.style.setProperty('--rc', rcol(pSel));
+        info = `<div class="dd-art">${art(pSel)}</div><div class="dd-tx"><div class="dd-name"><b>${esc(r.name)}</b><span class="sk">${esc(r.skill)}</span></div><p>${esc(r.text)}</p>${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>`;
+      } else info = `<span>${o.canPick ? `点一下头像查看技能。${o.hint}` : o.answered ? '你的出战已确认' : '请稍候'}</span>`;
+      if (o.answered || o.sending) btn = `<button class="dd-btn" disabled><b>${o.sending ? '提交中…' : '已确认'}</b><small>等待其他人</small></button>`;
+      else if (!o.canPick) btn = '<button class="dd-btn" disabled><b>请稍候</b><small>同步中</small></button>';
+      else if (!r) btn = '<button class="dd-btn" disabled><b>派 TA 上场</b><small>先点一个头像</small></button>';
+      else btn = `<button class="dd-btn go"><b>派 TA 上场</b><small>第 ${vs.raceNo} 场 · ${esc(r.name)}</small></button>`;
+      box.className = 'draft-detail pg-detail' + (r ? '' : ' empty');
+      box.innerHTML = `<div class="dd-info">${info}</div>${btn}`;
+      const go = $('.dd-btn.go', box);
+      if (go) go.onclick = () => { if (answer(d, pSel)) { Sound.card(); $$('#pickCards .rcard').forEach((c) => { c.onclick = null; c.classList.remove('pickable'); }); const ch = $(`#pickCards .rcard[data-id="${pSel}"]`); if (ch) ch.classList.add('chosen'); } };
+    };
+    for (const el of $$('#pickCards .rcard')) {
+      el.onclick = o.canPick ? () => { pSel = el.dataset.id; Sound.click(); detail(); } : () => { denyCue(); nudge(el); };
+    }
+    detail();
   }
   // 出战 / 选择浮层里的卡牌放不下时分页
   function fitOverlayCards(fresh) {
