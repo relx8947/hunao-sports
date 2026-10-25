@@ -1915,19 +1915,14 @@
       ? '<span class="tc-pos bad">摔倒中 · 本回合爬起来，不掷骰</span>'
       : `<span class="tc-pos" title="在第 ${r.pos} 格，离终点还差 ${left} 格">第 <b>${r.pos}</b> 格 · 差 <b>${left}</b> 格</span>`;
     const gap = rk ? `<div class="tc-gap ${rk.cls}"><i>${rk.rank}</i><span>${esc(rk.text)}</span></div>` : '';
-    // 行动顺序：当前行动者在最前，最多显示 4 位，你的选手标「你」
-    const order = turnOrder();
-    const q = order.slice(0, 4).map((x, k) => `<i class="tq ${k === 0 ? 'now' : ''} ${x.seat === you && isParticipant() ? 'me' : ''}" style="--c:${PCOL[x.seat % 6]}" title="${k === 0 ? '正在行动' : `第 ${k} 位`}：${esc(pname(vs.players[x.seat]))}的${esc(R[x.rid].name)}">${art(x.rid)}${x.seat === you && isParticipant() ? '<em>你</em>' : ''}</i>`).join('<span class="tq-arr" aria-hidden="true"></span>');
-    const more = order.length > 4 ? `<span class="tq-more">+${order.length - 4}</span>` : '';
-    const cue = ahead == null ? '' : `<span class="tc-cue ${ahead === 0 ? 'mine' : ahead === 1 ? 'soon' : ''}">${aheadText(ahead)}</span>`;
     tc.hidden = false;
     tc.style.setProperty('--c', PCOL[r.seat % 6]);
     tc.style.setProperty('--rc', rcol(r.rid));
-    tc.innerHTML = `${cue}<div class="tc-head"><div class="tc-ava">${art(r.rid)}</div><div class="tc-who"><span class="tc-player">${esc(pname(p))}${r.seat === you ? ' · 你' : p.ai ? ' · AI' : ''}</span><b>${esc(base.name)}</b></div></div>
+    tc.innerHTML = `<div class="tc-head"><div class="tc-ava">${art(r.rid)}</div><div class="tc-who"><span class="tc-player">${esc(pname(p))}${r.seat === you ? ' · 你' : p.ai ? ' · AI' : ''}</span><b>${esc(base.name)}</b></div></div>
       <div class="tc-bar" aria-hidden="true"><em style="width:${Math.round(r.pos / FIN * 100)}%"></em></div>
       ${pw ? `<div class="tc-skill"><span class="sk">借用「${esc(pw.skill)}」</span><em>来自${esc(pw.name)}</em></div>` : ''}
       ${gap}
-      <div class="tc-st ${r.tripped ? 'bad' : ''}">${pos}${order.length > 1 ? `<span class="tc-q" aria-label="行动顺序">${q}${more}</span>` : ''}</div>`;
+      <div class="tc-st ${r.tripped ? 'bad' : ''}">${pos}</div>`;
     if (tcRid !== r.rid) { tc.classList.remove('in'); void tc.offsetWidth; tc.classList.add('in'); tcRid = r.rid; }
     // 读屏：只在「下一个就是你」时提醒一次（轮到你由出牌提示负责播报）
     if (ahead !== 1) tcSoonSaid = null;
@@ -2119,8 +2114,7 @@
     const info = text && typeof text === 'object' ? text : null;
     let html = '', plain = '';
     if (info && info.kind === 'skill') {
-      const col = info.seat != null ? `style="--c:${PCOL[info.seat % 6]}"` : '';
-      html = `<span class="com-skill" ${col}><small class="cs-tag">技能</small><b class="cs-name">「${esc(info.skill)}」</b><i class="cs-who">${esc(info.who)}${info.borrowed ? `（借自${esc(info.borrowed)}）` : ''}</i><em class="cs-eff${[...String(info.effect)].length <= 14 ? ' nw' : ''}">${esc(info.effect)}</em></span>`;
+      // 画面上的技能提示由 skillCallout 的小提示条负责，解说条里不再重复，只给读屏播报
       plain = `${info.who} 发动「${info.skill}」：${info.effect}`;
     } else if (text) {
       plain = String(text).replace(/（AI）/g, '');
@@ -2764,122 +2758,32 @@
     if (!el || !el.style.left) return;
     drawArc(tokenPt(el), to, second ? 'swap2' : kind, 620 / Math.min(speed, 1.5), el.style.getPropertyValue('--c'));
   }
-  // 技能提示卡的落点：在棋盘坐标里挑一个不压行动卡、骰子、解说和被影响棋子的位置。
-  // 优先贴着发动者（上/下带小尖角）；贴不下就放到棋盘空白处，另画一条引线连回发动者。
-  function calloutSpot(card, pt, cw, hitEls) {
-    const [W, H] = VB();
-    const fl = $('#floaters');
-    const box = fl.getBoundingClientRect();
-    const k = W / (box.width || 1);
-    const ch = card.offsetHeight * k || 90;
-    const vbRect = (r, pad = 0) => ({ x: (r.left - box.left) * k - pad, y: (r.top - box.top) * k - pad, w: r.width * k + pad * 2, h: r.height * k + pad * 2 });
-    const obs = [];
-    const add = (el, wgt, pad) => { if (!el) return; const r = el.getBoundingClientRect(); if (r.width && r.height) obs.push({ ...vbRect(r, pad), wgt }); };
-    const tc = $('#turnCard');
-    if (tc && !tc.hidden) add(tc, 6, 4);
-    // 骰子区：骰子可能稍后才出现，按中央区域中间一块预留
-    const main = $('#center .center-main');
-    if (main) {
-      const m = vbRect(main.getBoundingClientRect());
-      const dw = Math.min(m.w, 230), dh = Math.min(m.h, 130);
-      obs.push({ x: m.x + (m.w - dw) / 2, y: m.y + (m.h - dh) / 2 - 8, w: dw, h: dh, wgt: 4 });
-      obs.push({ x: m.x, y: m.y + m.h - 64, w: m.w, h: 64, wgt: 1.5 });
-    }
-    for (const d of $$('#diceZone > *')) add(d, 4, 4);
-    for (const t of hitEls) add(t, 8, 6);
-    for (const t of $$('#tokens .token')) if (!hitEls.includes(t)) add(t, 1.5, 0);
-    const tok = 30;
-    obs.push({ x: pt.x - tok, y: pt.y - tok, w: tok * 2, h: tok * 2, wgt: 8 });
-    const area = cw * ch;
-    const cost = (x, y) => {
-      let c = 0;
-      for (const o of obs) {
-        const ix = Math.min(x + cw, o.x + o.w) - Math.max(x, o.x), iy = Math.min(y + ch, o.y + o.h) - Math.max(y, o.y);
-        if (ix > 0 && iy > 0) c += o.wgt * ix * iy / area * 100;
-      }
-      return c;
-    };
-    const clampX = (x) => Math.max(6, Math.min(W - cw - 6, x));
-    const clampY = (y) => Math.max(6, Math.min(H - ch - 6, y));
-    const off = layout === 'tall' ? 30 : 34;
-    let best = null;
-    const consider = (x, y, side, extra) => {
-      const c = cost(x, y) + extra;
-      if (!best || c < best.c) best = { x, y, side, c };
-    };
-    // 1) 贴着发动者：上方或下方，尖角在卡片宽度内滑动
-    for (const side of ['above', 'below']) {
-      const y = side === 'above' ? pt.y - off - ch : pt.y + off;
-      if (y < 4 || y + ch > H - 4) continue;
-      for (let f = 0; f <= 1.0001; f += 0.125) {
-        const x = clampX(pt.x - 18 - f * (cw - 36));
-        if (pt.x - x < 16 || pt.x - x > cw - 16) continue;
-        consider(x, y, side, Math.abs(f - 0.5) * 2);
-      }
-    }
-    // 2) 棋盘内任意空白处（带引线），离发动者越远代价越高
-    if (best && best.c > 3) {
-      for (let y = 6; y <= H - ch - 6; y += 12) {
-        for (let x = 6; x <= W - cw - 6; x += 16) {
-          const cx = Math.max(x, Math.min(x + cw, pt.x)), cy = Math.max(y, Math.min(y + ch, pt.y));
-          consider(x, y, 'free', 4 + Math.hypot(cx - pt.x, cy - pt.y) / 18);
-        }
-      }
-    }
-    if (!best) best = { x: clampX(pt.x - cw / 2), y: clampY(pt.y < H * 0.3 ? pt.y + off : pt.y - off - ch), side: pt.y < H * 0.3 ? 'below' : 'above' };
-    return { x: best.x, y: best.y, w: cw, h: ch, side: best.side, ax: Math.max(16, Math.min(cw - 16, pt.x - best.x)) };
-  }
-  function calloutLeader(spot, pt, color, life) {
-    if (reducedMotion.matches) return;
-    const svg = arcLayer();
-    // 从卡片边缘离发动者最近的点连到棋子边缘
-    const ex = Math.max(spot.x + 10, Math.min(spot.x + spot.w - 10, pt.x)), ey = Math.max(spot.y + 8, Math.min(spot.y + spot.h - 8, pt.y));
-    const d = Math.hypot(pt.x - ex, pt.y - ey);
-    if (d < 32) return;
-    const r = (layout === 'tall' ? 25 : 29) + 2;
-    const tx = pt.x - (pt.x - ex) / d * r, ty = pt.y - (pt.y - ey) / d * r;
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.setAttribute('class', 'sk-arc skc-lead');
-    g.style.setProperty('--ac', color);
-    const p = `M${ex.toFixed(1)} ${ey.toFixed(1)} L${tx.toFixed(1)} ${ty.toFixed(1)}`;
-    g.innerHTML = `<path class="under" d="${p}" pathLength="1"/><path class="over" d="${p}" pathLength="1"/><circle class="dot" cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="6"/>`;
-    svg.appendChild(g);
-    animationLater(() => g.classList.add('out'), life);
-    animationLater(() => g.remove(), life + 320);
-  }
-  // 技能提示卡
+  // 技能提示：棋盘顶部一条细小的单行提示（不压骰子、不压行动卡）；发动者棋子亮一圈，受影响者有弧线与抖动
   function skillCallout(rid, key, targets = []) {
     const info = R[key];
     if (!info || fast) return false;
     const el = tokenOf(rid);
     const r = vr(rid);
-    const [W, H] = VB();
-    const fl = $('#floaters');
-    for (const old of $$('.skc', fl)) { old.classList.add('out'); setTimeout(() => old.remove(), 220); }
-    const owner = r && vs.players[r.seat] ? vs.players[r.seat].name.replace(/（AI）$/, '') : '';
+    const board = $('#board');
+    for (const old of $$('.skt', board)) { old.classList.add('out'); setTimeout(() => old.remove(), 200); }
     const col = r ? PCOL[r.seat % 6] : INK;
-    const who = R[rid] ? R[rid].name : '';
-    const card = document.createElement('div');
-    card.className = 'skc';
-    card.style.setProperty('--c', col);
-    card.innerHTML = `<div class="skc-av">${art(rid)}</div><div class="skc-tx"><b>${esc(info.skill)}</b><span>${esc(owner ? `${owner} · ${who}` : who)}${key !== rid ? `（借用${esc(info.name)}）` : ''}</span><i>${esc(info.text)}</i></div>`;
-    const cw = layout === 'tall' ? 280 : 330;
-    const pt = el && el.style.left ? tokenPt(el) : { x: W / 2, y: H / 2 };
-    card.classList.add(layout === 'tall' ? 'tall' : 'wide');
-    card.style.visibility = 'hidden';
-    fl.appendChild(card);
-    const spot = calloutSpot(card, pt, cw, targets.filter((t) => t !== rid).map(tokenOf).filter(Boolean));
-    card.style.left = `${spot.x / W * 100}%`;
-    card.style.top = `${spot.y / H * 100}%`;
-    card.style.setProperty('--ax', spot.ax);
-    card.classList.add(spot.side);
-    card.style.visibility = '';
-    // 卡片没贴在发动者旁边时（为了避开行动卡/骰子），用一条引线连回发动者
-    if (spot.side === 'free') calloutLeader(spot, pt, col, Math.max(1000, 1700 / speed));
+    const tip = document.createElement('div');
+    tip.className = 'skt';
+    tip.style.setProperty('--c', col);
+    // 照 APK：只在发动者头顶弹一个对话气泡，里面只有技能名
+    tip.innerHTML = `<b>${esc(info.skill)}</b>`;
+    board.appendChild(tip);
+    if (el) {
+      const br = board.getBoundingClientRect(), tr = el.getBoundingClientRect(), tw = tip.offsetWidth;
+      const cx = tr.left + tr.width / 2 - br.left;
+      tip.style.left = `${Math.min(Math.max(cx, tw / 2 + 4), br.width - tw / 2 - 4)}px`;
+      tip.style.top = `${Math.max(tr.top - br.top - 4, tip.offsetHeight + 4)}px`;
+      tip.style.setProperty('--tail', `${cx - Math.min(Math.max(cx, tw / 2 + 4), br.width - tw / 2 - 4)}px`);
+    }
     const voiced = playSfx('callout');
-    const life = reducedMotion.matches ? 1200 : Math.max(1000, 1700 / speed);
-    animationLater(() => card.classList.add('out'), life);
-    animationLater(() => card.remove(), life + 260);
+    const life = reducedMotion.matches ? 1000 : Math.max(800, 1300 / speed);
+    animationLater(() => tip.classList.add('out'), life);
+    animationLater(() => tip.remove(), life + 220);
     if (el) restartClass(el, 'sk-cast', 1000);
     // 解说文字由 WP-B 在 case 'power' 里统一出（commentary(skillLine(e))），这里只管画面
     for (const t of targets) {
@@ -3056,7 +2960,7 @@
   }
   function showRevealOverlay(picks) {
     const cards = picks.map((p, k) => `<div class="flip ${p.seat === you ? 'mine' : ''}" style="--k:${k}"><div class="face">${rcard(p.rid, { mini: true })}</div><div class="face back"></div><div class="who" style="color:${PCOL[p.seat % 6]}">${esc(vs.players[p.seat].name)}${p.seat === you ? '（你）' : ''}</div></div>`).join('');
-    showOverlay(`<div class="ov-box ${phoneDraft() ? 'pickig reveal' : 'card'}"><h2>第 ${vs.raceNo} 场 · 选手登场</h2><p class="sub">${TRACKS[vs.track].name}</p><div class="reveal-grid">${cards}</div><div style="height:30px"></div></div>`, 'reveal');
+    showOverlay(`<div class="ov-box ${phoneDraft() ? 'pickig reveal' : 'card'}"><h2>第 ${vs.raceNo} 场 · 选手登场</h2><p class="sub">${TRACKS[vs.track].name}</p><div class="reveal-grid" style="--n:${picks.length}">${cards}</div><div style="height:30px"></div></div>`, 'reveal');
   }
   /* ---------- WP-C：单场结算 / 终局庆祝 ---------- */
   // 单场结算停留由 timing.js 统一定义（WP-A）；旧版没有这个常量时按 4.5 秒
@@ -3342,7 +3246,7 @@
     if (phoneDraft()) return showPickOverlayPhone(d, { key, canPick, answered, sending, cards, idx, hint, n: mineOpts && !answered ? mineOpts.length : 0 });
     showOverlay(`<div class="ov-box card"><h2>第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}</h2>
       <p class="sub">冠军 ${GOLD[idx]} 分 · 亚军 ${SILVER[idx]} 分 · ${sending ? '正在提交，等待服务器确认…' : connection !== 'ready' ? '断线中，重连同步后可重新选择' : canPick ? `派谁上场？${hint}` : answered ? '你的出牌已确认，等待其他人…' : '等待其他人出牌…'}</p>
-      <div class="ov-cards" id="pickCards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div><div class="pick-status" id="pickStatus"></div></div>`, 'pick');
+      <div class="ov-cards" id="pickCards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div><div class="pick-status" id="pickStatus" hidden></div></div>`, 'pick');
     overlayDecision = key;
     updatePickStatus(d);
     fitOverlayCards(true);
@@ -3357,7 +3261,7 @@
     if (pSelFor !== d.id) { pSelFor = d.id; pSel = null; }
     const sub = o.sending ? '正在提交，等待服务器确认…' : connection !== 'ready' ? '断线中，重连同步后可重新选择' : o.answered ? '你的出牌已确认，等待其他人…' : o.canPick ? `冠军 ${GOLD[o.idx]} 分 · 亚军 ${SILVER[o.idx]} 分` : '等待其他人出牌…';
     showOverlay(`<div class="ov-box pickig" style="--cols:${o.n <= 4 ? 2 : 3}"><h2>第 ${vs.raceNo} 场 · ${TRACKS[vs.track].name}</h2><p class="sub">${sub}</p>
-      <div class="ov-cards pg-cards" id="pickCards">${o.cards}</div><div class="draft-detail pg-detail" id="pickDetail"></div><div class="pick-status" id="pickStatus"></div></div>`, 'pick');
+      <div class="ov-cards pg-cards" id="pickCards">${o.cards}</div><div class="draft-detail pg-detail" id="pickDetail"></div><div class="pick-status" id="pickStatus" hidden></div></div>`, 'pick');
     overlayDecision = o.key;
     updatePickStatus(d);
     const detail = () => {
@@ -3390,7 +3294,7 @@
     let sel = n === 1 && o.canPick ? o.items[0].v : null;
     const cards = o.items.map((it, k) => rcard(it.rid, { cls: o.canPick ? 'pickable deal' : 'dim', k }).replace('class="rcard', `data-v="${esc(it.v)}" class="rcard`)).join('');
     showOverlay(`<div class="ov-box pickig${n === 1 ? ' one' : ''}" style="--cols:${n === 3 ? 3 : n <= 4 ? 2 : 3};--lc:${Math.min(n, 4)}"><h2>${esc(o.title)}</h2><p class="sub">${esc(o.sub)}</p>
-      <div class="ov-cards pg-cards" id="pickCards">${cards}</div><div class="draft-detail pg-detail" id="pickDetail"></div>${o.status ? '<div class="pick-status" id="pickStatus"></div>' : ''}</div>`, o.kind);
+      <div class="ov-cards pg-cards" id="pickCards">${cards}</div><div class="draft-detail pg-detail" id="pickDetail"></div>${o.status ? '<div class="pick-status" id="pickStatus" hidden></div>' : ''}</div>`, o.kind);
     overlayDecision = o.decision;
     if (o.status) updatePickStatus(o.d);
     const send = (v) => { if (answer(o.d, v)) { Sound.card(); if (o.after) o.after(); } };
@@ -3425,10 +3329,27 @@
     if (fresh && pagers.ov) pagers.ov.anchor = 0;
     paginate('ov', box, () => $$('.rcard', box), $('#ovPager'));
   }
-  function updatePickStatus(d) {
+  // 选人浮层底部只留一条细倒计时：别人选没选好与你无关，超时由服务器兜底
+  let pickTimerTick = null;
+  function updatePickStatus() {
+    clearInterval(pickTimerTick); pickTimerTick = null;
     const box = $('#pickStatus');
     if (!box) return;
-    box.innerHTML = d.seats.map((s) => `<span class="${d.done.includes(s) ? 'ok' : ''}" style="border-color:${PCOL[s % 6]}">${d.done.includes(s) ? `<span class="ico">${icon('check')}</span>` : ''}${esc(vs.players[s].name)}</span>`).join('');
+    const remain = deadlineAt - Date.now();
+    if (!deadlineAt || remain <= 0 || remain > 120000) { box.hidden = true; return; }
+    if (!timerDuration) timerDuration = remain;
+    const total = timerDuration;
+    box.hidden = false;
+    box.innerHTML = '<em></em>';
+    const bar = box.firstChild;
+    const tick = () => {
+      if (!box.isConnected) { clearInterval(pickTimerTick); pickTimerTick = null; return; }
+      const ms = Math.max(0, deadlineAt - Date.now());
+      bar.style.width = `${Math.min(100, ms / total * 100)}%`;
+      box.classList.toggle('urgent', ms > 0 && ms <= 5000);
+      if (!ms) { clearInterval(pickTimerTick); pickTimerTick = null; }
+    };
+    tick(); pickTimerTick = setInterval(tick, 200);
   }
 
   function showChooseOverlay(d, title, sub) {
@@ -5197,7 +5118,7 @@
     showOverlay(`<div class="ov-box card v2-swapmeet"><h2>变数卡 · 跳蚤市场</h2><p class="sub">${esc(sub)}</p>
       <div class="ov-cards" id="pickCards" data-fit>${cards}</div><div class="pager ov-pager" id="ovPager" hidden></div>
       ${canPick ? `<div class="ov-actions">${keep ? `<button class="btn" data-v="keep">${esc(keep.label)}</button>` : ''}${swap ? `<button class="btn primary" data-v="swap">${esc(swap.label)}</button>` : ''}</div>` : ''}
-      <div class="pick-status" id="pickStatus"></div></div>`, 'pick');
+      <div class="pick-status" id="pickStatus" hidden></div></div>`, 'pick');
     overlayDecision = key;
     updatePickStatus(d);
     fitOverlayCards(true);
