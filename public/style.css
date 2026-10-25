@@ -2608,5 +2608,62 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   #game .draft.ig > .my-team { grid-column: 1 / -1; justify-self: center; }
 }
 
+/* —— 仿 APK「招募参赛者」：86% 深色遮罩 + 标题 + 头像格 + 固定高度技能栏 + 底部固定「选 TA」；所有区块高度固定，换人时什么都不跳 —— */
+#game .draft.ig { background: rgba(22, 18, 34, .88); border-radius: 18px; padding: 8px 8px 7px; gap: 6px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .06); }
+#game .draft.ig::before { content: "招募参赛者"; flex: none; display: block; text-align: center; font-size: 17px; font-weight: 900; letter-spacing: 3px; color: #fff; line-height: 24px; }
+#game .draft.ig #draftOrder { padding: 0 4px; justify-content: center; }
+#game .draft.ig #draftOrder .do { background: rgba(255, 255, 255, .08); }
+#game .draft.ig #draftOrder .do.past { background: var(--c); }
+#game .draft.ig #draftOrder .do.now { background: var(--c); }
+#game .draft.ig #draftOrder .do.me:not(.now) { background: #fff; color: var(--ink); }
+#game .draft.ig #draftOrder .do-cue { background: rgba(255, 255, 255, .14); color: #fff; }
+#game .draft.ig #draftOrder .do-cue.soon { background: var(--yellow); color: var(--ink); }
+#game .draft.ig #draftOrder .do-cue.mine { background: var(--red); color: #fff; }
+#game .draft.ig #draftCards .rcard.sel { transform: none; box-shadow: 0 0 0 3px var(--yellow), 0 0 0 5px var(--ink); }
+#game .draft.ig #draftCards .rcard.sel::after {
+  content: "✓"; position: absolute; right: -4px; top: -5px; z-index: 4; width: 22px; height: 22px; display: grid; place-items: center;
+  border: 2px solid var(--ink); border-radius: 50%; background: var(--yellow); color: var(--ink); font-size: 14px; font-weight: 900; line-height: 1;
+}
+#game .draft.ig #draftCards .rcard.sel.taken::after { background: #fff; color: var(--ink3); }
+#game .draft.ig #draftCards .rcard.taken { filter: grayscale(1) brightness(.75); }
+#game .draft.ig .draft-detail { display: flex; flex-direction: column; align-items: stretch; align-content: stretch; gap: 7px; padding: 0; min-height: 0; background: none; border: 0; box-shadow: none; }
+#game .draft.ig .draft-detail[hidden] { display: none; }
+#game .draft.ig .draft-detail.empty { display: flex; justify-content: flex-start; text-align: left; font-size: inherit; color: inherit; }
+.dd-info { flex: none; height: 126px; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 10px; background: rgba(255, 255, 255, .1); border: 1.5px solid rgba(255, 255, 255, .22); border-radius: 14px; overflow: hidden; }
+.draft-detail.empty .dd-info { display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, .7); font-size: 13px; font-weight: 800; }
+.dd-info .dd-tx { height: 100%; overflow-y: auto; scrollbar-width: none; }
+.dd-info .dd-tx::-webkit-scrollbar { display: none; }
+.dd-info .dd-name b, .dd-info .dd-tx p { color: #fff; }
+.dd-info .dd-tx small { color: rgba(255, 255, 255, .62); }
+.dd-info .dd-name .sk { background: var(--yellow); color: var(--ink); }
+.draft-detail.taken .dd-info { filter: none; }
+.dd-btn { flex: none; width: 100%; height: 54px; }
+.dd-btn:disabled { background: #8D86A8; color: rgba(255, 255, 255, .82); border-color: rgba(255, 255, 255, .25); box-shadow: none; }
+#game .draft.ig .my-team { background: rgba(255, 255, 255, .1); border: 1.5px solid rgba(255, 255, 255, .22); box-shadow: none; color: #fff; }
+#game .draft.ig .my-team .mt-slot:not(.filled) { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .35); color: rgba(255, 255, 255, .8); }
+#game .draft.ig .my-team > :first-child { color: #fff; }
+@media (max-height: 520px) and (orientation: landscape) {
+  #game .draft.ig { padding: 6px 8px 6px 70px; }
+  #game .draft.ig::before { display: none; }
+  #game .draft.ig > .draft-detail { justify-content: flex-start; }
+  .dd-info { height: auto; min-height: 0; flex: 1 1 0; grid-template-columns: 50px minmax(0, 1fr); }
+}
+
+/* 矮屏手机（竖屏）：收起标题，技能栏与按钮变矮，仍保持固定高度 */
+@media (max-height: 800px) and (orientation: portrait) {
+  #game .draft.ig::before { display: none; }
+  .dd-info { height: 106px; padding: 7px 9px; grid-template-columns: 54px minmax(0, 1fr); }
+  .dd-art { width: 54px; height: 54px; }
+  .dd-tx p { font-size: 12px; line-height: 1.32; }
+  .dd-btn { height: 46px; min-height: 0; }
+  #game .draft.ig .mt-slot { width: 44px; height: 44px; }
+}
+@media (max-height: 700px) and (orientation: portrait) {
+  #game .draft.ig #draftOrder { display: none; }
+  .dd-info { height: 96px; }
+  #game .draft.ig .mt-slot { width: 36px; height: 36px; }
+  #game .draft.ig .my-team { padding: 3px 8px; }
+}
+
 /* 竖屏赛道是主角：底部行动面板压到最矮，名次差距那一行收起（名次在玩家栏里也看得到） */
 .board.tall .tc-gap { display: none; }

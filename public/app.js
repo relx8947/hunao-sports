@@ -1727,7 +1727,7 @@
     if (!tile) {
       dSel = null;
       box.className = 'draft-detail empty';
-      box.innerHTML = '<span>点一下上面的头像，在这里查看 TA 的技能</span>';
+      box.innerHTML = '<div class="dd-info"><span>点一下上面的头像，在这里查看 TA 的技能</span></div><button class="dd-btn" disabled><b>选 TA</b><small>先点一个头像</small></button>';
       return;
     }
     const r = R[dSel];
@@ -1741,7 +1741,7 @@
     else btn = `<button class="dd-btn" disabled><b>等待中</b><small>${d && d.kind === 'draft' && vs.players[d.seat] ? `${esc(vs.players[d.seat].name.replace(/（AI）$/, ''))} 在选` : '还没轮到你'}</small></button>`;
     box.className = `draft-detail${takenSeat != null ? ' taken' : ''}`;
     box.style.setProperty('--rc', rcol(dSel));
-    box.innerHTML = `<div class="dd-art">${art(dSel)}</div><div class="dd-tx"><div class="dd-name"><b>${esc(r.name)}</b><span class="sk">${esc(r.skill)}</span></div><p>${esc(r.text)}</p>${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>${btn}`;
+    box.innerHTML = `<div class="dd-info"><div class="dd-art">${art(dSel)}</div><div class="dd-tx"><div class="dd-name"><b>${esc(r.name)}</b><span class="sk">${esc(r.skill)}</span></div><p>${esc(r.text)}</p>${r.note ? `<small>${esc(r.note)}</small>` : ''}</div></div>${btn}`;
     const go = $('.dd-btn.go', box);
     if (go) go.onclick = () => {
       if (answer(d, dSel)) {
