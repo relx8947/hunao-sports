@@ -6,6 +6,7 @@ const { decide } = require('../game/ai');
 const { EDITIONS, DEFAULT_EDITION } = require('../game/tracks');
 const editionOf = (value) => (typeof value === 'string' && EDITIONS[value] ? value : DEFAULT_EDITION);
 const { batchMs } = require('../public/timing');
+const { createGameLog } = require('./gamelog');
 
 const AI_NAMES = ['阿呆', '小飞', '豆豆', '球球', '闪电', '胖虎', '米粒', '大卫', '可乐', '跳跳'];
 const EMOTES = new Set(['哈哈哈', '离谱！', '好耶', '救命', '666', '等等我']);
@@ -26,6 +27,9 @@ function createHub(options = {}) {
   const every = options.setInterval || setInterval;
   const cancelEvery = options.clearInterval || clearInterval;
   const random = options.random || Math.random;
+  // 对局日志：只有传了 logDir 才写盘（测试和 require 默认不写）
+  const gameLog = options.gameLog || createGameLog({ dir: options.logDir, now });
+  let lastPrune = now();
   const players = new Map(); // token -> { id, token, name, sockets:Set, room, touched }
   const byId = new Map();
   const rooms = new Map();
@@ -243,7 +247,14 @@ function createHub(options = {}) {
       if (!rooms.has(code)) return code;
     }
   }
+  function endLog(room, reason) {
+    if (!room.log) return;
+    const g = room.game;
+    room.log.end(reason, g ? { phase: g.phase, raceNo: g.raceNo, scores: g.players.map((p) => p.score) } : {});
+    room.log = null;
+  }
   function closeRoom(room, reason = 'closed') {
+    endLog(room, reason);
     stopTimer(room);
     room.timing = null;
     rooms.delete(room.code);
@@ -299,7 +310,7 @@ function createHub(options = {}) {
     const room = {
       code: newCode(), host: p.id, status: 'lobby', edition: editionOf(edition), seats: mode === 'spectator' ? [] : [{ pid: p.id, name: p.name, ai: false, autoMode: null }],
       ...(mode === 'spectator' ? { mode } : {}), spectators: new Set(),
-      clients: new Set(), game: null, gameId: null, timer: null, timing: null, scheduleVersion: 0, busyUntil: 0, touched: now(), speed: 1, deadline: 0,
+      clients: new Set(), game: null, gameId: null, timer: null, timing: null, scheduleVersion: 0, busyUntil: 0, touched: now(), speed: 1, deadline: 0, log: null,
     };
     for (let i = 0; i < aiCount; i++) appendAI(room);
     rooms.set(room.code, room);
@@ -370,7 +381,10 @@ function createHub(options = {}) {
     room.status = 'playing';
     // 决策 ID 只在局内递增；跨房间/重开必须用独立的随机局标识隔离旧标签动作。
     room.gameId = crypto.randomUUID();
-    room.game = new Game({ players: room.seats.map((s) => ({ name: s.name, ai: s.ai })), seed: Math.floor(random() * 2 ** 31), edition: room.edition });
+    endLog(room, 'replaced');
+    const seed = Math.floor(random() * 2 ** 31);
+    room.game = new Game({ players: room.seats.map((s) => ({ name: s.name, ai: s.ai })), seed, edition: room.edition });
+    room.log = gameLog.begin({ gameId: room.gameId, room: room.code, mode: room.mode || 'play', edition: room.edition, seed, players: room.seats.map((s) => ({ name: s.name, ai: !!s.ai })) });
     room.busyUntil = now();
     room.timing = null;
     room.game.start();
@@ -395,6 +409,7 @@ function createHub(options = {}) {
     stopTimer(room);
     room.timing = null;
     room.status = 'lobby';
+    endLog(room, 'lobby');
     room.game = null;
     room.gameId = null;
     room.busyUntil = 0;
@@ -450,12 +465,14 @@ function createHub(options = {}) {
   function flush(room, full) {
     settleBoost(room);
     const events = room.game.drain();
+    room.log?.events(events);
     const t = now();
     // 动画随倍速缩短；结算停留（Timing.FIXED）不缩短，免得下一场的选人浮层顶掉结果
     room.busyUntil = Math.max(room.busyUntil, t) + batchMs(events, room.speed);
     room.touched = t;
     if (room.game.phase === 'over') {
       room.status = 'over';
+      endLog(room, 'over');
       broadcastRoom(room);
     }
     schedule(room);
@@ -474,6 +491,7 @@ function createHub(options = {}) {
     if (typeof value !== 'string') return '无效选项';
     const err = room.game.answer(seat, id, value);
     if (err) return err;
+    room.log?.answer(seat, d, value, 'human');
     // 成功的真人操作明确接管；无效/过期动作不会偷偷取消托管。
     room.seats[seat].autoMode = null;
     flush(room);
@@ -530,11 +548,12 @@ function createHub(options = {}) {
       for (const seat of who) {
         if (g.pending !== d || !unanswered(d, seat)) continue;
         const st = room.seats[seat];
+        const by = st.ai ? 'ai' : !isAuto(room, st) || st.autoMode === 'timeout' ? 'timeout' : 'auto';
         if (!st.ai && !isAuto(room, st)) st.autoMode = 'timeout';
         const opts = d.simul ? d.optionsBySeat[seat] : d.options;
         let value = decide(g, d, seat);
         if (!opts.some((o) => o.v === value)) value = opts[0]?.v;
-        g.answer(seat, d.id, value);
+        if (!g.answer(seat, d.id, value)) room.log?.answer(seat, d, value, by);
       }
       flush(room);
     }, Math.max(0, soonest - t));
@@ -650,6 +669,7 @@ function createHub(options = {}) {
   function cleanup() {
     if (disposed) return;
     const t = now();
+    if (t - lastPrune >= 60 * 60 * 1000) { lastPrune = t; gameLog.prune(); }
     for (const room of rooms.values()) if (!viewers(room).length && t - room.touched >= ROOM_TTL) closeRoom(room, 'expired');
     for (const p of players.values()) {
       if (!openSockets(p).length && !p.room && t - p.touched >= PLAYER_TTL) { players.delete(p.token); byId.delete(p.id); }
@@ -689,7 +709,9 @@ function createHub(options = {}) {
       ...((type === 'lobby' || type === 'replay' || type === 'again') && room?.status === 'over' && now() < room.busyUntil ? { retryIn: Math.ceil(room.busyUntil - now()) } : {}),
     };
   }
-  return { handle, disconnect, rooms, cleanup, dispose, getDeadlineIn, recover, errorContext };
+  // 进程被 systemd 停掉前调用：给还在进行的对局补一条 end，复盘时能看出是重启打断的
+  function shutdownLogs() { for (const room of rooms.values()) endLog(room, 'shutdown'); }
+  return { handle, disconnect, rooms, cleanup, dispose, getDeadlineIn, recover, errorContext, shutdownLogs };
 }
 
 module.exports = { ...createHub(), createHub };

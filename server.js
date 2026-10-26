@@ -214,10 +214,14 @@ function createServer({ publicDir = PUBLIC, hub } = {}) {
 module.exports = { createServer };
 
 if (require.main === module) {
-  const server = createServer();
+  const logDir = process.env.HUNAO_LOG_DIR
+    || (process.env.STATE_DIRECTORY ? path.join(process.env.STATE_DIRECTORY.split(':')[0], 'games') : path.join(__dirname, 'logs', 'games'));
+  const hub = defaultHub.createHub({ logDir });
+  const server = createServer({ hub });
+  for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => { hub.shutdownLogs(); process.exit(0); });
   server.on('error', (err) => {
     console.error('服务启动失败', err.message);
     process.exitCode = 1;
   });
-  server.listen(PORT, HOST, () => console.log(`胡闹运动会 已启动：http://${HOST}:${PORT}`));
+  server.listen(PORT, HOST, () => console.log(`胡闹运动会 已启动：http://${HOST}:${PORT}，对局日志 ${logDir}`));
 }

@@ -10,3 +10,6 @@ coverage/
 /reference/magical-athlete-analysis/apk/*.apk
 /reference/magical-athlete-analysis.zip
 /reference/magical-athlete-analysis.zip.sha256
+
+# 本地对局日志（server/gamelog.js）
+/logs/
