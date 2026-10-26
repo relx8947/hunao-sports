@@ -740,6 +740,14 @@ class Game {
     }
   }
 
+  // 巨婴是「获得」技能的那一刻起生效：空指针离开它身后、蘑菇长出、神秘蛋孵出、冒牌货继承、模仿猫换抄……
+  // 这些时刻它可能已经和别人同格。统一在每次停格后和每个回合开始时扫一遍，把同格的人挤到身后一格。
+  *babySweep() {
+    for (const b of this.holders('hugebaby')) {
+      if (b.pos > 0 && b.pos < FINISH && this.at(b.pos, b).length) yield* this.shoveByBaby(b);
+    }
+  }
+
   /* ================= 移动 ================= */
   // kind: main | power | arrow | twist；opts.tripPassed：魔法健将掷 6 时绊倒被超过的人
   *move(r, amount, kind = 'power', opts = {}) {
@@ -791,8 +799,10 @@ class Game {
         return;
       }
       if (final !== pos) {
+        // 前进被巨婴挡回：去掉越过的格子；后退被推得更远（可能连着几个巨婴）：逐格补齐，路径不能跳格
         while (path.length && path[path.length - 1] !== final && (dir > 0 ? path[path.length - 1] > final : path[path.length - 1] < final)) path.pop();
-        if (path[path.length - 1] !== final) path.push(final);
+        let last = path.length ? path[path.length - 1] : from;
+        while (last !== final) { last += Math.sign(final - last); path.push(last); }
       }
       const passed = dir > 0 ? this.others(r).filter((o) => o.pos > from && o.pos < final) : [];
       const sharedBefore = this.at(from, r);
@@ -866,6 +876,7 @@ class Game {
     }
     for (const o of this.sortByTurn(finishers)) this.finish(o);
     yield* this.refreshCopies();
+    yield* this.babySweep();
   }
 
   // 停在某格之后的连锁：赛道格 → 当前玩家 → 其他玩家（顺时针）
@@ -875,6 +886,7 @@ class Game {
     // 前置连锁可能改变落点；只跳过位置相关触发，原移动的超车/同格历史仍须结算。
     // 巨婴落到有人的格子：把他们挤到身后一格（不算移动，视为停在那里）
     if (r.pos === final) yield* this.shoveByBaby(r);
+    yield* this.babySweep();
     const trig = [];
     const add = (order, fn) => trig.push({ order, fn });
     const sp = this.track.spaces[final];
@@ -1106,6 +1118,7 @@ class Game {
     this.resetTurnCounters();
     yield* this.refreshCopies();
     this.emit({ t: 'turn', seat: r.seat, rid: r.rid });
+    yield* this.babySweep();
     const startPos = r.pos;
     let skipMain = false;
     let penguin = false;
@@ -1296,7 +1309,8 @@ class Game {
   // r 为空时（玩家已没有场上运动员）用 seat 取固定点数；6 照样被派对杀手作废，因为是「任何人」掷出的 6
   *rollFor(r, seat) {
     let v = 0;
-    for (let k = 0; k < 6; k++) {
+    // 派对杀手：6 一直重掷到不是 6 为止（连掷 7 个 6 的概率约 28 万分之一，以前 6 次就放行是个漏洞）；100 次只是防死循环的保险
+    for (let k = 0; k < 100; k++) {
       const fixed = this.fixedFor(r ? r.seat : seat);
       v = fixed != null ? fixed : this.d6();
       if (this.edition === 'v1') return v;

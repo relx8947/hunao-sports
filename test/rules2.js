@@ -337,6 +337,22 @@ test('派对杀手：诅咒魔杖给已没有运动员的玩家掷的 6 也要�
   assert.strictEqual(ev(g, 'voided').length, 2);
   assert.strictEqual(ev(g, 'curse')[0].value, 2);
 });
+test('派对杀手：连续掷出 7 个 6 也要一直作废，直到不是 6', () => {
+  const g = setup([['hotel', 0], ['pooper', 20]]);
+  dice(g, [6, 6, 6, 6, 6, 6, 6, 2]);
+  turn(g, 'hotel');
+  assert.strictEqual(ev(g, 'voided').length, 7);
+  assert.strictEqual(R(g, 'hotel').pos, 2);
+});
+test('巨婴：空指针离开它身后、巨婴恢复技能的那一刻，把同格的人挤到身后一格', () => {
+  const g = setup([['nul', 3], ['hugebaby', 5], ['hotel', 5]], 'twisty', 'mix');
+  assert(!g.has(R(g, 'hugebaby'), 'hugebaby'), '空指针在身后时巨婴没有技能');
+  dice(g, [4]);
+  turn(g, 'nul');
+  assert.strictEqual(R(g, 'nul').pos, 7);
+  assert(g.has(R(g, 'hugebaby'), 'hugebaby'));
+  assert.strictEqual(R(g, 'hotel').pos, 4);
+});
 test('蘑菇：掷 1/2 抽一名运动员叠加技能（赛前技能跳过）', () => {
   const g = setup([['mush', 0], ['hotel', 20]]);
   g.deck = ['nepobaby', 'icarus'];
