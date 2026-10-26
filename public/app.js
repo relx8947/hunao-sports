@@ -150,6 +150,8 @@
   let timerTicker = null;
   let timerEnds = 0;
   let timerDuration = 0;
+  // 每个席位的倒计时：截止时间与本次决策的总时长（头像环用）
+  let seatDeadlines = {}, seatTotals = {};
   let deadlineId = null;
   let overlayHideTimer = null;
   let lastFullContext = null;
@@ -301,7 +303,7 @@
       // 关闭时不知道 act 是否被服务端处理；重连快照决定，不自动重发。
       clearTimeout(submitTimer); submitTimer = null;
       clearNavigation();
-      deadlineAt = 0;
+      deadlineAt = 0; seatDeadlines = {};
       setConnection('offline');
       clearPromptLive();
       if (!playing) renderPrompt();
@@ -336,9 +338,17 @@
     if (!d || d.id !== submitted.id || (d.simul && (d.done || []).includes(you))) clearSubmission();
   }
   function setDeadline(msg, id = deadlineId) {
-    if (id !== deadlineId) { deadlineAt = 0; timerEnds = 0; timerDuration = 0; deadlineId = id; }
+    if (id !== deadlineId) { deadlineAt = 0; timerEnds = 0; timerDuration = 0; seatDeadlines = {}; seatTotals = {}; deadlineId = id; }
     if (Object.prototype.hasOwnProperty.call(msg, 'deadlineIn')) {
       deadlineAt = Number.isFinite(msg.deadlineIn) && msg.deadlineIn > 0 ? Date.now() + msg.deadlineIn : 0;
+    }
+    if (Object.prototype.hasOwnProperty.call(msg, 'deadlines')) {
+      seatDeadlines = {};
+      for (const [seat, ms] of Object.entries(msg.deadlines || {})) {
+        if (!Number.isFinite(ms) || ms <= 0) continue;
+        seatDeadlines[seat] = Date.now() + ms;
+        if (!seatTotals[seat]) seatTotals[seat] = ms;
+      }
     }
   }
   function clearNavigation() {
@@ -415,7 +425,7 @@
         autoFlags = msg.auto || [];
         autoModes = msg.autoModes || [];
         if (msg.speed) speed = msg.speed;
-        setDeadline(isSpectator() ? { ...msg, deadlineIn: null } : msg, msg.snap.pending?.id ?? null);
+        setDeadline(isSpectator() ? { ...msg, deadlineIn: null, deadlines: null } : msg, msg.snap.pending?.id ?? null);
         reconcileSubmission(msg.snap);
         setConnection('ready');
         showScreen('game');
@@ -1593,6 +1603,7 @@
       playersHtml = html;
       box.innerHTML = html;
       fitPlayerNames();
+      syncAvatarRing();
     }
     refreshPlayerPop();
   }
@@ -2154,7 +2165,7 @@
     clearTimeout(comTimer);
     clearNavigation();
     if (!preserveSubmission) clearSubmission();
-    if (!preserveDeadline) { deadlineAt = 0; deadlineId = null; timerDuration = 0; }
+    if (!preserveDeadline) { deadlineAt = 0; deadlineId = null; timerDuration = 0; seatDeadlines = {}; seatTotals = {}; }
     lastFullContext = null;
     queue.length = 0; playing = false; fast = false;
     clearPromptLive(); hideTip(); hideOverlay(true);
@@ -3812,18 +3823,24 @@
     };
     tick(); timerTicker = setInterval(tick, 100);
   }
-  // 轮到你时，你自己的头像外圈是一圈随时间转着收缩的倒计时环（不显示数字）；决策条、选人浮层里的细条仍保留
+  // 谁在思考，谁的头像外圈就是一圈随时间顺时针收缩的倒计时环（不显示数字）
   function syncAvatarRing() {
     const box = $('#players');
-    if (!box) return;
-    const remain = deadlineAt - Date.now();
-    if (!deadlineAt || remain <= 0 || remain > 120000 || $('#game').hidden) {
-      if (box.hasAttribute('data-ring')) { box.removeAttribute('data-ring'); box.style.removeProperty('--ring'); }
-      return;
+    if (!box || $('#game').hidden) return;
+    const t = Date.now();
+    for (const row of box.children) {
+      const seat = String(row.dataset.seat);
+      let end = seatDeadlines[seat] || 0, total = seatTotals[seat] || 0;
+      // 兼容只带 deadlineIn 的消息：自己的席位退回用自己的倒计时
+      if (!end && Number(seat) === you && deadlineAt) { end = deadlineAt; total = timerDuration || end - t; }
+      const remain = end - t;
+      if (!end || remain <= 0 || remain > 120000) {
+        if (row.hasAttribute('data-ring')) { row.removeAttribute('data-ring'); row.style.removeProperty('--ring'); }
+        continue;
+      }
+      row.setAttribute('data-ring', remain <= 5000 ? 'urgent' : 'on');
+      row.style.setProperty('--ring', Math.min(1, remain / (total || remain)).toFixed(3));
     }
-    if (!timerDuration) timerDuration = remain;
-    box.setAttribute('data-ring', remain <= 5000 ? 'urgent' : 'on');
-    box.style.setProperty('--ring', Math.min(1, remain / timerDuration).toFixed(3));
   }
   setInterval(syncAvatarRing, 100);
   function yourTurnPing(id) {

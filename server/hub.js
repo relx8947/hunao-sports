@@ -131,13 +131,23 @@ function createHub(options = {}) {
     if (!entry || state.pausedAt != null || !room.game || !room.game.pending || !unanswered(room.game.pending, seat) || entry.mode !== 'human') return null;
     return Math.max(0, entry.humanAt - now());
   }
+  // 所有真人席位各自的剩余思考时间 { 座位: 毫秒 }，客户端据此在每个人的头像上画倒计时环
+  function deadlines(room) {
+    const state = room.timing, pending = room.game && room.game.pending;
+    if (!state || state.pausedAt != null || !pending) return null;
+    const out = {};
+    for (const [seat, entry] of state.due) {
+      if (entry.mode === 'human' && unanswered(pending, seat)) out[seat] = Math.max(0, entry.humanAt - now());
+    }
+    return Object.keys(out).length ? out : null;
+  }
   function gameMsg(room, p, events = [], full = false) {
     const seat = p ? seatOf(room, p.id) : -1;
-    return { type: 'game', gameId: room.gameId, edition: room.edition, you: seat, events, snap: room.game.snapshot(seat), full: !!full, auto: autoFlags(room), autoModes: autoModes(room), speed: room.speed, deadlineIn: deadlineIn(room, seat), ...(room.mode === 'spectator' ? { mode: room.mode } : {}) };
+    return { type: 'game', gameId: room.gameId, edition: room.edition, you: seat, events, snap: room.game.snapshot(seat), full: !!full, auto: autoFlags(room), autoModes: autoModes(room), speed: room.speed, deadlineIn: deadlineIn(room, seat), deadlines: deadlines(room), ...(room.mode === 'spectator' ? { mode: room.mode } : {}) };
   }
   function broadcastAuto(room) {
     if (!room.game) return;
-    for (const ws of viewers(room)) send(ws, { type: 'auto', gameId: room.gameId, auto: autoFlags(room), autoModes: autoModes(room), decisionId: room.game.pending ? room.game.pending.id : null, deadlineIn: deadlineIn(room, seatOf(room, ws.player.id)) });
+    for (const ws of viewers(room)) send(ws, { type: 'auto', gameId: room.gameId, auto: autoFlags(room), autoModes: autoModes(room), decisionId: room.game.pending ? room.game.pending.id : null, deadlineIn: deadlineIn(room, seatOf(room, ws.player.id)), deadlines: deadlines(room) });
   }
   function stopTimer(room) {
     cancel(room.timer);
@@ -425,7 +435,7 @@ function createHub(options = {}) {
     if (room.boost) return null;
     room.boost = { race: g.raceNo, prev: room.speed };
     room.speed = SKIP_SPEED;
-    for (const c of viewers(room)) send(c, { type: 'speed', speed: room.speed, boost: true, deadlineIn: deadlineIn(room, seatOf(room, c.player.id)) });
+    for (const c of viewers(room)) send(c, { type: 'speed', speed: room.speed, boost: true, deadlineIn: deadlineIn(room, seatOf(room, c.player.id)), deadlines: deadlines(room) });
     return null;
   }
   // 快进只覆盖本场：一旦这一批事件跑出了本场（结算、下一场或终局），在排程前恢复原速度。
@@ -547,7 +557,7 @@ function createHub(options = {}) {
     if (typeof room === 'string') return room;
     room.speed = SPEEDS[(SPEEDS.indexOf(room.speed) + 1) % SPEEDS.length];
     // 已发放的决策时间保持不变，新事件批次使用新速度。
-    for (const c of viewers(room)) send(c, { type: 'speed', speed: room.speed, deadlineIn: deadlineIn(room, seatOf(room, c.player.id)) });
+    for (const c of viewers(room)) send(c, { type: 'speed', speed: room.speed, deadlineIn: deadlineIn(room, seatOf(room, c.player.id)), deadlines: deadlines(room) });
     return null;
   }
   function emote(ws, key) {
@@ -674,6 +684,7 @@ function createHub(options = {}) {
     return {
       gameId: room?.game ? room.gameId : null,
       deadlineIn: getDeadlineIn(ws),
+      deadlines: (() => { const room = currentRoom(ws); return room ? deadlines(room) : null; })(),
       decisionId: room?.game?.pending?.id ?? null,
       ...((type === 'lobby' || type === 'replay' || type === 'again') && room?.status === 'over' && now() < room.busyUntil ? { retryIn: Math.ceil(room.busyUntil - now()) } : {}),
     };

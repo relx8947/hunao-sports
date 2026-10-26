@@ -623,9 +623,6 @@
   }
 
   if (typeof document !== 'undefined') {
-    // 调度循环在 AudioContext 瞬间不是 running（设备切换、iOS interrupted、标签页短暂隐藏）时会自己停下；
-    // 这里每秒兜底叫醒一次（已在跑时 wake 什么都不做），不用再靠开关音乐来重启
-    setInterval(() => { if (enabled && E && !timer) wake(); }, 1000);
     document.addEventListener('visibilitychange', () => {
       if (!E) return;
       if (document.hidden) { setVol(0, 0.12); clearTimeout(timer); timer = 0; }
@@ -638,6 +635,8 @@
     attach(ac) {
       if (E && E.ac === ac) return;
       E = createEngine(ac, ac.destination);
+      // 调度循环在 AudioContext 不是 running 时会自己停下；等它真正转回 running 的那一刻再叫醒，不轮询
+      ac.addEventListener('statechange', () => { if (ac.state === 'running') wake(); });
       if (enabled) { setVol(VOLUME, 0.8); wake(); }
     },
     setEnabled(on) {
