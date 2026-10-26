@@ -3812,6 +3812,20 @@
     };
     tick(); timerTicker = setInterval(tick, 100);
   }
+  // 轮到你时，你自己的头像外圈是一圈随时间转着收缩的倒计时环（不显示数字）；决策条、选人浮层里的细条仍保留
+  function syncAvatarRing() {
+    const box = $('#players');
+    if (!box) return;
+    const remain = deadlineAt - Date.now();
+    if (!deadlineAt || remain <= 0 || remain > 120000 || $('#game').hidden) {
+      if (box.hasAttribute('data-ring')) { box.removeAttribute('data-ring'); box.style.removeProperty('--ring'); }
+      return;
+    }
+    if (!timerDuration) timerDuration = remain;
+    box.setAttribute('data-ring', remain <= 5000 ? 'urgent' : 'on');
+    box.style.setProperty('--ring', Math.min(1, remain / timerDuration).toFixed(3));
+  }
+  setInterval(syncAvatarRing, 100);
   function yourTurnPing(id) {
     if (lastYourTurnId === id) return;
     lastYourTurnId = id;

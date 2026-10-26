@@ -2722,3 +2722,12 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 
 /* 竖屏赛道是主角：底部行动面板压到最矮，名次差距那一行收起（名次在玩家栏里也看得到） */
 .board.tall .tc-gap { display: none; }
+
+/* 倒计时头像环：把你头像原来的边框换成一圈随时间收缩的圆环（转动方向顺时针消失） */
+#players[data-ring] .prow.me .pav {
+  border-width: 4px; border-color: transparent; box-shadow: 0 0 0 2px var(--ink);
+  background: linear-gradient(var(--paper), var(--paper)) padding-box,
+    conic-gradient(from 0deg, var(--ring-c, #FFB703) calc(var(--ring, 1) * 1turn), rgba(35, 31, 51, .16) 0) border-box;
+}
+#players[data-ring="urgent"] .prow.me .pav { --ring-c: #FF4D3D; animation: ringUrgent .5s ease-in-out infinite alternate; }
+@keyframes ringUrgent { to { scale: 1.07; } }
