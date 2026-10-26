@@ -318,6 +318,25 @@ test('骰子先生：掷 6 颗挑重复点数；全不同不动', () => {
   turn(g, 'diceguy');
   assert.strictEqual(R(g, 'diceguy').pos, 0);
 });
+test('派对杀手：骰子先生一次掷 6 颗，其中的 6 都要作废重掷', () => {
+  const g = setup([['diceguy', 0], ['pooper', 5]]);
+  dice(g, [6, 3, 6, 5, 5, 1, 2, 4]);
+  turn(g, 'diceguy');
+  assert.deepStrictEqual(ev(g, 'rolls')[0].dice, [3, 5, 5, 1, 2, 4]);
+  assert.strictEqual(ev(g, 'voided').length, 2);
+  assert.strictEqual(R(g, 'pooper').pos, 7);
+});
+test('派对杀手：诅咒魔杖给已没有运动员的玩家掷的 6 也要作废重掷', () => {
+  const g = setup([['pooper', 0], ['hotel', 5]]);
+  g.racers[1].finished = 1; // 玩家 1 已冲线，没有场上运动员
+  g.twistActive = new Set(['cursewands']);
+  dice(g, [6, 6, 2]);
+  const gen = g.curseNext(1);
+  let r = gen.next(); while (!r.done) r = gen.next();
+  assert.strictEqual(r.value, (1 + 1 + 2) % 2);
+  assert.strictEqual(ev(g, 'voided').length, 2);
+  assert.strictEqual(ev(g, 'curse')[0].value, 2);
+});
 test('蘑菇：掷 1/2 抽一名运动员叠加技能（赛前技能跳过）', () => {
   const g = setup([['mush', 0], ['hotel', 20]]);
   g.deck = ['nepobaby', 'icarus'];

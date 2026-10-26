@@ -428,7 +428,7 @@ class Game {
   // 诅咒魔杖：每个玩家回合结束掷骰，跳过这么多名玩家（已完赛/淘汰的玩家也计数）
   *curseNext(seat) {
     const r = this.racerOfSeat(seat);
-    const v = r && this.active(r) ? yield* this.rollFor(r) : this.fixedFor(seat) ?? this.d6();
+    const v = yield* this.rollFor(r && this.active(r) ? r : null, seat);
     const next = (seat + 1 + v) % this.n;
     this.emit({ t: 'curse', seat, value: v, next, text: `诅咒魔杖：${this.players[seat].name} 掷出 ${v}，跳过 ${v} 名玩家，下一位是 ${this.players[next].name}` });
     return next;
@@ -1293,10 +1293,11 @@ class Game {
   fixedFor(seat) { return this.fixedRoll ? this.fixedRoll[seat] : undefined; }
   // 归属于某名运动员的一次掷骰：随机停止（固定点数）→ 电鳗（算 1）→ 派对杀手（6 作废重掷）。
   // 一代对局里等价于一次 d6()，不产生额外事件或随机消耗。
-  *rollFor(r) {
+  // r 为空时（玩家已没有场上运动员）用 seat 取固定点数；6 照样被派对杀手作废，因为是「任何人」掷出的 6
+  *rollFor(r, seat) {
     let v = 0;
     for (let k = 0; k < 6; k++) {
-      const fixed = r ? this.fixedFor(r.seat) : undefined;
+      const fixed = this.fixedFor(r ? r.seat : seat);
       v = fixed != null ? fixed : this.d6();
       if (this.edition === 'v1') return v;
       if (v !== 1 && r && this.active(r)) {
@@ -1438,7 +1439,7 @@ class Game {
         this.fixedRoll = {};
         for (const p of this.players) {
           const me = this.racerOfSeat(p.seat);
-          const v = me && this.active(me) ? yield* this.rollFor(me) : this.d6();
+          const v = yield* this.rollFor(me && this.active(me) ? me : null, p.seat);
           this.fixedRoll[p.seat] = v;
           this.emit({ t: 'fixedRoll', seat: p.seat, value: v, text: `${p.name} 掷出 ${v}，本场之后他的骰子都是 ${v}` });
         }
