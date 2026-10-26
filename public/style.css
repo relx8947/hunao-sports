@@ -307,6 +307,12 @@ input { font: inherit; color: inherit; }
 .legend { display: flex; gap: calc(8 * var(--u)); flex-wrap: wrap; justify-content: center; }
 .legend span { display: inline-flex; align-items: center; gap: calc(5 * var(--u)); padding: calc(3 * var(--u)) calc(10 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u)); background: rgba(255, 255, 255, .8); border: calc(2 * var(--u)) solid var(--ink); border-radius: 99px; font-size: calc(13 * var(--u)); font-weight: 800; }
 .legend svg { width: calc(24 * var(--u)); height: calc(24 * var(--u)); }
+.legend i { font-style: normal; }
+.you .you-auto { display: none; font-style: normal; }
+/* 竖屏棋盘中央窄：图例只留图标 + 效果，一行放下，不换行（换行的第二行会被回合卡盖住） */
+.board.tall .legend { flex-wrap: nowrap; gap: calc(5 * var(--u)); }
+.board.tall .legend span { white-space: nowrap; padding-right: calc(8 * var(--u)); }
+.board.tall .legend i { display: none; }
 .center.busy .center-track { opacity: .12; transform: scale(.94); }
 .dice-zone { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: calc(18 * var(--u)); }
 .commentary { position: absolute; left: 0; right: 0; bottom: calc(2 * var(--u)); font-size: calc(17 * var(--u)); font-weight: 800; color: var(--ink); min-height: 1.4em; }
@@ -2291,6 +2297,10 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
   #game .players .prow .pn b .you { left: -4px; background: var(--ink); color: #fff; text-shadow: none; border-color: #fff; box-shadow: 0 0 0 1.5px var(--ink); }
   #game .players .prow .pn b .auto { right: -4px; background: #fff; color: var(--ink2); text-shadow: none; }
   #game .players .prow .pn b .auto.ai { display: none; }
+  #game .players .prow .pn b .you .you-auto { display: inline; }
+  #game .players .prow .pn b .you + .auto { display: none; }
+  #game .players .prow .pn b .auto { left: -4px; right: auto; font-size: 0; }
+  #game .players .prow .pn b .auto::after { content: attr(data-short); font-size: 10px; }
   #game .players .prow .think { z-index: 4; top: -9px; right: -5px; padding: 0 5px; font-size: 9.5px; line-height: 14px; border-width: 1.5px; }
   #game .players .prow .soon-tag { display: none; }
   #game .players .prow .bubble { left: 0; right: 0; width: max-content; max-width: 150%; margin: 0 auto; top: -26px; font-size: 13px; padding: 3px 9px; }

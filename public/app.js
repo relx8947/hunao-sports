@@ -1144,7 +1144,7 @@
     Object.assign($('#center').style, { left: `${c.x / W * 100}%`, top: `${c.y / H * 100}%`, width: `${c.w / W * 100}%`, height: `${c.h / H * 100}%` });
     const t = TRACKS[trackKey];
     const legend = wild
-      ? `<div class="legend">${[['arrow', 2, '箭头：前进/后退'], ['rock', 0, '石头：摔倒'], ['star', 0, '星星：+1 分']].map(([ty, n, tx]) => `<span><svg viewBox="-24 -24 48 48">${spaceGlyph(ty, n, 0, 0, 1)}</svg>${tx}</span>`).join('')}</div>`
+      ? `<div class="legend">${[['arrow', 2, '箭头：', '前进/后退'], ['rock', 0, '石头：', '摔倒'], ['star', 0, '星星：', '+1 分']].map(([ty, n, kind, tx]) => `<span><svg viewBox="-24 -24 48 48">${spaceGlyph(ty, n, 0, 0, 1)}</svg><i>${kind}</i>${tx}</span>`).join('')}</div>`
       : '<small>一条平平无奇的跑道 · 全靠技能搞事</small>';
     // 实物版图中央是大块白色标题：英文名做主标题，中文名放在下面
     $('#centerTrack').innerHTML = `<b class="ct-en">${t.en.toUpperCase()}</b><small class="ct-cn">${t.name}</small>${legend}`;
@@ -1610,7 +1610,10 @@
   function playerTags(p) {
     const offline = !p.ai && room && room.seats[p.seat] && room.seats[p.seat].online === false;
     const modeLabel = offline ? '离线' : autoModes[p.seat] === 'timeout' ? '超时托管' : '托管';
-    return `${p.seat === you ? '<span class="you">你</span>' : ''}${(autoFlags[p.seat] || offline) && !p.ai ? `<span class="auto">${modeLabel}</span>` : ''}${p.ai ? '<span class="auto ai">AI</span>' : ''}`;
+    const auto = (autoFlags[p.seat] || offline) && !p.ai;
+    // 手机竖屏玩家卡只有六十来像素宽：「你」和托管合成一个标签（你·托管），不再两个标签互相压住
+    const short = offline ? '离线' : '托管';
+    return `${p.seat === you ? `<span class="you">你${auto ? `<em class="you-auto">·${short}</em>` : ''}</span>` : ''}${auto ? `<span class="auto" data-short="${short}">${modeLabel}</span>` : ''}${p.ai ? '<span class="auto ai">AI</span>' : ''}`;
   }
 
   /* ================= 玩家信息弹层：点头像看分数、角色名单、当前角色 ================= */
@@ -2689,6 +2692,8 @@
         if (x.t === 'swap') return x.a === src || x.b === src;
         if (x.t === 'chip') return !!srcRacer && x.seat === srcRacer.seat;
         if (x.t === 'move') return x.kind !== 'main' && (x.rid === src || (MOVES_OTHERS.has(e.key) && (tg.has(x.rid) || e.key === 'partyanimal')));
+        // 巨婴的效果只是把别人挤走；巨婴自己被瞬移（比如被催眠蛇拉过去）是起因，技能提示必须排在它后面
+        if (x.t === 'warp' && e.key === 'hugebaby') return tg.has(x.rid) && x.rid !== src;
         return x.rid === src || tg.has(x.rid);
       };
       let j = i;

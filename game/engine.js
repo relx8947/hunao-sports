@@ -1528,8 +1528,9 @@ class Game {
         const v = yield this.ask(r.seat, 'hypnotist', '催眠蛇：把谁瞬移到你身边？', opts);
         const o = this.byRid(v);
         if (v !== '_no' && this.active(o) && this.active(r)) {
-          yield* this.warp(o, r.pos, `被${this.nm(r)}催眠，瞬移过来`);
+          // 先报催眠蛇发动、再瞬移：被拉过去的人在落点引发的连锁（巨婴挤人等）要排在催眠之后播放
           yield* this.pw(r, 'hypnotist', 1, [o]);
+          yield* this.warp(o, r.pos, `被${this.nm(r)}催眠，瞬移过来`);
         }
       }
     }
