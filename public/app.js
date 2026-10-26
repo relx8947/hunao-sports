@@ -4599,6 +4599,10 @@
       badges.id = 'v2Badges'; badges.className = 'v2-badges'; badges.hidden = true;
       badges.addEventListener('click', onV2BadgeClick);
       badges.addEventListener('pointerleave', () => { if (matchMedia('(hover: hover)').matches) closeV2Pop(); });
+      // 详情弹开后，点屏幕上任何别的地方都收起（点徽标本身仍由 onV2BadgeClick 切换）
+      document.addEventListener('pointerdown', (e) => {
+        if (badges.dataset.open && !e.target.closest('#v2Badges')) closeV2Pop();
+      }, true);
       board.insertBefore(badges, $('#floaters'));
     }
     return { layer, badges };
