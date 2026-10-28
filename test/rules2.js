@@ -504,6 +504,13 @@ test('裸奔侠：一次移动超过人拿 1 分（超过多人也只 1 分，�
   run(g, g.warp(R(g, 'streaker'), 9));
   assert.strictEqual(g.score(0), 1);
 });
+test('裸奔侠：冲线那一步超过人也拿 1 分', () => {
+  const g = setup([['streaker', 27], ['hotel', 28], ['gloth', 1]]);
+  run(g, g.move(R(g, 'streaker'), 5, 'main'));
+  assert.strictEqual(R(g, 'streaker').finished, 1);
+  assert(ev(g, 'chip').some((e) => e.seat === 0 && e.text.includes('裸奔侠')), '冲线超车应得 1 分');
+  assert.strictEqual(g.score(0), 1 + 3);
+});
 test('电鳗：1 格内其他运动员掷出的骰子一律算 1', () => {
   const g = setup([['stunner', 4], ['hotel', 5], ['streaker', 0]]);
   dice(g, [5, 5]);

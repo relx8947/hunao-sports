@@ -812,6 +812,11 @@ class Game {
       const tw = this.track.twistAt;
       const twistHit = !!tw && this.twistDeck && !this.twistDone && from < tw && final >= tw;
       if (twistHit) this.twistDone = true;
+      // 裸奔侠：这次移动超过了人就当场拿 1 分——冲线那一步超车也算，不等落地后的箭头/冲线结算把它带走
+      if (passed.length && this.edition !== 'v1' && this.has(r, 'streaker')) {
+        this.giveChip(r.seat, 'bronze', 1, '裸奔侠一闪而过');
+        yield* this.pw(r, 'streaker', 1, passed);
+      }
       if (final === FINISH) {
         this.finish(r);
         if (skipped) yield* this.pw(r, 'leaptoad', skipped);
@@ -991,14 +996,6 @@ class Game {
           const hit = passed.filter((o) => this.active(o));
           for (const o of hit) this.trip(o, `被${this.nm(r)}超过`);
           if (hit.length) yield* this.pw(r, 'magicalathlete', 1, hit);
-        });
-      }
-      // 裸奔侠：这次移动超过了人就拿 1 分
-      if (this.has(r, 'streaker')) {
-        add(this.seatOrder(r.seat), function* () {
-          if (!this.active(r)) return;
-          this.giveChip(r.seat, 'bronze', 1, '裸奔侠一闪而过');
-          yield* this.pw(r, 'streaker', 1, passed);
         });
       }
     }
