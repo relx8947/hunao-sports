@@ -1489,7 +1489,8 @@
     $('#autoBtn').hidden = !isParticipant();
     $('#emotes').hidden = !isParticipant();
     $('#chatBtn').hidden = !isParticipant();
-    if (!isParticipant()) closeTopPops();
+    // 观众没有快捷聊天按钮：只收起聊天弹层。「更多」观众也在用，顶栏每次重绘都收会让它一放动画就缩回去
+    if (!isParticipant()) closeTopPops(false, '#emotes');
     const soundShort = { all: '音乐', sfx: '音效', off: '静音' }[Sound.mode] || '';
     $('#soundBtn').innerHTML = `<span class="ico">${icon(Sound.ui.icon)}</span><span class="lbl">声音</span><b class="st">${soundShort}</b>`;
     $('#soundBtn').title = Sound.ui.label;
@@ -4256,8 +4257,9 @@
   /* ================= 对局顶栏：手机竖屏的「更多」「快捷聊天」弹层 ================= */
   // 弹层本体就是 #topActions / #emotes（桌面上它们是常驻的，类名 .open 只在手机竖屏 CSS 里生效）
   const TOP_POPS = [['#moreBtn', '#topActions'], ['#chatBtn', '#emotes']];
-  function closeTopPops(focusBack) {
+  function closeTopPops(focusBack, only) {
     for (const [btn, pop] of TOP_POPS) {
+      if (only && pop !== only) continue;
       const b = $(btn), p = $(pop);
       if (!b || !p || !p.classList.contains('open')) continue;
       p.classList.remove('open');
