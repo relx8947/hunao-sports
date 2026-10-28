@@ -2784,3 +2784,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .prow.talking .pav, .seat.talking .ava { animation: none; outline-width: 4px; }
 }
+.voice-debug {
+  position: fixed; z-index: 90; left: 6px; bottom: calc(env(safe-area-inset-bottom) + 6px); margin: 0; max-width: calc(100vw - 12px);
+  padding: 6px 8px; border-radius: 8px; background: rgba(22, 18, 38, .86); color: #fff; font: 11px/1.45 ui-monospace, Menlo, monospace;
+  white-space: pre-wrap; pointer-events: none;
+}

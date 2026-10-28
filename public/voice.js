@@ -21,6 +21,9 @@
   const talking = new Set(); // 正在说话的连接 id（自己用 you）
   const heardAt = new Map(); // 连接 id -> 最近一次音量过线的时间
   let audioBox = null, talkChip = null;
+  // 网址带 voice=debug 时显示每条连接的路径、往返时间、抖动缓冲和丢包，排查延迟用
+  const DEBUG = new URLSearchParams(location.search).get('voice') === 'debug';
+  let debugBox = null, lastDebug = 0;
 
   const sid = () => Math.random().toString(36).slice(2, 10);
   const signal = (to, data) => hooks.send({ type: 'rtc', to, data });
@@ -279,6 +282,7 @@
       let stats;
       try { stats = await c.pc.getStats(); } catch (e) { continue; }
       c.lv ||= { in: {}, src: {} };
+      if (DEBUG && t - lastDebug > 1000) c.diag = diagnose(c, stats);
       stats.forEach((r) => {
         if (r.type === 'inbound-rtp' && r.kind === 'audio') {
           const p = peers.get(c.id);
@@ -307,8 +311,47 @@
     }
     // 有人说话时把背景音乐压低
     if (remote && window.Music && Music.duck) Music.duck();
+    if (DEBUG && t - lastDebug > 1000) { lastDebug = t; paintDebug(); }
     if (t - lastSync > 1000) { lastSync = t; sync(); }
     if ([...talking].join() !== was) paint();
+  }
+  function diagnose(c, stats) {
+    const d = { path: '?', rtt: null, buf: null, jitter: null, loss: null };
+    let pair = null;
+    stats.forEach((r) => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = stats.get(r.selectedCandidatePairId); });
+    if (!pair) stats.forEach((r) => { if (r.type === 'candidate-pair' && (r.selected || (r.nominated && r.state === 'succeeded'))) pair = r; });
+    if (pair) {
+      const lo = stats.get(pair.localCandidateId), re = stats.get(pair.remoteCandidateId);
+      d.path = `${lo ? lo.candidateType : '?'}→${re ? re.candidateType : '?'} ${lo ? lo.protocol || '' : ''}${lo && lo.relayProtocol ? `/中继${lo.relayProtocol}` : ''}`;
+      if (typeof pair.currentRoundTripTime === 'number') d.rtt = Math.round(pair.currentRoundTripTime * 1000);
+    }
+    stats.forEach((r) => {
+      if (r.type !== 'inbound-rtp' || r.kind !== 'audio') return;
+      const prev = c.lv.jb || {};
+      if (typeof r.jitterBufferDelay === 'number' && r.jitterBufferEmittedCount > (prev.n || 0)) {
+        d.buf = Math.round(((r.jitterBufferDelay - (prev.d || 0)) / (r.jitterBufferEmittedCount - (prev.n || 0))) * 1000);
+      }
+      c.lv.jb = { d: r.jitterBufferDelay, n: r.jitterBufferEmittedCount };
+      if (typeof r.jitter === 'number') d.jitter = Math.round(r.jitter * 1000);
+      const total = (r.packetsReceived || 0) + (r.packetsLost || 0);
+      if (total) d.loss = Math.round(((r.packetsLost || 0) / total) * 1000) / 10;
+    });
+    return d;
+  }
+  function paintDebug() {
+    if (!debugBox) {
+      debugBox = document.createElement('pre');
+      debugBox.className = 'voice-debug';
+      document.body.appendChild(debugBox);
+    }
+    const ms = (v) => (v == null ? '-' : `${v}ms`);
+    const lines = [...conns.values()].map((c) => {
+      const p = peers.get(c.id), d = c.diag || {};
+      // 估算单程：网络半程 + 抖动缓冲 + 约 40ms 采集/编解码/播放
+      const est = d.rtt != null && d.buf != null ? Math.round(d.rtt / 2 + d.buf + 40) : null;
+      return `${p ? p.name : c.id} ${c.pc.connectionState}\n 路径 ${d.path || '?'}  往返 ${ms(d.rtt)}\n 缓冲 ${ms(d.buf)}  抖动 ${ms(d.jitter)}  丢包 ${d.loss == null ? '-' : `${d.loss}%`}\n 估算单程 ${ms(est)}`;
+    });
+    debugBox.textContent = `语音诊断 ${micOnline() ? '已开麦' : '未开麦'}\n${lines.join('\n') || '没有连接（双方都没开麦）'}`;
   }
   // 座位上的状态：mic-on 开着麦，talking 正在说话（app.js 重绘玩家栏/座位后会调 paint 补上）
   function seatClass(seat) {
