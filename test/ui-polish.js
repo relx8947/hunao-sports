@@ -45,7 +45,7 @@ const { launch, step, state, clickTop } = require('./browser-helper');
         await page.waitForTimeout(450); // 等弹出动画播完再量尺寸
         assert.equal(await page.locator('#moreBtn').getAttribute('aria-expanded'), 'true');
         const items = await page.evaluate(() => [...document.querySelectorAll('#topActions .icon-btn')].filter(e => e.getClientRects().length).map(e => { const r = e.getBoundingClientRect(); return { id: e.id || e.dataset.open, h: r.height, w: r.width, left: r.left, right: r.right, bottom: r.bottom, name: e.getAttribute('aria-label') }; }));
-        assert.deepEqual(items.map(i => i.id).sort(), ['autoBtn', 'recordsBtn', 'rules', 'soundBtn', 'speedBtn'], `更多弹层的项目：${JSON.stringify(items)}`);
+        assert.deepEqual(items.map(i => i.id).sort(), ['autoBtn', 'earBtn', 'recordsBtn', 'rules', 'soundBtn', 'speedBtn'], `更多弹层的项目：${JSON.stringify(items)}`);
         assert(items.every(i => i.h >= 40 && i.w >= 40 && i.left >= 0 && i.right <= 393 && i.bottom <= 852 && i.name), `更多弹层触控目标/视口/aria-label：${JSON.stringify(items)}`);
         await page.mouse.click(3, 420); // 弹层之外的空白处
         assert.equal(await page.locator('#topActions.open').count(), 0, '点外部关闭更多弹层');

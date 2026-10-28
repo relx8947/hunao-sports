@@ -104,6 +104,7 @@
       <div class="lobby-inner">
         <button class="btn ghost back" id="leaveLobby"><span class="ico" data-icon="door"></span>离开</button>
         <button class="icon-btn sound-toggle lobby-sound" data-sound type="button"></button>
+        <button class="icon-btn voice-mic lobby-mic" id="lobbyMic" type="button" data-voice-mic hidden></button>
         <div class="room-head">
           <div class="room-label">房间码</div>
           <div class="room-code" id="roomCode" aria-live="polite">----</div>
@@ -144,10 +145,12 @@
           <button class="icon-btn" id="speedBtn" title="动画速度" aria-label="动画速度"><span class="ico" data-icon="bolt"></span><span class="lbl">动画速度</span><b id="speedLabel">1x</b></button>
           <button class="icon-btn" id="autoBtn" title="托管" aria-label="托管"><span class="ico" data-icon="robot"></span><b>托管</b></button>
           <button class="icon-btn" id="soundBtn" title="声音" aria-label="声音"><span class="ico" data-icon="sound"></span></button>
+          <button class="icon-btn voice-ear" id="earBtn" type="button" data-voice-ear hidden></button>
           <button class="icon-btn" id="recordsBtn" title="赛事纪录" aria-label="赛事纪录"><span class="ico" data-icon="trophy"></span><span class="lbl">赛事纪录</span></button>
           <button class="icon-btn" data-open="rules" title="玩法说明" aria-label="玩法说明"><span class="ico" data-icon="book"></span><span class="lbl">玩法说明</span></button>
         </div>
         <button class="icon-btn tb-more" id="moreBtn" type="button" title="更多" aria-label="更多：速度、托管、声音、纪录、规则" aria-haspopup="true" aria-expanded="false" aria-controls="topActions"><span class="ico" data-icon="more"></span></button>
+        <button class="icon-btn tb-mic voice-mic" id="micBtn" type="button" data-voice-mic hidden></button>
         <button class="icon-btn tb-chat" id="chatBtn" type="button" title="快捷聊天" aria-label="快捷聊天" aria-haspopup="true" aria-expanded="false" aria-controls="emotes"><span class="ico" data-icon="chat"></span></button>
         <button class="icon-btn" id="leaveGame" title="离开" aria-label="离开对局"><span class="ico" data-icon="door"></span></button>
       </header>
@@ -202,6 +205,7 @@
   <script src="board-art.js" defer></script>
   <script src="sound.js" defer></script>
   <script src="music.js" defer></script>
+  <script src="voice.js" defer></script>
   <script src="racers-data.js" defer></script>
   <script src="app.js" defer></script>
 </body>

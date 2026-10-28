@@ -304,6 +304,7 @@
       clearTimeout(submitTimer); submitTimer = null;
       clearNavigation();
       deadlineAt = 0; seatDeadlines = {};
+      if (window.Voice) Voice.offline();
       setConnection('offline');
       clearPromptLive();
       if (!playing) renderPrompt();
@@ -460,6 +461,7 @@
         break;
       case 'error': {
         if (msg.for === 'act' && msg.gameId != null && msg.gameId !== gameId) break;
+        if (msg.for === 'voice' && window.Voice) Voice.denied();
         setDeadline(msg);
         const raw = typeof msg.msg === 'string' ? msg.msg : '';
         if (msg.for === 'hello') {
@@ -488,6 +490,8 @@
         break;
       }
       case 'emote': showEmote(msg.seat, msg.key); break;
+      case 'voice': if (window.Voice) Voice.roster(msg); break;
+      case 'rtc': if (window.Voice) Voice.signal(msg); break;
       case 'auto':
         if (msg.gameId != null && msg.gameId !== gameId) break;
         autoFlags = msg.auto; autoModes = msg.autoModes || [];
@@ -571,6 +575,7 @@
   /* ================= 屏幕 ================= */
   function returnHome({ keepInvite = false } = {}) {
     resetGameView();
+    if (window.Voice) Voice.leave();
     room = null; gameId = null; gameMode = null; you = -1; autoFlags = []; autoModes = [];
     if (!keepInvite) { inviteRoom = null; setRoomUrl(null); }
     setConnection('ready');
@@ -843,13 +848,13 @@
       const tag = s.ai ? 'AI 选手' : `<span class="dot ${s.online ? '' : 'off'}"></span>${s.pid === room.host ? '房主' : '玩家'}${mine ? ' · 你' : ''}`;
       if (mine && (lobbyEdit || unnamed)) {
         // 行内起名：受邀者第一次进来是随机名，直接在自己的座位上改
-        return `<div class="seat wpd-me wpd-editing${unnamed ? ' wpd-unnamed' : ''}" style="--c:${c}"><div class="ava">${inner}</div>`
+        return `<div class="seat wpd-me wpd-editing${unnamed ? ' wpd-unnamed' : ''}" data-seat="${i}" style="--c:${c}"><div class="ava">${inner}</div>`
           + `<label class="wpd-name"><input id="lobbyName" maxlength="12" value="${unnamed ? '' : esc(s.name)}" placeholder="${esc(s.name)}" aria-label="你的名字" autocomplete="nickname" enterkeyhint="done" spellcheck="false">${wpdIcon('pencil')}</label>`
           + `<div class="tag wpd-name-tag">${unnamed ? '点上面起个名字' : '回车保存'}</div></div>`;
       }
       // 自己的名字本身就是改名按钮（带一支小铅笔），点一下变回输入框
       const nm = mine ? `<button type="button" class="nm wpd-nm" data-rename aria-label="改名，现在叫 ${esc(s.name)}"><span>${esc(s.name)}</span>${wpdIcon('pencil')}</button>` : `<div class="nm">${esc(s.name)}</div>`;
-      return `<div class="seat${mine ? ' wpd-me' : ''}" style="--c:${c}">${kick}<div class="ava">${inner}</div>${nm}<div class="tag">${tag}</div></div>`;
+      return `<div class="seat${mine ? ' wpd-me' : ''}" data-seat="${i}" style="--c:${c}">${kick}<div class="ava">${inner}</div>${nm}<div class="tag">${tag}</div></div>`;
     });
     for (let i = room.seats.length; i < 6; i++) cards.push(`<div class="seat empty">${i < 3 ? '至少 3 人' : '空位'}</div>`);
     // 逐个座位比对：只重画变了的那张，正在输入名字的座位不打断，新来的人才有弹入动画
@@ -868,6 +873,7 @@
     });
     for (const extra of kids.slice(cards.length)) extra.remove();
     fillIcons(box);
+    if (window.Voice) Voice.paint(); // 重画的座位补上开麦/说话状态
     $('#addAI').hidden = !host;
     $('#addAI').disabled = room.seats.length >= 6 || connection !== 'ready';
     $('#startBtn').hidden = !host;
@@ -1604,6 +1610,7 @@
       box.innerHTML = html;
       fitPlayerNames();
       syncAvatarRing();
+      if (window.Voice) Voice.paint();
     }
     refreshPlayerPop();
   }
@@ -5196,6 +5203,7 @@
     initHome();
     initLobby();
     initGameBar();
+    if (window.Voice) Voice.init({ send: (m) => send(m, true), toast });
     if (window.ResizeObserver) new ResizeObserver(syncSpot).observe($('#board'));
     initEmotes();
     if (window.Music) Music.follow(musicScene);

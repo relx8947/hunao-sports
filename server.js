@@ -77,6 +77,8 @@ function messageError(msg) {
       break;
     case 'auto': valid = typeof msg.on === 'boolean'; break;
     case 'emote': valid = boundedString(msg.key, 32) && msg.key.length > 0; break;
+    case 'voice': valid = typeof msg.mic === 'boolean'; break;
+    case 'rtc': valid = boundedString(msg.to, 32) && !!msg.data && typeof msg.data === 'object' && !Array.isArray(msg.data); break;
     default: return '未知指令';
   }
   return valid ? null : '指令参数不正确';
@@ -216,12 +218,15 @@ module.exports = { createServer };
 if (require.main === module) {
   const logDir = process.env.HUNAO_LOG_DIR
     || (process.env.STATE_DIRECTORY ? path.join(process.env.STATE_DIRECTORY.split(':')[0], 'games') : path.join(__dirname, 'logs', 'games'));
-  const hub = defaultHub.createHub({ logDir });
+  // 语音 TURN 中继（可选）：HUNAO_TURN_URLS 逗号分隔，HUNAO_TURN_SECRET 与 coturn 的 static-auth-secret 一致
+  const list = (value) => (value || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const turn = { urls: list(process.env.HUNAO_TURN_URLS), secret: process.env.HUNAO_TURN_SECRET || '', stun: list(process.env.HUNAO_STUN_URLS) };
+  const hub = defaultHub.createHub({ logDir, turn });
   const server = createServer({ hub });
   for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => { hub.shutdownLogs(); process.exit(0); });
   server.on('error', (err) => {
     console.error('服务启动失败', err.message);
     process.exitCode = 1;
   });
-  server.listen(PORT, HOST, () => console.log(`胡闹运动会 已启动：http://${HOST}:${PORT}，对局日志 ${logDir}`));
+  server.listen(PORT, HOST, () => console.log(`胡闹运动会 已启动：http://${HOST}:${PORT}，对局日志 ${logDir}，语音中继 ${turn.urls.length && turn.secret ? turn.urls.join(' ') : '未配置'}`));
 }

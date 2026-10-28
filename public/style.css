@@ -2745,3 +2745,42 @@ body:not([data-screen="game"]) .toast.wpd-toast { --toast-y: 14px; }
 
 /* 不让系统/微信按自己的字号设置放大文字（一屏布局按固定字号排版） */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* ================= 语音开麦（voice.js） ================= */
+.topbar > .tb-mic { order: 2; }
+.tb-mic .lbl { display: none; }
+.voice-mic.on { background: var(--green); color: #fff; }
+/* 房间里的开麦按钮挨着右上角的声音开关 */
+.lobby-mic { position: absolute; top: 0; right: 52px; z-index: 2; height: 44px; min-width: 44px; justify-content: center; }
+.lobby-mic .lbl { display: none; }
+@media (min-aspect-ratio: 5/4) and (max-height: 560px) {
+  .lobby-mic { position: static; grid-column: 1; grid-row: 1; justify-self: end; align-self: start; margin-right: 52px; }
+}
+/* 横屏手机顶栏放不下场次名：和竖屏一样只留序号，给开麦按钮腾位置 */
+@media (max-width: 760px) and (orientation: landscape) {
+  #game .race-pill .tn { display: none; }
+}
+.voice-mic.busy { opacity: .7; }
+.voice-ear.off { color: var(--ink3); }
+@media (max-width: 600px) and (orientation: portrait) {
+  #game .topbar > .tb-mic { order: 4; }
+}
+/* 开着麦：头像外一圈绿；正在说话：绿圈外扩呼吸。用 outline，不和各布局里头像自己的 box-shadow 打架 */
+.prow.mic-on .pav, .seat.mic-on .ava { outline: 2.5px solid var(--green); outline-offset: 2px; }
+.prow.talking .pav, .seat.talking .ava { animation: voice-talk 0.9s ease-in-out infinite; }
+@keyframes voice-talk {
+  0%, 100% { outline-width: 2.5px; outline-offset: 2px; }
+  50% { outline-width: 4px; outline-offset: 4px; }
+}
+/* 观众没有座位：说话的人名字浮在顶部 */
+.voice-talk {
+  position: fixed; z-index: 70; top: calc(env(safe-area-inset-top) + 64px); left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: 5px 12px;
+  border: 2px solid var(--ink); border-radius: 999px; background: var(--green); color: #fff;
+  font-weight: 800; font-size: 13px; box-shadow: var(--shadow-sm); pointer-events: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.voice-talk svg { width: 16px; height: 16px; flex: none; }
+@media (prefers-reduced-motion: reduce) {
+  .prow.talking .pav, .seat.talking .ava { animation: none; outline-width: 4px; }
+}

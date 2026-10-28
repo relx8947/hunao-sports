@@ -16,6 +16,10 @@ const ROOM_TTL = 30 * 60 * 1000;
 const PLAYER_TTL = 24 * 60 * 60 * 1000;
 const SPEEDS = [1, 1.5, 2.2];
 const SKIP_SPEED = 6; // 真人都跑完后「快进到结算」：只加速本场剩余的 AI 回合
+const VOICE_TALKERS = 6; // 一个房间同时开麦的上限：语音是两两直连，人再多每人上行带宽吃不消
+const VOICE_ICE_TTL = 24 * 60 * 60; // TURN 临时凭证有效期（秒）
+const RTC_BURST = 300; // 每个连接每 10 秒最多转发的信令条数（ICE 候选一次会来十几条）
+const SIGNAL_ID = /^[a-z0-9]{1,16}$/;
 const rid = (n) => crypto.randomBytes(n).toString('hex');
 const cleanName = (s) => typeof s === 'string' ? s.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 12) : '';
 
@@ -27,6 +31,8 @@ function createHub(options = {}) {
   const every = options.setInterval || setInterval;
   const cancelEvery = options.clearInterval || clearInterval;
   const random = options.random || Math.random;
+  // 语音中继：{ urls: ['turn:host:3478?transport=udp', ...], secret, stun: ['stun:host:3478'] }，不配就只靠浏览器直连
+  const turn = options.turn || {};
   // 对局日志：只有传了 logDir 才写盘（测试和 require 默认不写）
   const gameLog = options.gameLog || createGameLog({ dir: options.logDir, now });
   let lastPrune = now();
@@ -126,7 +132,80 @@ function createHub(options = {}) {
   function broadcastRoom(room) {
     const msg = { type: 'room', room: roomSummary(room) };
     for (const ws of viewers(room)) send(ws, msg);
+    broadcastVoice(room);
     notifyDirectory();
+  }
+
+  /* ---------- 语音：服务端只转发 WebRTC 信令，音频在浏览器之间直连，连不通时走 TURN 中继 ---------- */
+  // coturn 的 use-auth-secret 约定：用户名「过期时间戳:任意标识」，密码是用共享密钥对用户名做的 HMAC-SHA1
+  function iceServers(ws) {
+    const list = turn.stun?.length ? [{ urls: turn.stun }] : [];
+    if (turn.urls?.length && turn.secret) {
+      const t = Math.floor(now() / 1000);
+      if (!ws.ice || ws.ice.until - t < 3600) {
+        const username = `${t + VOICE_ICE_TTL}:${ws.player.id}`;
+        const credential = crypto.createHmac('sha1', turn.secret).update(username).digest('base64');
+        ws.ice = { until: t + VOICE_ICE_TTL, server: { urls: turn.urls, username, credential } };
+      }
+      list.push(ws.ice.server);
+    }
+    return list;
+  }
+  function micOn(ws, room) { return ws.mic === room.code; }
+  function voicePeers(room) {
+    return viewers(room).map((ws) => ({ id: ws.vid, pid: ws.player.id, seat: seatOf(room, ws.player.id), name: ws.player.name, mic: micOn(ws, room) }));
+  }
+  // 房间广播很频繁，名单没变就不重发
+  function broadcastVoice(room) {
+    const peers = voicePeers(room);
+    const sig = JSON.stringify(peers);
+    if (sig === room.voiceSig) return;
+    room.voiceSig = sig;
+    for (const ws of viewers(room)) send(ws, { type: 'voice', you: ws.vid, peers, ice: iceServers(ws) });
+  }
+  // 观众（全 AI 观战房）也能开麦，和一起看的人聊
+  function setMic(ws, on) {
+    const room = currentRoom(ws);
+    if (!room) return '你不在房间里';
+    if (on && !micOn(ws, room)) {
+      if (voicePeers(room).filter((p) => p.mic).length >= VOICE_TALKERS) return `最多 ${VOICE_TALKERS} 人同时开麦，等别人闭麦再试`;
+      // 同一身份只留一个标签页开麦，免得同一台设备自己听到自己
+      for (const s of ws.player.sockets) s.mic = null;
+    }
+    ws.mic = on ? room.code : null;
+    broadcastVoice(room);
+    return null;
+  }
+  // 只放行 SDP、ICE 候选和挂断三种信令，重新组装后转发，不透传多余字段
+  function cleanSignal(d) {
+    if (!d || typeof d !== 'object' || Array.isArray(d) || typeof d.sid !== 'string' || !SIGNAL_ID.test(d.sid)) return null;
+    if (d.sdp !== undefined) {
+      const x = d.sdp;
+      if (!x || (x.type !== 'offer' && x.type !== 'answer') || typeof x.sdp !== 'string' || x.sdp.length > 12000) return null;
+      return { sid: d.sid, sdp: { type: x.type, sdp: x.sdp } };
+    }
+    if (d.ice !== undefined) {
+      const c = d.ice;
+      if (!c || typeof c.candidate !== 'string' || c.candidate.length > 1024) return null;
+      if (c.sdpMid != null && (typeof c.sdpMid !== 'string' || c.sdpMid.length > 32)) return null;
+      if (c.sdpMLineIndex != null && (!Number.isInteger(c.sdpMLineIndex) || c.sdpMLineIndex < 0 || c.sdpMLineIndex > 15)) return null;
+      return { sid: d.sid, ice: { candidate: c.candidate, sdpMid: c.sdpMid ?? null, sdpMLineIndex: c.sdpMLineIndex ?? null } };
+    }
+    if (d.bye === true) return { sid: d.sid, bye: true };
+    return null;
+  }
+  function relaySignal(ws, to, data) {
+    const signal = cleanSignal(data);
+    if (!signal) return '语音信令格式不正确';
+    // 离房、对方刚断线时迟到的信令直接丢弃，不报错打扰玩家
+    const room = currentRoom(ws);
+    if (!room) return null;
+    const t = now();
+    if (!ws.rtcWindow || t - ws.rtcWindow.at >= 10000) ws.rtcWindow = { at: t, n: 0 };
+    if (++ws.rtcWindow.n > RTC_BURST) return null;
+    const target = viewers(room).find((c) => c.vid === to);
+    if (target && target !== ws) send(target, { type: 'rtc', from: ws.vid, data: signal });
+    return null;
   }
   function unanswered(d, seat) { return d.simul ? d.seats.includes(seat) && d.answers[seat] === undefined : d.seat === seat; }
   function deadlineIn(room, seat) {
@@ -181,6 +260,7 @@ function createHub(options = {}) {
     p.touched = now();
     p.sockets.add(ws);
     ws.player = p;
+    ws.vid ||= rid(4); // 语音按标签页区分：同一身份开多个标签时，信令只发给指定那一个
     let room = p.room && rooms.get(p.room);
     if (room && !hasMember(room, p.id)) room = null;
     if (!room) {
@@ -213,6 +293,7 @@ function createHub(options = {}) {
     if (room) room.clients.delete(ws);
     ws.room = null;
     ws.player = null;
+    ws.mic = null;
     if (room) {
       room.touched = now();
       transferHost(room);
@@ -227,6 +308,7 @@ function createHub(options = {}) {
       if (ws.room !== room.code) continue;
       room.clients.delete(ws);
       ws.room = null;
+      ws.mic = null;
       send(ws, { type: 'left', reason });
     }
     p.touched = now();
@@ -260,7 +342,7 @@ function createHub(options = {}) {
     rooms.delete(room.code);
     for (const p of byId.values()) if (p.room === room.code) releasePlayer(p, room, reason);
     for (const ws of room.clients) {
-      if (ws.room === room.code) { ws.room = null; send(ws, { type: 'left', reason }); }
+      if (ws.room === room.code) { ws.room = null; ws.mic = null; send(ws, { type: 'left', reason }); }
     }
     room.clients.clear();
     room.spectators.clear();
@@ -659,6 +741,8 @@ function createHub(options = {}) {
       case 'act': return act(ws, msg);
       case 'auto': return setAuto(ws, msg.on);
       case 'emote': return emote(ws, msg.key);
+      case 'voice': return setMic(ws, msg.mic);
+      case 'rtc': return relaySignal(ws, msg.to, msg.data);
       case 'speed': return setSpeed(ws);
       case 'lobby': return backToLobby(ws);
       case 'again': return playAgain(ws);
