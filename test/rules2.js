@@ -511,6 +511,34 @@ test('裸奔侠：冲线那一步超过人也拿 1 分', () => {
   assert(ev(g, 'chip').some((e) => e.seat === 0 && e.text.includes('裸奔侠')), '冲线超车应得 1 分');
   assert.strictEqual(g.score(0), 1 + 3);
 });
+test('冲线那一步超过的人：企鹅照样摔倒、狼人照样咬、魔法健将掷 6 照样绊倒', () => {
+  let g = setup([['hotel', 26], ['penguin', 28], ['gloth', 5]]);
+  run(g, g.move(R(g, 'hotel'), 5, 'main'));
+  assert.strictEqual(R(g, 'hotel').finished, 1);
+  assert.strictEqual(R(g, 'penguin').tripped, true);
+  g = setup([['bitemark', 26], ['hotel', 28], ['gloth', 5]]);
+  R(g, 'bitemark').wolf = true;
+  run(g, g.move(R(g, 'bitemark'), 5, 'main'));
+  assert.strictEqual(R(g, 'bitemark').finished, 1);
+  assert.strictEqual(R(g, 'hotel').out, true);
+  assert.strictEqual(R(g, 'gloth').out, false);
+  g = setup([['magicalathlete', 25], ['hotel', 28], ['gloth', 5]]);
+  dice(g, [6]);
+  turn(g, 'magicalathlete');
+  assert.strictEqual(R(g, 'magicalathlete').finished, 1);
+  assert.strictEqual(R(g, 'hotel').tripped, true);
+  assert.strictEqual(R(g, 'gloth').tripped, false);
+});
+test('捣蛋鬼 × 骰子先生：只看选中的点数，其他骰子出 3 不反向', () => {
+  let g = setup([['diceguy', 0], ['saboteur', 20]]);
+  dice(g, [5, 5, 3, 1, 2, 4]);
+  turn(g, 'diceguy');
+  assert.strictEqual(R(g, 'diceguy').pos, 5);
+  g = setup([['diceguy', 10], ['saboteur', 20]]);
+  dice(g, [3, 3, 5, 1, 2, 4]);
+  turn(g, 'diceguy');
+  assert.strictEqual(R(g, 'diceguy').pos, 7, '选中 3 时照样反向');
+});
 test('电鳗：1 格内其他运动员掷出的骰子一律算 1', () => {
   const g = setup([['stunner', 4], ['hotel', 5], ['streaker', 0]]);
   dice(g, [5, 5]);

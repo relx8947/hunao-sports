@@ -914,6 +914,114 @@ test('额外回合中天才被淘汰后不能再执行旧席回合，最先淘�
   assert.strictEqual(g.firstSeat, 0);
 });
 
+/* ---------- 此前没有专门用例的一代运动员 ---------- */
+// 陪练选不带主移动加成的角色（起哄怪、黏液怪），避免和教练 +1 之类混在一起
+const dice1 = (g, seq) => { g.d6 = () => { assert(seq.length, '骰点不得超出夹具'); return seq.shift(); }; };
+const turn1 = (g, rid, answers) => run(g, g.takeTurn(R(g, rid)), { mode: 'roll', ...answers });
+test('炼金术士：掷出 1/2 可以改走 4 格', () => {
+  const g = setup([['alchemist', 0], ['heckler', 20]]);
+  dice1(g, [2]);
+  turn1(g, 'alchemist', { alchemist: 'yes' });
+  assert.strictEqual(R(g, 'alchemist').pos, 4);
+});
+test('翻翻鱼：不掷骰，和另一名运动员交换位置', () => {
+  const g = setup([['flipflop', 0], ['heckler', 20]]);
+  turn1(g, 'flipflop', { mode: 'flip:heckler' });
+  assert.deepStrictEqual([R(g, 'flipflop').pos, R(g, 'heckler').pos], [20, 0]);
+  assert.strictEqual(g.events.filter(e => e.t === 'move').length, 0, '交换是瞬移');
+});
+test('啦啦队长：最后一名前进 2，自己前进 1，再主移动', () => {
+  const g = setup([['cheerleader', 5], ['heckler', 2], ['gunk', 10]]);
+  dice1(g, [3]);
+  turn1(g, 'cheerleader', { cheerleader: 'yes' });
+  assert.strictEqual(R(g, 'heckler').pos, 4);
+  assert.strictEqual(R(g, 'cheerleader').pos, 5 + 1 + 3 - 1);
+});
+test('决斗家：停到别人格子可以决斗，平局算决斗家赢', () => {
+  const g = setup([['duelist', 0], ['heckler', 4]]);
+  dice1(g, [4, 4, 4]);
+  turn1(g, 'duelist', { duel: 'heckler' });
+  assert.strictEqual(R(g, 'duelist').pos, 6);
+});
+test('决斗家：别人停到我格子也能决斗，点大者前进 2', () => {
+  const g = setup([['heckler', 0], ['duelist', 3]]);
+  dice1(g, [3, 2, 5]);
+  turn1(g, 'heckler', { duel: 'heckler' });
+  assert.strictEqual(R(g, 'heckler').pos, 5);
+  assert.strictEqual(R(g, 'duelist').pos, 3);
+});
+test('催眠蛇：主移动前把一名运动员瞬移到自己格子', () => {
+  const g = setup([['hypnotist', 5], ['heckler', 20]]);
+  dice1(g, [2]);
+  turn1(g, 'hypnotist', { hypnotist: 'heckler' });
+  assert.strictEqual(R(g, 'heckler').pos, 5);
+  assert.strictEqual(R(g, 'hypnotist').pos, 7);
+});
+test('尺蠖：别人主移动掷出 1 时这步作废，尺蠖前进 1', () => {
+  const g = setup([['gunk', 0], ['inchworm', 10]]);
+  dice1(g, [1]);
+  turn1(g, 'gunk');
+  assert.strictEqual(R(g, 'gunk').pos, 0);
+  assert.strictEqual(R(g, 'inchworm').pos, 11);
+});
+test('跟班：别人主移动掷出 6 时抢先前进 2', () => {
+  const g = setup([['heckler', 0], ['lackey', 10]]);
+  dice1(g, [6]);
+  turn1(g, 'heckler');
+  assert.strictEqual(R(g, 'heckler').pos, 6);
+  assert.strictEqual(R(g, 'lackey').pos, 12);
+  const moves = g.events.filter(e => e.t === 'move').map(e => e.rid);
+  assert.deepStrictEqual(moves, ['lackey', 'heckler'], '跟班先走');
+});
+test('可爱废柴：主移动前独自垫底拿 1 分，并列垫底不拿', () => {
+  let g = setup([['loser', 0], ['heckler', 10]]);
+  dice1(g, [2]);
+  turn1(g, 'loser');
+  assert.strictEqual(g.score(0), 1);
+  g = setup([['loser', 0], ['heckler', 0]]);
+  dice1(g, [2]);
+  turn1(g, 'loser');
+  assert.strictEqual(g.score(0), 0);
+});
+test('魔术象：主移动最多重掷两次，用最后一次点数', () => {
+  const g = setup([['magician', 0], ['heckler', 20]]);
+  dice1(g, [1, 2, 5]);
+  const asked = [];
+  turn1(g, 'magician', { reroll: d => { asked.push(d.options.map(o => o.v)); return d.options.some(o => o.v === 'magic') ? 'magic' : 'keep'; } });
+  assert.strictEqual(R(g, 'magician').pos, 5);
+  assert.strictEqual(asked.length, 2, '第三次掷完不再提供重掷');
+});
+test('火箭科学家：点数翻倍，移动后摔倒', () => {
+  const g = setup([['rocket', 0], ['heckler', 20]]);
+  dice1(g, [3]);
+  turn1(g, 'rocket', { rocket: 'yes' });
+  assert.strictEqual(R(g, 'rocket').pos, 6);
+  assert.strictEqual(R(g, 'rocket').tripped, true);
+});
+test('双胞胎：赛前复制往届冠军技能，没有冠军时不复制', () => {
+  let g = setup([['twin', 0], ['heckler', 0]]);
+  g.winners = ['legs'];
+  run(g, g.beforeRace(), { twin: 'legs' });
+  assert.strictEqual(R(g, 'twin').power, 'legs');
+  g = setup([['twin', 0], ['heckler', 0]]);
+  run(g, g.beforeRace());
+  assert.strictEqual(R(g, 'twin').power, 'twin');
+});
+test('半人马：冲线那一步超过的人也后退 2 格', () => {
+  const g = setup([['centaur', 26], ['heckler', 28], ['gunk', 5]]);
+  run(g, g.move(R(g, 'centaur'), 5, 'main'));
+  assert.strictEqual(R(g, 'centaur').finished, 1);
+  assert.strictEqual(R(g, 'heckler').pos, 26);
+  assert.strictEqual(R(g, 'gunk').pos, 5);
+});
+test('香蕉：冲线那一步超过香蕉不再绊倒冲线者，也不触发技能', () => {
+  const g = setup([['heckler', 26], ['banana', 28], ['gunk', 5]]);
+  run(g, g.move(R(g, 'heckler'), 5, 'main'));
+  assert.strictEqual(R(g, 'heckler').finished, 1);
+  assert.strictEqual(R(g, 'heckler').tripped, false);
+  assert(!g.events.some(e => e.t === 'power' && e.key === 'banana'));
+});
+
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('  ✓', name); } catch (e) { fail++; console.log('  ✗', name, '\n    ', e.message); }

@@ -818,8 +818,13 @@ class Game {
         yield* this.pw(r, 'streaker', 1, passed);
       }
       if (final === FINISH) {
+        // 冲线那一步超过的人照样结算半人马、企鹅、咬痕等：技能先按冲线前记下，冲线后再结算
+        const own = this.powers(r);
         this.finish(r);
         if (skipped) yield* this.pw(r, 'leaptoad', skipped);
+        const trig = this.passTriggers(r, passed, { moved: true, tripPassed: !!opts.tripPassed, own, crossed: true });
+        trig.sort((a, b) => a.order - b.order);
+        for (const t of trig) yield* t.fn.call(this);
         yield* this.afterFinishMove(r, from, sharedBefore);
         if (twistHit) yield* this.drawTwist(r);
         return;
@@ -949,56 +954,7 @@ class Game {
       }
     }
 
-    // 香蕉：超过我的人被绊倒
-    for (const b of passed) {
-      if (!this.has(b, 'banana')) continue;
-      add(this.seatOrder(b.seat), function* () {
-        if (!this.active(r) || !this.active(b)) return;
-        this.trip(r, `超过了${this.nm(b)}`);
-        yield* this.pw(b, 'banana', 1, [r]);
-      });
-    }
-    // 半人马：被我超过的人后退 2
-    if (moved && passed.length && this.has(r, 'centaur')) {
-      add(this.seatOrder(r.seat), function* () {
-        for (const o of this.sortByTurn(passed)) {
-          if (!this.active(o) || !this.active(r)) continue;
-          this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 一记后蹄踢飞 ${this.nm(o)}` });
-          yield* this.move(o, -2, 'power');
-          yield* this.pw(r, 'centaur', 1, [o]);
-        }
-      });
-    }
-
-    if (moved && passed.length && this.edition !== 'v1') {
-      // 攀滚企鹅：被超过就摔倒
-      for (const b of passed) {
-        if (!this.has(b, 'penguin')) continue;
-        add(this.seatOrder(b.seat), function* () {
-          if (!this.active(b)) return;
-          this.trip(b, `被${this.nm(r)}超过`);
-          yield* this.pw(b, 'penguin');
-        });
-      }
-      // 咬痕（已变身）：被超过的人淘汰
-      if (r.wolf && this.has(r, 'bitemark')) {
-        add(this.seatOrder(r.seat), function* () {
-          for (const o of this.sortByTurn(passed)) {
-            if (!this.active(o) || !this.active(r)) continue;
-            yield* this.eliminate(o, r, 'bitemark');
-            yield* this.pw(r, 'bitemark', 1, [o]);
-          }
-        });
-      }
-      // 魔法健将掷 6：绊倒被超过的人
-      if (tripPassed) {
-        add(this.seatOrder(r.seat), function* () {
-          const hit = passed.filter((o) => this.active(o));
-          for (const o of hit) this.trip(o, `被${this.nm(r)}超过`);
-          if (hit.length) yield* this.pw(r, 'magicalathlete', 1, hit);
-        });
-      }
-    }
+    trig.push(...this.passTriggers(r, passed, { moved, tripPassed }));
 
     const here = r.pos === final ? this.at(final, r) : [];
     // 小旅馆：停到旅馆的格子要付 1 分，付不出被绊倒
@@ -1077,6 +1033,65 @@ class Game {
 
     trig.sort((a, b) => a.order - b.order);
     for (const t of trig) yield* t.fn.call(this);
+  }
+
+  // 超车触发：香蕉、半人马、攀滚企鹅、咬痕、魔法健将掷 6。
+  // crossed：r 这一步冲线已离场，它的技能按冲线前判定（own），被超过的人照样结算；香蕉绊冲线者没有意义，不触发。
+  passTriggers(r, passed, { moved, tripPassed = false, own = this.powers(r), crossed = false }) {
+    const trig = [];
+    const add = (order, fn) => trig.push({ order, fn });
+    const live = () => crossed || this.active(r);
+    // 香蕉：超过我的人被绊倒
+    for (const b of crossed ? [] : passed) {
+      if (!this.has(b, 'banana')) continue;
+      add(this.seatOrder(b.seat), function* () {
+        if (!this.active(r) || !this.active(b)) return;
+        this.trip(r, `超过了${this.nm(b)}`);
+        yield* this.pw(b, 'banana', 1, [r]);
+      });
+    }
+    // 半人马：被我超过的人后退 2
+    if (moved && passed.length && own.includes('centaur')) {
+      add(this.seatOrder(r.seat), function* () {
+        for (const o of this.sortByTurn(passed)) {
+          if (!this.active(o) || !live()) continue;
+          this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 一记后蹄踢飞 ${this.nm(o)}` });
+          yield* this.move(o, -2, 'power');
+          yield* this.pw(r, 'centaur', 1, [o]);
+        }
+      });
+    }
+
+    if (moved && passed.length && this.edition !== 'v1') {
+      // 攀滚企鹅：被超过就摔倒
+      for (const b of passed) {
+        if (!this.has(b, 'penguin')) continue;
+        add(this.seatOrder(b.seat), function* () {
+          if (!this.active(b)) return;
+          this.trip(b, `被${this.nm(r)}超过`);
+          yield* this.pw(b, 'penguin');
+        });
+      }
+      // 咬痕（已变身）：被超过的人淘汰
+      if (r.wolf && own.includes('bitemark')) {
+        add(this.seatOrder(r.seat), function* () {
+          for (const o of this.sortByTurn(passed)) {
+            if (!this.active(o) || !live()) continue;
+            yield* this.eliminate(o, r, 'bitemark');
+            yield* this.pw(r, 'bitemark', 1, [o]);
+          }
+        });
+      }
+      // 魔法健将掷 6：绊倒被超过的人
+      if (tripPassed) {
+        add(this.seatOrder(r.seat), function* () {
+          const hit = passed.filter((o) => this.active(o));
+          for (const o of hit) this.trip(o, `被${this.nm(r)}超过`);
+          if (hit.length) yield* this.pw(r, 'magicalathlete', 1, hit);
+        });
+      }
+    }
+    return trig;
   }
 
   *duelOffer(d, pos, only) {
@@ -1783,8 +1798,8 @@ class Game {
       for (const nl of this.holders('nul')) if (nl !== r && nl.pos < r.pos) { mods.push({ label: '空指针', v: -1 }); yield* this.pw(nl, 'nul', 1, [r]); }
       for (const sd of this.holders('stepdad')) if (sd !== r && this.stepchild(sd) === r) { mods.push({ label: '后爸', v: 2 }); yield* this.pw(sd, 'stepdad', 1, [r]); }
       if (this.twistOn('conveyor')) mods.push({ label: '传送带', v: 3 });
-      // 捣蛋鬼：别人掷出 3 时整段反向（两个反向抵消）
-      if (dice.includes(3)) {
+      // 捣蛋鬼：别人掷出 3 时整段反向（两个反向抵消）；骰子先生只看选中的点数，显摆王累加的每一颗都算（同伊卡洛斯）
+      if (roll === 3 || (showSum && dice.includes(3))) {
         for (const sb of this.holders('saboteur')) {
           if (sb === r) continue;
           reverse = !reverse;
