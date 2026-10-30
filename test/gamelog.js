@@ -26,7 +26,15 @@ function play(edition, humanActs = true) {
   hub.handle(ws, { type: 'hello', name: '真人' });
   assert.equal(hub.handle(ws, { type: 'quick', ai: 3, edition }), null);
   const room = hub.rooms.get(ws.room);
+  let reported = false;
   for (let guard = 0; guard < 50000 && room.game.phase !== 'over'; guard++) {
+    // 对局中途点一次「反馈问题」
+    if (!reported && room.game.evSeq > 30) {
+      assert.equal(hub.handle(ws, { type: 'report', text: '  掷了 1\n却走了 3 格  ', seq: 25 }), null);
+      assert.equal(ws.messages.at(-1).type, 'reported');
+      assert.match(hub.handle(ws, { type: 'report', text: '连点' }), /频繁/);
+      reported = true;
+    }
     const d = room.game.pending;
     // 真人席：一半自己点、一半等超时，日志里要能分清
     if (humanActs && d && (d.simul ? d.seats.includes(0) && d.answers[0] === undefined : d.seat === 0) && guard % 2) {
@@ -57,6 +65,12 @@ for (const edition of ['v1', 'mix']) {
   for (const b of ['human', 'ai', 'timeout']) assert(by.has(b), `应记录 ${b} 决策`);
   const events = recs.filter((r) => r.k === 'ev').flatMap((r) => r.events);
   assert(events.some((e) => e.t === 'gameOver'));
+  // 反馈记录：说明压成一行，带上画面播放到的序号和服务端最新序号；重放校验不受影响
+  const rep = recs.filter((r) => r.k === 'report');
+  assert.equal(rep.length, 1);
+  assert.equal(rep[0].text, '掷了 1 却走了 3 格');
+  assert.equal(rep[0].seq, 25);
+  assert(rep[0].latest > 30 && rep[0].seat === 0 && rep[0].name === '真人');
   // 结束记录的比分要和终局事件一致（之前读了不存在的 p.score，全是 null）
   const over = events.find((e) => e.t === 'gameOver');
   const endScores = recs.at(-1).scores;

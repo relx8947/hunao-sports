@@ -166,7 +166,7 @@ class Game {
   }
 
   copyCandidates(r) {
-    return this.leaders().filter((x) => x !== r && x.power !== 'copycat' && !BEFORE_RACE.has(x.power));
+    return this.leaders().filter((x) => x !== r && x.power !== 'copycat' && !BEFORE_RACE.has(x.power) && !OFF_TRACK.has(x.power));
   }
   copyKey(candidates) { return candidates.map((r) => `${r.rid}:${r.power}`).sort().join('|'); }
 
@@ -379,6 +379,7 @@ class Game {
   // 每场重置的二代状态；一代对局中这些字段保持空值，不参与任何结算。
   resetRaceState() {
     this.preMain = null;
+    this.penguinDone = null;
     this.doppelDone = false;
     this.twistDone = false;
     this.twistActive = null;
@@ -421,7 +422,7 @@ class Game {
       // 规则书 Genius 注释：猜中1时，后触发的 Skipper 抢走下一回合。
       if (this.skipperNext != null) { seat = this.skipperNext; this.skipperNext = null; extraFor = null; }
       else if (extraFor) { /* 同一名运动员再来一回合 */ }
-      else if (this.twistOn('cursewands')) seat = yield* this.curseNext(seat);
+      else if (this.twistOn('cursewands') && tookTurn) seat = yield* this.curseNext(seat);
       else seat = (seat + 1) % this.n;
     }
     this.raceEndReason = 'loop-limit';
@@ -499,8 +500,10 @@ class Game {
       yield* this.pw(r, 'sisyphus');
     } else if (key === 'egg') {
       const draw = this.deck.splice(0, 3);
-      if (!draw.length) return;
-      const v = yield this.ask(r.seat, 'egg', '神秘蛋：从 3 名运动员中挑一个技能', draw.map((id) => ({ v: id, label: BY_ID[id].name })));
+      // 赛场外技能（返场王）不能被复制，不能孵
+      const pick = draw.filter((id) => !OFF_TRACK.has(id));
+      if (!pick.length) { this.deck.push(...draw); return; }
+      const v = yield this.ask(r.seat, 'egg', '神秘蛋：从 3 名运动员中挑一个技能', pick.map((id) => ({ v: id, label: BY_ID[id].name })));
       this.deck.push(...draw.filter((id) => id !== v));
       r.power = v;
       r.via = v;
@@ -543,7 +546,7 @@ class Game {
       yield* this.pw(r, 'understudy', 1, [o]);
       yield* this.applyBeforeRace(r, k, depth + 1);
     } else if (key === 'twin') {
-      const opts = [...new Set(this.winners)].filter((id) => id !== 'twin');
+      const opts = [...new Set(this.winners)].filter((id) => id !== 'twin' && !OFF_TRACK.has(id));
       if (!opts.length) {
         this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 还没有往届冠军可以复制` });
         return;
@@ -884,7 +887,7 @@ class Game {
       this.emit({ t: 'info', rid: baby.rid, text: `${this.nm(baby)} 太大了，${this.nm(r)} 只能停在它身后（第 ${final} 格）` });
       yield* this.pw(baby, 'hugebaby', 1, [r]);
     }
-    if (final !== from) yield* this.afterStop(r, from, final, { passed: [], moved: false, sharedBefore: [], viaWhirl: !!opts.viaWhirl });
+    if (final !== from) yield* this.afterStop(r, from, final, { passed: [], moved: false, sharedBefore: [], viaWhirl: opts.viaWhirl ?? null });
   }
 
   // 同时瞬移（大海怪、镜像世界、传送带）：不结算停格与同格技能（暂定），冲线者按回合顺序计名次。
@@ -906,7 +909,8 @@ class Game {
   }
 
   // 停在某格之后的连锁：赛道格 → 当前玩家 → 其他玩家（顺时针）
-  *afterStop(r, from, final, { passed, moved, sharedBefore, tripPassed = false, viaWhirl = false }) {
+  // viaWhirl：刚从漩涡传过来时是出口格号，停在出口不会被吸回去
+  *afterStop(r, from, final, { passed, moved, sharedBefore, tripPassed = false, viaWhirl = null }) {
     if (!this.active(r)) return;
     yield* this.refreshCopies();
     // 前置连锁可能改变落点；只跳过位置相关触发，原移动的超车/同格历史仍须结算。
@@ -929,10 +933,10 @@ class Game {
         } else if (sp.type === 'star') {
           this.emit({ t: 'space', rid: r.rid, pos: final, space: 'star' });
           this.giveChip(r.seat, 'bronze', 1, '踩到星星');
-        } else if (sp.type === 'whirl' && !viaWhirl) {
+        } else if (sp.type === 'whirl' && viaWhirl !== final) {
           // 漩涡：传送到配对的另一端；传送不算移动，到达另一端不会再被吸回来
           this.emit({ t: 'space', rid: r.rid, pos: final, space: 'whirl', to: sp.to, text: `${this.nm(r)} 掉进漩涡，从第 ${sp.to} 格冒出来` });
-          yield* this.warp(r, sp.to, null, { viaWhirl: true });
+          yield* this.warp(r, sp.to, null, { viaWhirl: sp.to });
         }
       });
     }
@@ -998,7 +1002,8 @@ class Game {
     for (const by of here) {
       if (!this.has(by, 'babayaga')) continue;
       add(this.seatOrder(by.seat), function* () {
-        if (r.pos !== final || by.pos !== final || !this.active(by)) return;
+        // 停上来那一刻就触发：先结算的决斗、箭头把人带走了也照样绊倒（规则书：决斗大师照样被绊倒）
+        if (!this.active(r) || !this.active(by)) return;
         this.trip(r, `停到了${this.nm(by)}的格子`);
         yield* this.pw(by, 'babayaga', 1, [r]);
       });
@@ -1186,10 +1191,12 @@ class Game {
       }
     }
     if (!skipMain && this.active(r)) yield* this.mainMove(r, startPos, penguin);
-    if (penguin && this.active(r) && r.tripped) {
+    // 主移动中途结束（淘汰、被拦下等）没走到 mainDone 时在这里爬起来；走到了就不再管（宿敌超过它摔的要留到下回合）
+    if (penguin && this.active(r) && r.tripped && this.penguinDone !== r) {
       r.tripped = false;
       this.emit({ t: 'recover', rid: r.rid, penguin: true, text: `${this.nm(r)} 滑完爬起来了` });
     }
+    this.penguinDone = null;
 
     // 起哄怪按回合实际位移触发：第一名技能失效不抹去本回合的移动事实。
     if (!r.out && this.finishCount < 2 && Math.abs(r.pos - startPos) <= 1) {
@@ -1270,7 +1277,7 @@ class Game {
     }
     // 大海怪：每场一次，把所有人卷到自己格子并绊倒
     if (this.active(r) && this.has(r, 'kraken') && !r.krakenUsed) {
-      if (this.others(r).some((o) => o.pos !== r.pos)) {
+      if (this.others(r).length) {
         const v = yield this.ask(r.seat, 'kraken', '大海怪：把所有人卷到你的格子并绊倒？（每场一次）', yn('卷进深海！', '先不用'), { rid: r.rid });
         if (v === 'yes' && this.active(r)) {
           r.krakenUsed = true;
@@ -1372,7 +1379,7 @@ class Game {
   *rerollPhase(r, st) {
     for (let g = 0; g < 4; g++) {
       const opts = [{ v: 'keep', label: `就用 ${st.roll}` }];
-      if (st.magic > 0) opts.push({ v: 'magic', label: `魔术重掷（还剩 ${st.magic} 次）` });
+      if (st.magic > 0 && this.has(r, 'magician')) opts.push({ v: 'magic', label: `魔术重掷（还剩 ${st.magic} 次）` });
       const dealers = !st.diceUsed ? this.holders('dicemonger') : [];
       if (dealers.length) opts.push({ v: 'dice', label: '骰子交易：重掷一次' });
       if (opts.length === 1) break;
@@ -1411,15 +1418,18 @@ class Game {
 
   // 蘑菇：从牌堆抽一名运动员，把它的技能叠加到自己身上
   *mushGrow(r) {
-    for (let tries = 0; tries < 6 && this.deck.length; tries++) {
-      const id = this.deck.shift();
-      // 暂定：赛前/赛场外技能和模仿猫叠上来没有意义，放回牌堆底再抽
-      if (BEFORE_RACE.has(id) || OFF_TRACK.has(id) || id === 'copycat' || id === 'mush' || this.has(r, id)) { this.deck.push(id); continue; }
-      (r.stack ||= []).push(id);
-      this.emit({ t: 'stack', rid: r.rid, powers: [id], text: `${this.nm(r)} 吃啥长啥，长出了「${BY_ID[id].skill}」（${BY_ID[id].name}）` });
+    const id = this.deck.shift();
+    if (!id) return;
+    // 卡牌注释：赛前技能抽到也没用。赛场外技能、模仿猫、蘑菇自己和已经有的技能叠上来同样没效果，这次白抽，放回牌堆底
+    if (BEFORE_RACE.has(id) || OFF_TRACK.has(id) || id === 'copycat' || id === 'mush' || this.has(r, id)) {
+      this.deck.push(id);
+      this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 抽到了 ${BY_ID[id].name}，这个技能叠上来没用，白长了` });
       yield* this.pw(r, 'mush');
       return;
     }
+    (r.stack ||= []).push(id);
+    this.emit({ t: 'stack', rid: r.rid, powers: [id], text: `${this.nm(r)} 吃啥长啥，长出了「${BY_ID[id].skill}」（${BY_ID[id].name}）` });
+    yield* this.pw(r, 'mush');
   }
 
   /* ---------- 变数卡 ---------- */
@@ -1476,7 +1486,8 @@ class Game {
       case 'timeimp':
         if (r && this.active(r)) {
           const p = this.players[r.seat];
-          if (this.raceNo < 4 && !p.extras.some((ex) => ex.rid === r.rid)) p.extras.push({ rid: r.rid, power: r.power, keep: false });
+          // 按卡牌本身上场：替补演员、神秘蛋、双胞胎学来的技能只用本场，下一场赛前重新选
+          if (this.raceNo < 4 && !p.extras.some((ex) => ex.rid === r.rid)) p.extras.push({ rid: r.rid, power: r.rid, keep: false });
           yield* this.eliminate(r, null, 'timeimp');
         }
         break;
@@ -1766,12 +1777,12 @@ class Game {
         }
       }
       if (skip || !this.active(r)) return;
-      if (bust) { yield* this.nemesisFollow(nemFollow, roll); return; }
+      if (bust) { yield* this.mainDone(r, penguin, nemFollow, roll); return; }
       base = showSum || roll;
       // 魔法健将：按点数发动（掷 2、3、5 不再主移动）；显摆王累加时不再发动（暂定）
       if (this.has(r, 'magicalathlete') && !showSum) {
         const out = yield* this.magicalAthlete(r, roll);
-        if (out === 'done') { yield* this.nemesisFollow(nemFollow, roll); return; }
+        if (out === 'done') { yield* this.mainDone(r, penguin, nemFollow, roll); return; }
         base = out.base;
         tripPassed = !!out.tripPassed;
       }
@@ -1846,6 +1857,18 @@ class Game {
     if (r.rocketTrip) {
       r.rocketTrip = false;
       this.trip(r, '火箭过载');
+    }
+    yield* this.mainDone(r, penguin, nemFollow, roll);
+  }
+
+  // 主移动收尾：攀滚企鹅「主移动走完才爬起来」，先爬起来再让宿敌「等它走完」跟进——宿敌超过它照样会再摔
+  *mainDone(r, penguin, nemFollow, roll) {
+    if (penguin) {
+      this.penguinDone = r;
+      if (this.active(r) && r.tripped) {
+        r.tripped = false;
+        this.emit({ t: 'recover', rid: r.rid, penguin: true, text: `${this.nm(r)} 滑完爬起来了` });
+      }
     }
     yield* this.nemesisFollow(nemFollow, roll);
   }

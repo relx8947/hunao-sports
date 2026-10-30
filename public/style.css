@@ -2789,3 +2789,15 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   padding: 6px 8px; border-radius: 8px; background: rgba(22, 18, 38, .86); color: #fff; font: 11px/1.45 ui-monospace, Menlo, monospace;
   white-space: pre-wrap; pointer-events: none;
 }
+
+/* 反馈问题弹框：对局里随时可开，盖在遮罩之上、提示之下 */
+.report-box { position: fixed; z-index: 85; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92vw, 360px); padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; box-shadow: 0 6px 0 var(--ink); }
+.report-box[hidden] { display: none; }
+.report-box p { margin: 0; font-size: 13px; opacity: .75; }
+.report-box textarea { min-height: 84px; resize: vertical; font: inherit; padding: 8px; border: 2px solid var(--ink); border-radius: 10px; }
+.rb-acts { display: flex; justify-content: flex-end; gap: 8px; }
+.rb-acts button { font: inherit; font-weight: 800; padding: 6px 14px; border: 2px solid var(--ink); border-radius: 99px; background: var(--paper); color: var(--ink); cursor: pointer; }
+.rb-acts .primary { background: #FFD43B; }
+.rec-report { display: block; margin: 12px auto 0; font: inherit; font-size: 13px; font-weight: 800; padding: 5px 14px; border: 2px solid var(--ink); border-radius: 99px; background: var(--paper); color: var(--ink); cursor: pointer; }
+/* 手机横屏顶栏按钮平铺、很挤：反馈入口改在赛事纪录弹窗里 */
+@media (max-width: 1000px) and (orientation: landscape) and (max-height: 550px) { #reportBtn { display: none; } }
