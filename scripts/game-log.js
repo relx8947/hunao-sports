@@ -80,7 +80,7 @@ for (const r of recs) {
   if (r.k === 'ans') lines = [`  ▶ ${names[r.seat]} [${r.kind} #${r.id}] 选 ${JSON.stringify(r.value)}（${r.by}）`];
   else if (r.k === 'ev') {
     lines = r.events.map((e) => {
-      const extra = e.t === 'rolls' ? ` [${e.dice.join(' ')}]` : e.t === 'roll' || e.t === 'voided' ? ` [${e.value}]` : e.t === 'calc' ? ` [${e.base}→${e.total}]` : '';
+      const extra = e.t === 'rolls' ? ` [${e.dice.join(' ')}]` : e.t === 'roll' || e.t === 'voided' ? ` [${e.value}]` : e.t === 'calc' ? ` [${e.raw ?? e.base}→${e.total}]` : '';
       return `    ${String(e.seq).padStart(5)} ${e.t}${extra}  ${e.text || (e.t === 'power' ? `技能 ${e.key}（${e.rid}）` : e.t === 'move' ? `${e.rid} ${e.from}→${e.to}` : '')}`;
     });
   } else if (r.k === 'end') lines = [`■ 结束：${r.reason}${r.scores ? `  比分 ${r.scores.join('/')}` : ''}`];

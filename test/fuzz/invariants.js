@@ -61,10 +61,10 @@ for (let i = 0; i < count; i++) {
         case 'voided': turnVoided++; if (!g.holders('pooper').length) note('没有派对杀手却作废了 6', c, e); break;
         case 'calc': {
           lastMainCalc = e;
-          if (!e.mods.some((m) => m.mult) && !e.reverse) {
-            const exp = e.base + e.mods.reduce((a, m) => a + m.v, 0);
-            if (e.total !== exp && e.total !== Math.max(0, exp)) note('主移动算式对不上', c, e);
-          }
+          // 骰面 × 倍数 = base；base ± 加减值（不低于 0）再按反向取负 = total
+          if (e.raw != null && e.raw * e.mods.reduce((p, m) => p * (m.mult || 1), 1) !== e.base) note('倍数算式对不上', c, e);
+          const abs = Math.max(0, e.base + e.mods.reduce((a, m) => a + (m.mult ? 0 : m.v), 0));
+          if (e.total !== (e.reverse ? -abs : abs)) note('主移动算式对不上', c, e);
           // 伊卡洛斯：最终点数含 6 就该淘汰（显摆王累加的每颗都算）
           break;
         }

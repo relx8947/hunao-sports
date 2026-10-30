@@ -332,7 +332,7 @@ function createHub(options = {}) {
   function endLog(room, reason) {
     if (!room.log) return;
     const g = room.game;
-    room.log.end(reason, g ? { phase: g.phase, raceNo: g.raceNo, scores: g.players.map((p) => p.score) } : {});
+    room.log.end(reason, g ? { phase: g.phase, raceNo: g.raceNo, scores: g.players.map((p) => g.score(p.seat)) } : {});
     room.log = null;
   }
   function closeRoom(room, reason = 'closed') {

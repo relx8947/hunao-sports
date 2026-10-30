@@ -57,6 +57,11 @@ for (const edition of ['v1', 'mix']) {
   for (const b of ['human', 'ai', 'timeout']) assert(by.has(b), `应记录 ${b} 决策`);
   const events = recs.filter((r) => r.k === 'ev').flatMap((r) => r.events);
   assert(events.some((e) => e.t === 'gameOver'));
+  // 结束记录的比分要和终局事件一致（之前读了不存在的 p.score，全是 null）
+  const over = events.find((e) => e.t === 'gameOver');
+  const endScores = recs.at(-1).scores;
+  assert(endScores.every((v) => Number.isInteger(v)), `结束记录比分应为整数：${JSON.stringify(endScores)}`);
+  if (Array.isArray(over.scores)) assert.deepEqual(endScores, over.scores.map((x) => (typeof x === 'object' ? x.score : x)));
   const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'game-log.js'), file, '--verify'], { encoding: 'utf8' });
   assert.match(out, /^重放一致：\d+ 条事件/m, out);
   ok(`${edition}：整局写入 start/ans/ev/end，human/ai/timeout 可区分，按种子重放 ${events.length} 条事件一致`);

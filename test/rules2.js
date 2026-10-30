@@ -297,6 +297,51 @@ test('魔法健将：六种点数效果', () => {
   dice(g, [6]); turn(g, 'magicalathlete');
   assert.strictEqual(R(g, 'magicalathlete').pos, 6); assert.strictEqual(R(g, 'hotel').tripped, true);
 });
+test('魔法健将掷 3 瞬移后照常结算落点（落到漩涡口会被传走）', () => {
+  const g = setup([['magicalathlete', 0], ['gloth', 11], ['hotel', 2]], 'whirly');
+  dice(g, [3]); turn(g, 'magicalathlete', { athleteWarp: 'gloth' });
+  assert.strictEqual(R(g, 'gloth').tripped, true, '先绊倒目标格的人');
+  assert.strictEqual(R(g, 'magicalathlete').pos, 15, '11 号漩涡口传到 15');
+});
+test('浪漫鳄：停格者被漩涡送走后不再算「恰好两人」，不会来回循环', () => {
+  const g = setup([['romantic', 2], ['gloth', 6]], 'whirly');
+  run(g, g.move(R(g, 'romantic'), 4, 'main'));
+  assert.strictEqual(R(g, 'romantic').pos, 4);
+  assert.strictEqual(g.events.filter((e) => /啊，爱情/.test(e.text || '')).length, 0);
+});
+test('无限循环走完一遍就停：浪漫鳄从漩涡冒出来正好又凑成两人', () => {
+  const g = setup([['romantic', 0], ['gloth', 4]], 'whirly');
+  run(g, g.move(R(g, 'romantic'), 6, 'main'));
+  assert.strictEqual(R(g, 'romantic').pos, 4);
+  assert(g.events.filter((e) => /啊，爱情/.test(e.text || '')).length <= 2, '之前要来回 30 遍');
+  assert(g.events.some((e) => /无限循环/.test(e.text || '')));
+});
+test('糊涂狗：垫底 ×3 的算式写全；垫底又被捣蛋鬼反向时按卡牌不乘 3', () => {
+  let g = setup([['blunderdog', 0], ['hotel', 5]]);
+  dice(g, [2]); turn(g, 'blunderdog');
+  const c = ev(g, 'calc')[0];
+  assert.strictEqual(c.raw, 2);
+  assert.match(c.text, /主移动：2×3（糊涂狗垫底） = 6/);
+  g = setup([['blunderdog', 4], ['saboteur', 5]]);
+  dice(g, [3]); turn(g, 'blunderdog');
+  assert.strictEqual(R(g, 'blunderdog').pos, 1, '后退 3 而不是 9');
+  assert.match(ev(g, 'calc')[0].text, /主移动：3，反向 = -3/);
+  g = setup([['blunderdog', 9], ['saboteur', 5]]);
+  dice(g, [3]); turn(g, 'blunderdog');
+  assert.strictEqual(R(g, 'blunderdog').pos, 12, '没垫底反向 + 捣蛋鬼反向 = 抵消');
+  assert.strictEqual(ev(g, 'calc')[0].cancel, true);
+  assert.match(ev(g, 'calc')[0].text, /两次反向抵消/);
+});
+test('绊倒提示：企鹅照样掷骰；自己回合主移动前摔倒是这回合不能动；已经摔倒不重复提示', () => {
+  const g = setup([['penguin', 3], ['hotel', 5]]);
+  g.trip(R(g, 'penguin'), '测试');
+  assert.match(ev(g, 'trip')[0].text, /下回合照样掷骰，主移动翻倍/);
+  g.trip(R(g, 'penguin'), '再来');
+  assert.strictEqual(ev(g, 'trip').length, 1);
+  g.preMain = R(g, 'hotel');
+  g.trip(R(g, 'hotel'), '踩到石头');
+  assert.match(ev(g, 'trip')[1].text, /这回合不能主移动/);
+});
 test('鼹鼠：身边 1 格没人时可以直接走 6；有人时没有这个选项', () => {
   let g = setup([['mole', 0], ['hotel', 2]]);
   g.d6 = () => { throw new Error('不应掷骰'); };
@@ -361,6 +406,13 @@ test('蘑菇：掷 1/2 抽一名运动员叠加技能（赛前技能跳过）', 
   assert.deepStrictEqual(R(g, 'mush').stack, ['icarus']);
   assert.strictEqual(R(g, 'mush').pos, 5, '叠上伊卡洛斯后本次主移动就 +3');
   assert.deepStrictEqual(g.deck, ['nepobaby']);
+});
+test('蘑菇：长出咬痕的这一掷就变身', () => {
+  const g = setup([['mush', 0], ['hotel', 20]]);
+  g.deck = ['bitemark'];
+  dice(g, [1]);
+  turn(g, 'mush');
+  assert.strictEqual(R(g, 'mush').wolf, true);
 });
 test('宿敌：跟掷点数相同，等对方走完再前进同样格数', () => {
   const g = setup([['nemesis', 0], ['hotel', 2]]);
@@ -633,6 +685,21 @@ test('炼金实验室：狼人怪每个玩家回合后掷骰前进，淘汰被�
   assert.strictEqual(R(g, 'gloth').out, true);
   assert.strictEqual(R(g, 'diva').out, false, '停在同格不算超过');
 });
+test('炼金实验室：运动员都离场的玩家没有回合，狼人怪不替他前进', () => {
+  const g = setup([['hotel', 28], ['gloth', 10], ['streaker', 29]]);
+  g.monster = 0;
+  R(g, 'gloth').out = true;
+  dice(g, [2, 1, 1]); // 旅馆冲线 → 狼人怪 1 → （1 号席没有回合）→ 裸奔侠冲线
+  run(g, g.raceLoop(0));
+  assert.strictEqual(ev(g, 'monster').length, 1);
+  assert.strictEqual(R(g, 'streaker').finished, 2);
+});
+test('全员出局结束的比赛，结束原因记为 all-out', () => {
+  const g = setup([['hotel', 3], ['gloth', 5]]);
+  for (const r of g.racers) r.out = true;
+  assert.throws(() => g.checkEnd(), (e) => e.constructor.name === 'RaceEnd');
+  assert.strictEqual(g.raceEndReason, 'all-out');
+});
 test('粉丝要乱来：再连抽两张依次结算', () => {
   const g = twist(['chaos', 'conveyor', 'roastchicken'], [['hotel', 14], ['gloth', 20]]);
   assert.deepStrictEqual(g.twistDrawn, ['chaos', 'conveyor', 'roastchicken']);
@@ -679,6 +746,35 @@ test('AI：伊卡洛斯掷出 6 会重掷；催眠蛇不拉大嘴怪；啦啦队
   assert.strictEqual(ask('cheerleader', 'cheerleader', ['yes', 'no']), 'yes');
   R(g, 'mouth').pos = 3; R(g, 'gloth').pos = 4; R(g, 'icarus').pos = 4; R(g, 'hypnotist').pos = 6;
   assert.strictEqual(ask('cheerleader', 'cheerleader', ['yes', 'no']), 'no', '大嘴怪垫底，前进 2 正好停到我独占的第 5 格');
+});
+test('AI：按实际落点决策（石头、箭头、漩涡、撞头虫），返场王先派，毒舌家不帮后退的人重掷，西西弗斯不冒险', () => {
+  const { decide } = require('../game/ai');
+  const g = setup([['legs', 0], ['mole', 11], ['diceguy', 0], ['alchemist', 12], ['critic', 3], ['blunderdog', 9]], 'wild');
+  const h = setup([['sisyphus', 4], ['flipflop', 0], ['hotel', 9], ['gloth', 10]]);
+  const ask = (rid, kind, options, extra = {}) => { const x = g.racers.some((r) => r.rid === rid) ? g : h; return decide(x, { kind, seat: R(x, rid).seat, rid, options: options.map((v) => ({ v, label: v })), ...extra }, R(x, rid).seat); };
+  assert.strictEqual(ask('legs', 'mode', ['roll', 'legs']), 'roll', '走 5 正好踩第 5 格石头');
+  R(g, 'legs').pos = 1;
+  assert.strictEqual(ask('legs', 'mode', ['roll', 'legs']), 'legs');
+  assert.strictEqual(ask('mole', 'mode', ['roll', 'mole']), 'roll', '走 6 正好踩第 17 格石头');
+  assert.strictEqual(ask('diceguy', 'diceguy', ['3', '5']), '3', '5 会踩石头');
+  assert.strictEqual(ask('alchemist', 'alchemist', ['yes', 'no'], { title: '炼金术士：把 1 变成 4？' }), 'no', '12+4 踩 16 号箭头退回 12，走 1 到 13 还有星星');
+  R(g, 'alchemist').pos = 0;
+  assert.strictEqual(ask('alchemist', 'alchemist', ['yes', 'no'], { title: '炼金术士：把 1 变成 4？' }), 'yes');
+  assert.strictEqual(ask('critic', 'critic', ['yes', 'no'], { target: 'blunderdog', roll: 5 }), 'no', '糊涂狗没垫底，这一步是后退');
+  assert.strictEqual(ask('critic', 'critic', ['yes', 'no'], { target: 'mole', roll: 5 }), 'yes');
+  assert.strictEqual(ask('sisyphus', 'reroll', ['keep', 'dice'], { roll: 2 }), 'keep');
+  assert.strictEqual(ask('sisyphus', 'reroll', ['keep', 'dice'], { roll: 6 }), 'dice');
+  assert.strictEqual(ask('flipflop', 'mode', ['roll', 'flip:hotel', 'flip:gloth']), 'flip:gloth', '挑换过去最远的');
+  assert.strictEqual(ask('hotel', 'pickRacer', ['gloth', 'rerunner']), 'rerunner');
+  g.twistActive = new Set(['bonkbug']);
+  R(g, 'legs').pos = 25;
+  assert.strictEqual(ask('legs', 'showoff', ['stop', 'more'], { roll: 4, sum: 4 }), 'more', '停在 29 会被撞回 24');
+  R(g, 'legs').pos = 26;
+  for (let k = 0; k < 20; k++) assert(Number(ask('legs', 'cheatahSet', ['1', '2', '3', '4', '5', '6'])) >= 4, '差 4 格就定能冲线的点数');
+  const w = setup([['tail', 18], ['hotel', 23]], 'whirly');
+  const tail = (target) => decide(w, { kind: 'tail', seat: 0, rid: 'tail', target, options: [{ v: 'yes' }, { v: 'no' }] }, 0);
+  assert.strictEqual(tail(22), 'no', '贴到 22 号漩涡口会被传回 17');
+  assert.strictEqual(tail(21), 'yes');
 });
 test('跳蚤市场：每人抽一张，同时暗中决定换不换', () => {
   const g = setup([['hotel', 14], ['gloth', 3]]);

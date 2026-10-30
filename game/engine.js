@@ -378,6 +378,7 @@ class Game {
 
   // 每场重置的二代状态；一代对局中这些字段保持空值，不参与任何结算。
   resetRaceState() {
+    this.preMain = null;
     this.doppelDone = false;
     this.twistDone = false;
     this.twistActive = null;
@@ -398,9 +399,11 @@ class Game {
       const list = extraFor ? [extraFor] : this.seatRacers(seat);
       const isExtra = !!extraFor;
       extraFor = null;
+      let tookTurn = false;
       for (const r of list) {
         this.extraTurn = false;
         if (this.active(r)) {
+          tookTurn = true;
           if (isExtra) this.emit({ t: 'extraTurn', rid: r.rid, text: `${this.nm(r)} 再来一回合！` });
           yield* this.takeTurn(r);
         }
@@ -413,8 +416,8 @@ class Game {
         if (this.extraTurn && this.active(r) && !extraFor) extraFor = r;
         this.extraTurn = false;
       }
-      // 炼金实验室：每个玩家回合结束后狼人怪前进
-      if (this.monster != null) { yield* this.moveMonster(); this.checkEnd(); }
+      // 炼金实验室：每个玩家回合结束后狼人怪前进（运动员都已离场的玩家没有回合，不推进）
+      if (this.monster != null && tookTurn) { yield* this.moveMonster(); this.checkEnd(); }
       // 规则书 Genius 注释：猜中1时，后触发的 Skipper 抢走下一回合。
       if (this.skipperNext != null) { seat = this.skipperNext; this.skipperNext = null; extraFor = null; }
       else if (extraFor) { /* 同一名运动员再来一回合 */ }
@@ -474,7 +477,11 @@ class Game {
   }
 
   checkEnd() {
-    if (this.finishCount >= this.placesNeeded() || this.onTrack().length === 0) throw new RaceEnd();
+    if (this.finishCount >= this.placesNeeded()) throw new RaceEnd();
+    if (this.onTrack().length === 0) {
+      if (this.raceEndReason === 'finished') this.raceEndReason = 'all-out';
+      throw new RaceEnd();
+    }
   }
 
   *beforeRace() {
@@ -621,9 +628,13 @@ class Game {
 
   /* ================= 状态变化 ================= */
   trip(r, why) {
-    if (!this.active(r)) return;
+    if (!this.active(r) || r.tripped) return;
     r.tripped = true;
-    this.emit({ t: 'trip', rid: r.rid, text: `${this.nm(r)} 被绊倒了${why ? `（${why}）` : ''}，下回合跳过主移动` });
+    // 自己回合主移动前摔倒的，这回合就爬起来不掷骰；攀滚企鹅摔倒照样掷骰并翻倍
+    const now = this.preMain === r;
+    const then = this.edition !== 'v1' && this.has(r, 'penguin') ? `${now ? '这' : '下'}回合照样掷骰，主移动翻倍`
+      : now ? '这回合不能主移动' : '下回合跳过主移动';
+    this.emit({ t: 'trip', rid: r.rid, text: `${this.nm(r)} 被绊倒了${why ? `（${why}）` : ''}，${then}` });
   }
 
   // cause 缺省为大嘴怪吞人（一代原有文案）；二代的其他淘汰原因单独说明
@@ -756,11 +767,11 @@ class Game {
     yield* this.refreshCopies();
     // 兜底：同一回合里，同一运动员在完全相同的局面下反复做同样的移动 = 无限循环。
     // 例：狂野荒原 24 号箭头（后退 2）+ 浪漫鳄的「啊，爱情！」会在 22↔24 之间往返，先移动后计数的技能
-    // 绕过了 PW_PER_TURN，只剩深度上限，分支会指数爆炸。同一签名超过 PW_PER_TURN 次就停。
+    // 绕过了 PW_PER_TURN，只剩深度上限，分支会指数爆炸。按规则 8，同一局面下同一移动再次出现就是无限循环，走完一遍就停。
     const sig = `${r.rid}|${amount}|${kind}|${this.stateSig()}`;
     const seen = (this.moveSeen.get(sig) || 0) + 1;
     this.moveSeen.set(sig, seen);
-    if (seen > PW_PER_TURN) {
+    if (seen > 1) {
       if (!this.loopNoted) { this.loopNoted = true; this.emit({ t: 'info', text: '触发了无限循环，按规则走完一遍就停' }); }
       return;
     }
@@ -869,11 +880,15 @@ class Game {
     const baby = this.babyPushed;
     r.pos = final;
     this.emit({ t: 'warp', rid: r.rid, from, to: final, text: why ? `${this.nm(r)} ${why}` : undefined });
-    if (baby) yield* this.pw(baby, 'hugebaby', 1, [r]);
+    if (baby) {
+      this.emit({ t: 'info', rid: baby.rid, text: `${this.nm(baby)} 太大了，${this.nm(r)} 只能停在它身后（第 ${final} 格）` });
+      yield* this.pw(baby, 'hugebaby', 1, [r]);
+    }
     if (final !== from) yield* this.afterStop(r, from, final, { passed: [], moved: false, sharedBefore: [], viaWhirl: !!opts.viaWhirl });
   }
 
-  // 同时瞬移（大海怪、镜像世界、传送带、魔法健将）：不结算停格与同格技能（暂定），冲线者按回合顺序计名次
+  // 同时瞬移（大海怪、镜像世界、传送带）：不结算停格与同格技能（暂定），冲线者按回合顺序计名次。
+  // 魔法健将也借用它落到目标格（不被巨婴挡开），落点效果之后单独结算
   *warpAll(list, why) {
     const finishers = [];
     for (const [o, to0] of list) {
@@ -1001,7 +1016,8 @@ class Game {
     if (here.length === 1) {
       for (const ro of this.holders('romantic')) {
         add(this.seatOrder(ro.seat), function* () {
-          if (!this.active(ro)) return;
+          // 结算到这里时停格者已被漩涡等送走、或格子里人数变了，就不算「恰好两人」（否则会和漩涡来回循环）
+          if (!this.active(ro) || r.pos !== final || this.at(final, r).length !== 1) return;
           this.emit({ t: 'info', rid: ro.rid, text: `${this.nm(ro)}：啊，爱情！前进 2 格` });
           yield* this.move(ro, 2, 'power');
           yield* this.pw(ro, 'romantic');
@@ -1136,10 +1152,12 @@ class Game {
     let skipMain = false;
     let penguin = false;
 
+    this.preMain = r;
     if (this.edition !== 'v1') {
       yield* this.turnStart(r);
-      if (!this.active(r)) { this.emit({ t: 'turnEnd', seat: r.seat }); return; }
+      if (!this.active(r)) { this.preMain = null; this.emit({ t: 'turnEnd', seat: r.seat }); return; }
     }
+    this.preMain = null;
     if (r.tripped) {
       if (this.edition !== 'v1' && this.has(r, 'penguin')) {
         // 攀滚企鹅：摔倒时照样掷骰且主移动翻倍，主移动之后才爬起来
@@ -1698,13 +1716,14 @@ class Game {
         return;
       }
       if (roll === 1 || roll === 2) {
+        // 蘑菇先长出新技能（卡牌：先长再移动），长出咬痕的这一掷就变身
+        if (this.has(r, 'mush')) yield* this.mushGrow(r);
         // 咬痕：掷出 1 或 2 永久变身（这一步就生效）
-        if (this.has(r, 'bitemark') && !r.wolf) {
+        if (this.active(r) && this.has(r, 'bitemark') && !r.wolf) {
           r.wolf = true;
           this.emit({ t: 'wolf', rid: r.rid, text: `${this.nm(r)} 月圆变身成狼人！被它超过的人会被淘汰` });
           yield* this.pw(r, 'bitemark');
         }
-        if (this.active(r) && this.has(r, 'mush')) yield* this.mushGrow(r);
       }
       if (!this.active(r)) return;
       // 掷骰触发
@@ -1770,12 +1789,13 @@ class Game {
 
     // ---- 加减值 ----
     const mods = [];
-    let reverse = false;
+    const raw = base; // 乘倍数之前的点数，算式从它写起
+    let reverse = false, flips = 0;
     if (this.edition !== 'v1') {
       // 攀滚企鹅摔倒时翻倍；糊涂狗垫底 ×3、否则反向
       if (penguin && this.has(r, 'penguin')) { mods.push({ label: '企鹅滑行', v: base, mult: 2 }); base *= 2; yield* this.pw(r, 'penguin'); }
       if (this.has(r, 'blunderdog')) {
-        if (this.lasts().includes(r)) { mods.push({ label: '糊涂狗垫底', v: base * 2, mult: 3 }); base *= 3; } else reverse = !reverse;
+        if (this.lasts().includes(r)) { mods.push({ label: '糊涂狗垫底', v: base * 2, mult: 3 }); base *= 3; } else { reverse = !reverse; flips++; }
         yield* this.pw(r, 'blunderdog');
       }
     }
@@ -1804,14 +1824,19 @@ class Game {
         for (const sb of this.holders('saboteur')) {
           if (sb === r) continue;
           reverse = !reverse;
+          flips++;
           yield* this.pw(sb, 'saboteur', 1, [r]);
         }
       }
+      // 糊涂狗卡牌注释：后退时不乘 3（垫底 ×3 之后又被捣蛋鬼反向，就撤掉 ×3）
+      const bd = mods.findIndex((m) => m.mult === 3 && m.label === '糊涂狗垫底');
+      if (reverse && bd >= 0) { base /= 3; mods.splice(bd, 1); }
     }
     if (!this.active(r)) return;
     let total = Math.max(0, base + mods.reduce((s, m) => s + (m.mult ? 0 : m.v), 0));
     if (reverse) total = -total;
-    if (mods.length || reverse) this.emit({ t: 'calc', rid: r.rid, base, mods, total, ...(reverse ? { reverse: true } : {}), text: `${this.nm(r)} 主移动：${base}${mods.filter((m) => !m.mult).map((m) => `${m.v > 0 ? '+' : ''}${m.v}（${m.label}）`).join('')}${reverse ? '，反向' : ''} = ${total}` });
+    const formula = mods.map((m) => (m.mult ? `×${m.mult}` : `${m.v > 0 ? '+' : ''}${m.v}`) + `（${m.label}）`).join('');
+    if (mods.length || flips) this.emit({ t: 'calc', rid: r.rid, base, raw, mods, total, ...(reverse ? { reverse: true } : flips ? { cancel: true } : {}), text: `${this.nm(r)} 主移动：${raw}${formula}${reverse ? '，反向' : flips ? '，两次反向抵消' : ''} = ${total}` });
     // 水晶球：主移动 6 格或以上改为淘汰
     if (this.twistOn('scrying') && total >= 6) {
       yield* this.eliminate(r, null, 'scrying');
@@ -1859,11 +1884,14 @@ class Game {
         if (!this.active(o) || !this.active(r)) return 'done';
         const to = o.pos;
         say(`瞬移到第 ${to} 格，绊倒那里的人`);
+        const from = r.pos;
         yield* this.warpAll([[r, to]], '瞬移过去');
         if (!this.active(r)) return 'done';
         const hit = this.at(r.pos, r);
         for (const x of hit) this.trip(x, `被${this.nm(r)}砸中`);
         yield* this.pw(r, 'magicalathlete', 1, hit);
+        // 落点照常结算（漩涡、小旅馆、野猪……），和催眠蛇、跟屁虫等单人瞬移一致
+        if (this.active(r) && r.pos === to && to !== from) yield* this.afterStop(r, from, to, { passed: [], moved: false, sharedBefore: [] });
         return 'done';
       }
       case 4:

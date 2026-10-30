@@ -2447,8 +2447,12 @@
         break;
       }
       case 'calc': {
-        const mods = e.mods.map((m) => `<span class="m ${m.v < 0 ? 'neg' : 'pos'}">${esc(m.label)} ${m.v > 0 ? '+' : ''}${m.v}</span>`).join('');
-        setDice(`<div class="calc"><div class="die" style="width:calc(56*var(--u));height:calc(56*var(--u))">${e.base <= 6 ? sdie(e.base) : ''}</div>${e.base > 6 ? `<b>${e.base}</b>` : ''}${mods}<span>=</span><span class="eq">${e.total}</span></div>`, `主移动 ${e.total} 格`);
+        // 从乘倍数之前的点数写起：骰面 × 倍数 ± 加减值，再标出反向
+        const start = e.raw ?? e.base;
+        const mods = e.mods.map((m) => (m.mult ? `<span class="m pos">${esc(m.label)} ×${m.mult}</span>`
+          : `<span class="m ${m.v < 0 ? 'neg' : 'pos'}">${esc(m.label)} ${m.v > 0 ? '+' : ''}${m.v}</span>`)).join('')
+          + (e.reverse ? '<span class="m neg">反向</span>' : e.cancel ? '<span class="m">反向抵消</span>' : '');
+        setDice(`<div class="calc"><div class="die" style="width:calc(56*var(--u));height:calc(56*var(--u))">${start <= 6 ? sdie(start) : ''}</div>${start > 6 ? `<b>${start}</b>` : ''}${mods}<span>=</span><span class="eq">${e.total}</span></div>`, e.total < 0 ? `主移动后退 ${-e.total} 格` : `主移动 ${e.total} 格`);
         await pause(e.ai ? 320 : 500);
         // 结果小标签从骰子区飞到要走的棋子身上
         if (!flyChip($('#diceZone .calc .eq'), e.rid, e.total, () => playSfx('diceLand', e.total)) && !fast) playSfx('diceLand', e.total);
@@ -3080,7 +3084,8 @@
         + `<span class="gain ${gain ? 'pos' : 'zero'}">${gain != null ? `+<b>${gain}</b>` : ''}</span>`
         + `<span class="tot">${sc}</span></div>`;
     }).join('');
-    const reason = e.reason === 'turn-limit' ? '<p class="sub wpc-note">回合数已到上限，按当前名次结算</p>' : e.reason === 'loop-limit' ? '<p class="sub wpc-note">技能连锁停不下来，按当前名次结算</p>' : '';
+    const reason = e.reason === 'turn-limit' ? '<p class="sub wpc-note">回合数已到上限，按当前名次结算</p>' : e.reason === 'loop-limit' ? '<p class="sub wpc-note">技能连锁停不下来，按当前名次结算</p>'
+      : e.reason === 'all-out' ? '<p class="sub wpc-note">运动员都出局了，没凑齐两名冲线者</p>' : '';
     showOverlay(`<div class="ov-box card wpc-results"><h2>第 ${e.race} 场结果</h2><p class="sub">${TRACKS[e.track].name} · 冠军 ${GOLD[idx]} 分 / 亚军 ${SILVER[idx]} 分</p>${reason}
       <div class="podium">${pod(second, 'p2', '2', SILVER[idx], 0)}${pod(first, 'p1', '1', GOLD[idx], 1)}</div>
       <div class="st-head" aria-hidden="true"><span></span><span>选手</span><span></span><span>本场</span><span>总分</span></div>
