@@ -12,6 +12,18 @@ function decide(game, d, seat) {
   // 二代的决策会带上发起技能的运动员 rid（一名玩家可能控制多名运动员）
   const me = (d.rid && game.byRid(d.rid)) || game.racerOfSeat(seat);
   const has = (v) => vals.includes(v);
+  // 水晶球：主移动达到 6 格直接淘汰。按常见的固定加成估一下，这次主移动的点数最多能到几还不出局（没有水晶球时不设上限）
+  const scryCap = () => {
+    if (!me || !game.twistOn('scrying')) return Infinity;
+    let lift = 0;
+    if (game.twistOn('conveyor')) lift += 3;
+    if (me.hogs) lift += 2 * me.hogs;
+    if (game.has(me, 'icarus')) lift += 3;
+    if (game.has(me, 'hare')) lift += 2;
+    if (game.has(me, 'speeddemon')) lift += game.score(me.seat);
+    if (game.holders('stepdad').some((sd) => sd !== me && game.stepchild(sd) === me)) lift += 2;
+    return 5 - lift;
+  };
 
   switch (d.kind) {
     case 'draft':
@@ -32,10 +44,11 @@ function decide(game, d, seat) {
       return vals[0];
     case 'mode': {
       const pos = me ? me.pos : 0;
+      const cap = scryCap();
       let best = 'roll', bestGain = 3.5;
       if (has('cheat')) { best = 'cheat'; bestGain = 4.2; }
-      if (has('legs')) { best = 'legs'; bestGain = 5; }
-      if (has('mole')) { best = 'mole'; bestGain = 6; }
+      if (has('legs') && cap >= 5) { best = 'legs'; bestGain = 5; }
+      if (has('mole') && cap >= 6) { best = 'mole'; bestGain = 6; }
       for (const v of vals) {
         if (!v.startsWith('flip:')) continue;
         const o = game.byRid(v.slice(5));
@@ -115,8 +128,11 @@ function decide(game, d, seat) {
     }
     case 'tail':
       return 'yes';
-    case 'cheatahSet':
+    case 'cheatahSet': {
+      const cap = Math.min(6, scryCap());
+      if (cap < 6) return String(Math.max(1, Math.ceil(rnd() * cap)));
       return String(3 + Math.floor(rnd() * 4));
+    }
     case 'cheatahGuess':
       return String(rnd() < 0.8 ? 4 + Math.floor(rnd() * 3) : 1 + Math.floor(rnd() * 3));
     case 'critic': {
@@ -126,10 +142,15 @@ function decide(game, d, seat) {
     case 'nemesis':
       return 'yes';
     case 'showoff':
+      // 再掷至少比上一颗大 1，累加后可能被水晶球看穿
+      if ((d.sum || 0) + (d.roll || 0) + 1 > scryCap()) return 'stop';
       return (d.roll || 6) <= 2 ? 'more' : 'stop';
     case 'diceguy': {
-      const nums = vals.map(Number);
+      let nums = vals.map(Number);
       const need = me ? FINISH - me.pos : 99;
+      // 水晶球：只在不出局的点数里挑；全都会出局就挑最小的
+      const cap = scryCap();
+      nums = nums.some((v) => v <= cap) ? nums.filter((v) => v <= cap) : [Math.min(...nums)];
       if (nums.includes(need)) return String(need);
       return String(Math.max(...nums));
     }

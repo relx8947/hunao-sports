@@ -132,12 +132,12 @@ test('糊涂狗：垫底 ×3，不垫底改为后退', () => {
   assert.strictEqual(R(g, 'blunderdog').pos, 3);
   assert.strictEqual(ev(g, 'calc')[0].reverse, true);
 });
-test('老千豹：右手边玩家猜错按暗定步数走，猜中不动；暗定数字不算掷骰', () => {
+test('老千豹：上家猜错按暗定步数走，猜中不动；暗定数字不算掷骰', () => {
   let g = setup([['hotel', 0], ['cheatah', 0], ['gloth', 20]]);
   g.d6 = () => { throw new Error('不应掷骰'); };
   const seen = [];
   turn(g, 'cheatah', { mode: 'cheat', cheatahSet: '5', cheatahGuess: (d) => { seen.push(d.seat); return '3'; } });
-  assert.deepStrictEqual(seen, [0], '右手边是上一席');
+  assert.deepStrictEqual(seen, [0], '上家是上一席');
   assert.strictEqual(R(g, 'cheatah').pos, 5);
   g = setup([['hotel', 0], ['cheatah', 0], ['gloth', 20]]);
   turn(g, 'cheatah', { mode: 'cheat', cheatahSet: '4', cheatahGuess: '4' });
@@ -484,7 +484,7 @@ test('搅局鬼：其他人都领先至少 5 格时取消本场并拿 3 分', ()
   turn(h, 'spoilsport');
   assert(!h.ended);
 });
-test('后爸：左手边玩家的运动员主移动 +2，它夺冠时后爸拿 3 分', () => {
+test('后爸：下家的运动员主移动 +2，它夺冠时后爸拿 3 分', () => {
   const g = setup([['stepdad', 0], ['hotel', 0], ['streaker', 0]]);
   dice(g, [1, 1]);
   turn(g, 'hotel');
@@ -654,6 +654,20 @@ test('水晶球：之后主移动 6 格及以上改为淘汰', () => {
   assert.strictEqual(ev(g, 'out')[0].cause, 'scrying');
   turn(g, 'hotel');
   assert.strictEqual(R(g, 'hotel').pos, 16);
+});
+test('水晶球生效时，AI/托管不会自己走进 6 格淘汰（鼹鼠、显摆王、骰子先生、老千豹）', () => {
+  const { decide } = require('../game/ai');
+  const g = setup([['mole', 5], ['showoff', 0], ['diceguy', 0], ['cheatah', 0], ['hotel', 14]]);
+  const ask = (rid, kind, options, extra = {}) => decide(g, { kind, seat: R(g, rid).seat, rid, options: options.map((v) => ({ v, label: v })), ...extra }, R(g, rid).seat);
+  assert.strictEqual(ask('mole', 'mode', ['roll', 'mole']), 'mole', '没有水晶球时照常打地洞');
+  g.twistActive = new Set(['scrying']);
+  assert.strictEqual(ask('mole', 'mode', ['roll', 'mole']), 'roll');
+  assert.strictEqual(ask('showoff', 'showoff', ['stop', 'more'], { roll: 2, sum: 2 }), 'more', '2 之后至少再掷 3，累加 5 还不出局');
+  assert.strictEqual(ask('showoff', 'showoff', ['stop', 'more'], { roll: 2, sum: 3 }), 'stop', '1+2 之后至少再掷 3，累加 6 会被看穿');
+  assert.strictEqual(ask('diceguy', 'diceguy', ['1', '5']), '5');
+  for (let k = 0; k < 20; k++) assert(Number(ask('cheatah', 'cheatahSet', ['1', '2', '3', '4', '5', '6'])) <= 5);
+  g.twistActive = new Set(['scrying', 'conveyor']);
+  assert.strictEqual(ask('diceguy', 'diceguy', ['1', '5']), '1', '传送带 +3：5 会变成 8');
 });
 test('跳蚤市场：每人抽一张，同时暗中决定换不换', () => {
   const g = setup([['hotel', 14], ['gloth', 3]]);

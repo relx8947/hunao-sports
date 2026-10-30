@@ -224,7 +224,7 @@ class Game {
   has(r, key) { return this.powers(r).includes(key); }
   holders(key) { return this.sortByTurn(this.onTrack().filter((r) => this.has(r, key))); }
   twistOn(key) { return !!this.twistActive && this.twistActive.has(key); }
-  // 后爸的「继子」：左手边（回合顺序下一位）玩家仍在场的运动员
+  // 后爸的「继子」：下家（回合顺序下一位）玩家仍在场的运动员
   stepchild(sd) {
     for (let k = 1; k < this.n; k++) {
       const seat = (sd.seat + k) % this.n;
@@ -246,7 +246,8 @@ class Game {
     }
     return v - left;
   }
-  rightOf(seat) { return (seat - 1 + this.n) % this.n; }
+  // 上家：回合顺序里排在前面的那位玩家（界面上不按左右摆座位，规则文案统一用上家/下家）
+  prevSeat(seat) { return (seat - 1 + this.n) % this.n; }
 
   score(seat) { return this.players[seat].chips.reduce((s, c) => s + c.v, 0); }
   giveChip(seat, kind, v, why) {
@@ -1376,13 +1377,13 @@ class Game {
     }
   }
 
-  // 老千豹：暗定 1–6，右手边玩家猜；猜中不动。返回主移动步数（0 = 不动）
+  // 老千豹：暗定 1–6，上家猜；猜中不动。返回主移动步数（0 = 不动）
   *cheatahPlay(r) {
     const nums = () => [1, 2, 3, 4, 5, 6].map((k) => ({ v: String(k), label: `${k} 格` }));
-    const set = Number(yield this.ask(r.seat, 'cheatahSet', '老千豹：暗中定一个步数（别人看不到）', nums(), { rid: r.rid }));
+    const gs = this.prevSeat(r.seat);
+    const set = Number(yield this.ask(r.seat, 'cheatahSet', `老千豹：暗中定一个步数（别人看不到），由上家 ${this.players[gs].name} 来猜`, nums(), { rid: r.rid }));
     if (!this.active(r)) return 0;
-    const gs = this.rightOf(r.seat);
-    this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 暗中定好了步数，请 ${this.players[gs].name} 来猜` });
+    this.emit({ t: 'info', rid: r.rid, text: `${this.nm(r)} 暗中定好了步数，请上家 ${this.players[gs].name} 来猜` });
     const guess = Number(yield this.ask(gs, 'cheatahGuess', `猜猜 ${this.nm(r)} 暗定了几格？猜中它就走不了`, nums(), { rid: r.rid }));
     const hit = guess === set;
     this.emit({ t: 'cheat', rid: r.rid, seat: gs, set, guess, hit, text: hit ? `${this.players[gs].name} 猜中了 ${set}！${this.nm(r)} 原地不动` : `${this.players[gs].name} 猜 ${guess}，实际是 ${set}，${this.nm(r)} 走 ${set} 格` });
@@ -1580,7 +1581,7 @@ class Game {
       for (const o of this.others(r)) if (o.pos !== r.pos) modes.push({ v: `flip:${o.rid}`, label: `和${this.nm(o)}换位（第 ${o.pos} 格）` });
     }
     if (this.has(r, 'mole') && !this.others(r).some((o) => Math.abs(o.pos - r.pos) <= 1)) modes.push({ v: 'mole', label: '打地洞：直接走 6 格' });
-    if (this.has(r, 'cheatah')) modes.push({ v: 'cheat', label: '暗箱操作：暗定步数让右手边玩家猜' });
+    if (this.has(r, 'cheatah')) modes.push({ v: 'cheat', label: '暗箱操作：暗定步数让上家猜' });
     let mode = 'roll';
     if (modes.length > 1) mode = yield this.ask(r.seat, 'mode', '这回合怎么走？', modes);
     else mode = yield this.ask(r.seat, 'roll', '轮到你了，掷骰子！', modes);

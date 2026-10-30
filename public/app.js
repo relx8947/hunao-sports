@@ -2427,7 +2427,12 @@
       }
       case 'roll': {
         const r = vr(e.rid);
-        const cap = `${r ? esc(vs.players[r.seat].name) : ''}${e.reroll ? ' 重掷' : ''}`;
+        // 不是主移动的骰（水龙头喷水、宿敌跟掷、显摆王累加）不能写「前进 X 格」，否则和棋子实际走的格数对不上
+        const use = e.purpose === 'hose' ? { tag: ' 水龙头', n: `滋前方 ${e.value} 格`, say: `水龙头掷出 ${e.value} 点，前方 ${e.value} 格内全部绊倒` }
+          : e.purpose === 'nemesis' ? { tag: ' 跟掷', n: `跟掷 ${e.value}`, say: `宿敌跟掷出 ${e.value} 点` }
+          : e.extra ? { tag: ' 再掷', n: `累加 +${e.value}`, say: `显摆再掷出 ${e.value} 点，累加到这次主移动` }
+          : { tag: e.reroll ? ' 重掷' : '', n: `前进 ${e.value} 格`, say: `掷出 ${e.value} 点，前进 ${e.value} 格` };
+        const cap = `${r ? esc(vs.players[r.seat].name) : ''}${use.tag}`;
         const T = Timing.ROLL[e.ai ? 'ai' : 'human'];
         setDice(`<div class="die rolling sk-die">${sdie(1 + Math.floor(Math.random() * 6), { tilt: Math.round(Math.random() * 50 - 25) })}</div>`, '掷骰中');
         Sound.dice();
@@ -2435,7 +2440,7 @@
         animationIntervals.add(spin);
         await pause(T.spin);
         clearInterval(spin); animationIntervals.delete(spin);
-        setDice(`<div class="die land sk-die" style="--c:${r ? PCOL[r.seat % 6] : INK}">${sdie(e.value, 'win')}<div class="die-cap">${cap}</div><div class="die-n" aria-hidden="true">前进 ${e.value} 格</div></div>`, `掷出 ${e.value} 点，前进 ${e.value} 格`);
+        setDice(`<div class="die land sk-die" style="--c:${r ? PCOL[r.seat % 6] : INK}">${sdie(e.value, 'win')}<div class="die-cap">${cap}</div><div class="die-n" aria-hidden="true">${use.n}</div></div>`, use.say);
         // 「叮」响在点数落到棋子上的那一刻：后面跟着 calc 的，由 calc 的飞点落地时响；没有加减值的，定格的骰点就是最终点数
         if (!fast && !calcFollows(e)) playSfx('diceLand', e.value);
         await pause(T.land);
@@ -5097,7 +5102,7 @@
     tail: '瞬移到前方最近那名运动员身后一格',
     critic: '它的主移动骰要重掷一次（每回合一次）',
     nemesis: '你也掷一颗：点数相同，等它走完你也前进同样格数',
-    cheatahSet: '右手边的玩家会来猜，猜中你就原地不动；猜错按这个数走',
+    cheatahSet: '你的上家会来猜，猜中你就原地不动；猜错按这个数走',
     cheatahGuess: '猜中了它就走不了；猜错它按暗定的数走',
   };
   Object.assign(WAIT_TEXT, {
