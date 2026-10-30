@@ -5,6 +5,7 @@
 //   node scripts/game-log.js <文件> [--grep 文字]    按时间线打印事件和每个决策（--grep 只看含该文字的行）
 //   node scripts/game-log.js <文件> --verify         用当前引擎按种子 + 决策重放，逐条对比事件是否一致
 //   node scripts/game-log.js <文件> --json           原样输出事件 JSON（一行一个），方便再用 grep/jq
+//   node scripts/game-log.js <文件> --reports        只看玩家点「反馈问题」的记录，每条附上反馈位置之前的 20 条事件
 const fs = require('fs');
 const path = require('path');
 const { Game } = require('../game/engine');
@@ -32,7 +33,8 @@ if (fs.statSync(target).isDirectory()) {
     const end = recs.find((r) => r.k === 'end');
     const races = recs.filter((r) => r.k === 'ev').reduce((n, r) => n + r.events.filter((e) => e.t === 'raceEnd').length, 0);
     const who = (st.players || []).map((p) => p.ai && !p.name.includes('AI') ? `${p.name}(AI)` : p.name).join('、');
-    console.log(`${f}  ${st.mode || '?'}/${st.edition || '?'}  ${races}/4 场  ${end ? end.reason : '未结束'}  ${who}`);
+    const reports = recs.filter((r) => r.k === 'report').length;
+    console.log(`${f}  ${st.mode || '?'}/${st.edition || '?'}  ${races}/4 场  ${end ? end.reason : '未结束'}  ${who}${reports ? `  ★ 反馈 ${reports} 条` : ''}`);
   }
   process.exit(0);
 }
@@ -68,6 +70,19 @@ if (flag('--verify')) {
   process.exit(0);
 }
 
+if (flag('--reports')) {
+  const events = recs.filter((r) => r.k === 'ev').flatMap((r) => r.events);
+  const reports = recs.filter((r) => r.k === 'report');
+  if (!reports.length) console.log('这局没有反馈');
+  for (const r of reports) {
+    console.log(`\n★ ${fmtT(r.t)} ${r.name}（席位 ${r.seat}）第 ${r.race} 场：${r.text || '（没写说明）'}`);
+    console.log(`  画面播放到第 ${r.seq ?? '?'} 条，服务端最新第 ${r.latest} 条；之前的事件：`);
+    const upto = r.seq || r.latest;
+    for (const e of events.filter((x) => x.seq <= upto).slice(-20)) console.log(`    ${String(e.seq).padStart(5)} ${e.t}  ${e.text || (e.t === 'move' ? `${e.rid} ${e.from}→${e.to}` : e.t === 'power' ? `技能 ${e.key}` : '')}`);
+  }
+  process.exit(0);
+}
+
 if (flag('--json')) {
   for (const r of recs) if (r.k === 'ev') for (const e of r.events) console.log(JSON.stringify(e));
   process.exit(0);
@@ -85,5 +100,6 @@ for (const r of recs) {
     });
   } else if (r.k === 'end') lines = [`■ 结束：${r.reason}${r.scores ? `  比分 ${r.scores.join('/')}` : ''}`];
   else if (r.k === 'truncated') lines = ['■ 日志超过单文件上限，之后的没有记录'];
+  else if (r.k === 'report') lines = [`★★ 反馈 ${r.name}（席位 ${r.seat}）看到第 ${r.seq ?? '?'} 条：${r.text || '（没写说明）'}`];
   for (const l of lines) if (!grep || l.includes(grep)) console.log(`${r.t != null ? fmtT(r.t) : '      '} ${l}`);
 }

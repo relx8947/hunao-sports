@@ -674,6 +674,20 @@ function createHub(options = {}) {
     for (const c of viewers(room)) send(c, { type: 'emote', seat, key });
     return null;
   }
+  // 对局里点「反馈问题」：把说明和画面播放到的事件序号记进对局日志，排查时按序号定位、按种子重放
+  function report(ws, msg) {
+    const room = currentRoom(ws);
+    if (!room || !room.game || !room.log) return '对局开始后才能反馈';
+    const p = ws.player;
+    const t = now();
+    if (p.lastReport != null && t - p.lastReport < 3000) return '反馈太频繁了，稍等一下';
+    p.lastReport = t;
+    const text = typeof msg.text === 'string' ? msg.text.replace(/\s+/g, ' ').trim().slice(0, 500) : '';
+    const seq = Number.isInteger(msg.seq) && msg.seq >= 0 ? msg.seq : null;
+    room.log.report({ seat: seatOf(room, p.id), name: p.name, seq, latest: room.game.evSeq, race: room.game.raceNo, text });
+    send(ws, { type: 'reported' });
+    return null;
+  }
   // 房主在大厅切换模式（一代/二代/混合）；开局后锁定
   function setEdition(ws, edition) {
     if (typeof edition !== 'string' || !EDITIONS[edition]) return '未知的模式';
@@ -741,6 +755,7 @@ function createHub(options = {}) {
       case 'act': return act(ws, msg);
       case 'auto': return setAuto(ws, msg.on);
       case 'emote': return emote(ws, msg.key);
+      case 'report': return report(ws, msg);
       case 'voice': return setMic(ws, msg.mic);
       case 'rtc': return relaySignal(ws, msg.to, msg.data);
       case 'speed': return setSpeed(ws);

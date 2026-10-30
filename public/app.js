@@ -122,6 +122,7 @@
   let snap = null; // 服务端最新权威快照
   let vs = null; // 当前画面状态（随动画推进）
   let you = -1;
+  let shownSeq = 0; // 画面上播放到的事件序号（反馈问题时一起记进日志）
   let speed = 1;
   let autoFlags = [];
   let deadlineAt = 0;
@@ -490,6 +491,7 @@
         break;
       }
       case 'emote': showEmote(msg.seat, msg.key); break;
+      case 'reported': toast('已经记下了，谢谢反馈'); break;
       case 'voice': if (window.Voice) Voice.roster(msg); break;
       case 'rtc': if (window.Voice) Voice.signal(msg); break;
       case 'auto':
@@ -2291,6 +2293,7 @@
   async function playEvent(e, epoch) {
     const pause = async (ms) => { await wait(ms, epoch); if (epoch !== animationEpoch) throw CANCELLED; };
     if (epoch !== animationEpoch) throw CANCELLED;
+    if (e.seq) shownSeq = e.seq;
     if (e.text && e.t !== 'raceIntro') {
       const r0 = vr(e.rid) || vr(e.a);
       addFeed(e.text, FEED_CLS[e.t] || '', e.seat != null ? e.seat : r0 ? r0.seat : undefined);
@@ -4315,6 +4318,34 @@
     window.addEventListener('resize', () => { if (!MQ_PHONE_PORTRAIT.matches) closeTopPops(); });
   }
 
+  /* ================= 反馈问题：说明 + 画面播放到的位置记进对局日志，排查时按序号重放 ================= */
+  function openReport() {
+    closeTopPops();
+    let box = $('#reportBox');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'reportBox';
+      box.className = 'report-box';
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-label', '反馈问题');
+      box.innerHTML = '<b>反馈问题</b><p>会记下你画面上刚播放到的这一步，方便按日志重放排查。</p>'
+        + '<textarea maxlength="500" placeholder="哪里不对？比如：掷了 1 却走了 3 格"></textarea>'
+        + '<div class="rb-acts"><button type="button" data-v="cancel">取消</button><button type="button" class="primary" data-v="send">提交</button></div>';
+      document.body.appendChild(box);
+      box.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        Sound.click();
+        if (b.dataset.v === 'send') send({ type: 'report', text: $('textarea', box).value, seq: shownSeq });
+        box.hidden = true;
+      });
+      box.addEventListener('keydown', (e) => { if (e.key === 'Escape') box.hidden = true; });
+    }
+    $('textarea', box).value = '';
+    box.hidden = false;
+    $('textarea', box).focus();
+  }
+
   /* ================= 对局顶栏 ================= */
   function initGameBar() {
     // 倍速循环 1 → 1.5 → 2.2 → 1（与 hub.js 的 SPEEDS 一致）：往快里切用「嗖↑」，绕回 1 倍用普通点击
@@ -4324,6 +4355,7 @@
     $('#speedBtn').onclick = () => { if (!(speed < 2.2 && playSfx('boost'))) Sound.click(); send({ type: 'speed' }); };
     $('#autoBtn').onclick = () => { Sound.click(); send({ type: 'auto', on: !autoFlags[you] }); };
     $('#soundBtn').onclick = () => { Sound.cycleMode(); renderTopButtons(); Sound.click(); };
+    $('#reportBtn').onclick = () => { Sound.click(); openReport(); };
     initTopPops();
     initPlayerPop();
     $('#leaveGame').onclick = () => {

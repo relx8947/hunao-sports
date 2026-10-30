@@ -19,6 +19,10 @@ for (let i = 0; i < count; i++) {
   const ctx = { edition, seed };
   const pos = new Map();            // 按事件推出来的位置
   let turnRid = null, turnRolls = [], turnVoided = 0, lastMainCalc = null; var recent = []; const powHist = new Map();
+  let turnSinceMonster = false;          // 狼人怪只在真有人行动过的回合之后前进
+  let turnMoves = new Set();             // 本回合出现过的「移动 + 全场位置」
+  const tripClaims = new Map();          // 绊倒文字的承诺：rid → 'next'（下回合跳过）/ 'now'（这回合不能动）
+  let turnTripCheck = null;              // 本回合开始时承诺要跳过主移动的运动员
   const orig = g.emit.bind(g);
   g.emit = (e) => {
     try {
@@ -30,9 +34,10 @@ for (let i = 0; i < count; i++) {
         for (const baby of g.holders('hugebaby')) if (baby.pos > 0 && baby.pos < FINISH) { const same = g.others(baby).filter((o) => o.pos === baby.pos); if (same.length) note('回合开始时巨婴格子上有别人', { ...c, prev: recent.join(',') }, { baby: baby.rid + '@' + baby.pos, others: same.map((o) => o.rid) }); }
       }
       switch (e.t) {
-        case 'reveal': case 'raceIntro': pos.clear(); for (const x of g.racers) pos.set(x.rid, x.pos); break;
+        case 'reveal': case 'raceIntro': pos.clear(); for (const x of g.racers) pos.set(x.rid, x.pos); tripClaims.clear(); turnTripCheck = null; break;
         case 'turn': {
-          turnRid = e.rid; turnRolls = []; turnVoided = 0;
+          turnRid = e.rid; turnRolls = []; turnVoided = 0; turnSinceMonster = true; turnMoves = new Set();
+          turnTripCheck = tripClaims.get(e.rid) === 'next' ? { rid: e.rid, recovered: false } : null;
           if (r && (r.finished || r.out)) note('已冲线/淘汰的运动员还在行动', c, e);
           for (const x of g.racers) if (!pos.has(x.rid)) pos.set(x.rid, x.pos);
           break;
@@ -43,9 +48,14 @@ for (let i = 0; i < count; i++) {
           if (e.path && e.path.length && e.path[e.path.length - 1] !== e.to) note('移动路径终点≠目标', c, e);
           if (e.path) for (let k = 0; k < e.path.length; k++) { const prev = k ? e.path[k - 1] : e.from; if (Math.abs(e.path[k] - prev) !== 1) { note('移动路径不连续', c, e); break; } }
           if (r && r.out) note('已淘汰的运动员还在移动', c, e);
+          // 规则 8：同一回合里局面（全场位置 + 摔倒/离场状态，同引擎 stateSig）完全相同时又做同一移动 = 无限循环，引擎应在第二次之前停下
+          const flags = g.racers.map((x) => `${x.rid}${x.tripped ? 't' : ''}${x.finished || x.out ? 'x' : ''}`).join(',');
+          const mk = `${e.rid}|${e.from}|${e.to}|${e.kind}|${[...pos].sort().join(',')}|${flags}`;
+          if (turnMoves.has(mk)) note('同一局面下同一移动又出现了（无限循环没停住）', c, e);
+          turnMoves.add(mk);
           pos.set(e.rid, e.to); break;
         }
-        case 'finale': pos.clear(); for (const x of g.racers) pos.set(x.rid, x.pos); break;
+        case 'finale': pos.clear(); for (const x of g.racers) pos.set(x.rid, x.pos); tripClaims.clear(); turnTripCheck = null; break;
         case 'warp': case 'swap':
           if (e.rid && e.to != null) pos.set(e.rid, e.to);
           if (e.t === 'swap') { pos.clear(); for (const x of g.racers) pos.set(x.rid, x.pos); }
@@ -76,6 +86,29 @@ for (let i = 0; i < count; i++) {
           if (false && !offTrack && !(r.finished || r.out) && !g.has(r, e.key) && !hist.some((h) => h.includes(e.key))) note('没有这个技能却发动了:' + e.key, c, { e, powers: g.powers(r), hist });
           break;
         }
+        case 'monster':
+          if (e.from == null) break; // 「狼人怪从起点出发了」是公告，不是移动
+          if (!turnSinceMonster) note('狼人怪在没有人行动的回合之后前进', c, e);
+          turnSinceMonster = false;
+          break;
+        case 'trip':
+          // 文字说了什么就得兑现：「下回合跳过主移动」→ 它下回合要爬起来；「这回合不能主移动」→ 本回合就爬起来
+          if (/下回合跳过主移动/.test(e.text || '')) tripClaims.set(e.rid, 'next');
+          else if (/这回合不能主移动/.test(e.text || '')) tripClaims.set(e.rid, 'now');
+          else tripClaims.delete(e.rid);
+          break;
+        case 'recover':
+          if (turnTripCheck && turnTripCheck.rid === e.rid) turnTripCheck.recovered = true;
+          if (tripClaims.get(e.rid) === 'now' && turnRid !== e.rid) note('文字说这回合不能主移动，却不是在它自己的回合爬起来', c, e);
+          tripClaims.delete(e.rid);
+          break;
+        case 'turnEnd':
+          if (turnTripCheck && !turnTripCheck.recovered) {
+            const x = g.byRid(turnTripCheck.rid);
+            if (x && !x.out && !x.finished && !x.extraTurnSkip) note('文字说下回合跳过主移动，下回合却没跳过', c, { rid: turnTripCheck.rid, tripped: x.tripped });
+          }
+          turnTripCheck = null;
+          break;
         case 'twist': stats.twists[e.id] = (stats.twists[e.id] || 0) + 1; if (g.trackKey !== 'twisty') note('变数卡出现在非扭扭糖果赛道', c, e); break;
         case 'finish': if (r && r.pos < FINISH && !g.finale && !/预言成真/.test(e.text || '')) note('冲线时位置没到终点', c, { e, pos: r.pos }); break;
         case 'raceEnd': {

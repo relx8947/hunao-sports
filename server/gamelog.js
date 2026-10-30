@@ -28,7 +28,7 @@ function stamp(t) {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
-const NOOP = { answer() {}, events() {}, end() {}, file: null };
+const NOOP = { answer() {}, events() {}, report() {}, end() {}, file: null };
 
 function createGameLog({ dir, now = Date.now, retentionDays = 30, maxFileBytes = 8 * 1024 * 1024, maxTotalBytes = 1024 * 1024 * 1024, log = console } = {}) {
   if (!dir) return { begin: () => NOOP, prune() {}, dir: null };
@@ -83,6 +83,8 @@ function createGameLog({ dir, now = Date.now, retentionDays = 30, maxFileBytes =
       // by：human 真人点的 / ai AI 席位 / auto 托管或离线代打 / timeout 超时代打
       answer(seat, d, value, by) { write({ k: 'ans', t: now() - t0, seat, id: d.id, kind: d.kind, value, by }); },
       events(list) { if (list.length) write({ k: 'ev', t: now() - t0, events: list }); },
+      // 玩家点「反馈问题」：seq 是他画面上播放到的事件序号，latest 是服务端当时最新的序号
+      report(rec) { write({ k: 'report', t: now() - t0, ...rec }); },
       end(reason, extra = {}) { write({ k: 'end', t: now() - t0, reason, ...extra }); closed = true; },
     };
   }
