@@ -6,10 +6,7 @@ node_modules/
 coverage/
 .DS_Store
 
-# Large local reference artifacts; use the portable ZIP for full handoff.
-/reference/magical-athlete-analysis/apk/*.apk
-/reference/magical-athlete-analysis.zip
-/reference/magical-athlete-analysis.zip.sha256
+# 参考资料里的 APK 和打包 zip 体积大，走 Git LFS（见 .gitattributes）
 
 # 本地对局日志（server/gamelog.js）
 /logs/
