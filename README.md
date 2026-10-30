@@ -42,82 +42,7 @@ python3 scripts/verify_assets.py
 
 Python/中文字体、可选浏览验证和目录细节见 [分析项目 README](reference/magical-athlete-analysis/README.md)。原始对局说明图来自 APK；弹窗静态复原已单独标明，保存坐标与模板文字不能直接视为运行时结果。
 
-参考资料的 PNG、JSON、源码和文档可纳入 Git。原始 APK 和完整交接 ZIP 体积较大，由 `.gitignore` 排除，保留在本地；跨机器完整交接使用 ZIP。只获取 Git 中的资料仍可浏览和使用人物插画，APK 原始文件校验需另行取得对应安装包。资料统一保存在本项目的 `reference/` 下；旧的工作区入口已删除，后续使用上面的项目内链接。
-
-## 访问
-
-- 开发机：**http://dev-host:18160/**
-
-## 部署（本机统一 nginx）
-
-接入本机系统 nginx 的统一站点管理（见 `/home/dev/project/site/NGINX-MANAGEMENT.md`）：
-
-```
-浏览器 ──► nginx :18160（站点 hunao-sports）
-             ├─ /              静态托管 public/（Cache-Control: no-cache，改前端刷新即生效）
-             ├─ /ws            WebSocket 反代 ─┐
-             ├─ /racers-data.js                ├─► Node 127.0.0.1:18161（用户级 hunao-sports.service）
-             └─ /healthz                      ─┘
-```
-
-| 文件 | 部署位置 |
-| --- | --- |
-| `deploy/hunao-sports.nginx.conf` | `/etc/nginx/sites-available/hunao-sports.conf`，登记在 `/etc/nginx/local-sites.json` |
-| `deploy/hunao-sports.service` | `~/.config/systemd/user/hunao-sports.service` |
-
-常用命令（`scripts/start.sh` / `stop.sh` / `reload.sh` 已封装以下步骤，统一走 `local-nginx-sites`）：
-
-```bash
-systemctl --user restart hunao-sports      # 改了 game/ 或 server/ 后重启后端（房间在内存里，重启会清空）
-systemctl --user status hunao-sports
-journalctl --user -u hunao-sports -f
-# 改了 nginx 配置：
-sudo install -m 644 deploy/hunao-sports.nginx.conf /etc/nginx/sites-available/hunao-sports.conf
-sudo local-nginx-sites reload
-sudo local-nginx-sites disable hunao-sports   # 下线站点
-```
-
-只改 `public/` 下的前端文件时不用重启，浏览器刷新即可。注意本机 umask 是 077：`public/` 里**新建**的文件要 `chmod 644`，否则 nginx（www-data）读不到。
-
-**挂到其他域名 / 子路径**：前端的静态资源和 WebSocket 都用相对路径，可以直接挂在任意 path 下。例如在别的 server 块里加：
-
-```nginx
-location = /hunao { return 301 /hunao/; }
-location = /hunao/ws {
-    proxy_pass http://127.0.0.1:18161/ws;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 3600s;
-}
-location = /hunao/racers-data.js { proxy_pass http://127.0.0.1:18161/racers-data.js; }
-location /hunao/ {
-    alias /home/dev/project/playgroud/hunao-sports/public/;
-    try_files $uri $uri/ /hunao/index.html;
-    add_header Cache-Control "no-cache";
-}
-```
-
-
-
-```
-             ├─ /game/hunao/ws            ─┐
-             ├─ /game/hunao/racers-data.js ├─► Node 127.0.0.1:18161（系统级 hunao-sports.service，用户 hunao）
-             └─ /game/hunao/healthz       ─┘
-```
-
-| 文件 | 部署位置 |
-| --- | --- |
-
-发布 = 把要上线的提交推到服务器裸仓库的 `main`：
-
-```bash
-```
-
-
-旧地址 `/hunao/`（2026-10-24 之前）的页面一律 301 到 `/game/hunao/` 下的对应路径，查询串保留，旧邀请链接仍可用；`/hunao/ws`、`/hunao/racers-data.js`、`/hunao/healthz` 继续反代作兼容，因为旧地址上已打开的页面断线重连还会连这些地址，而 WebSocket 不跟随重定向。`/game/` 本身 302 到站点首页。
-
-nginx 在该站点对 `index.html` 做了两处替换：隐藏只对桌游大厅挂载有意义的「返回大厅」，并在首页页脚下方加上 ICP 备案号。
+参考资料的 PNG、JSON、源码和文档可纳入 Git。原始 APK 和完整交接 ZIP 有版权风险，不入库。只获取 Git 中的资料仍可浏览和使用人物插画，APK 原始文件校验需另行取得对应安装包。资料统一保存在本项目的 `reference/` 下；旧的工作区入口已删除，后续使用上面的项目内链接。
 
 ## 语音开麦
 
@@ -125,18 +50,19 @@ nginx 在该站点对 `index.html` 做了两处替换：隐藏只对桌游大厅
 
 ```
 浏览器A ──（/ws 转发 SDP / ICE 信令，消息类型 voice、rtc）── 浏览器B
+   └──── 音频 WebRTC 直连（Opus），直连不通时经 TURN（coturn）中继 ────┘
 ```
 
 - 两人里有一方开着麦才建立连接，都闭麦 20 秒后断开；开闭麦只替换发送轨道，不重新协商。
 - 服务端不碰音频，只按「标签页连接 id」在同房间内转发信令（`server/hub.js` 的 `relaySignal`），并清洗字段、按连接限频。
 - TURN 用 coturn 的 `use-auth-secret`：游戏服务按 `HUNAO_TURN_SECRET` 现签 24 小时有效的临时用户名/密码随语音名单下发，前端看不到密钥。不配置时只靠浏览器直连（同一局域网可用，手机 4G、公司网络常常连不上）。
-- 浏览器只在 https 或 localhost 下给麦克风权限：开发机的 `http://dev-host:18160/` 只能听不能开麦。
+- 浏览器只在 https 或 localhost 下给麦克风权限：用 http 访问其他机器的地址时只能听不能开麦。
+- TURN 用环境变量配置：`HUNAO_STUN_URLS`、`HUNAO_TURN_URLS`、`HUNAO_TURN_SECRET`（密钥与 coturn 的 `static-auth-secret` 相同），服务启动日志里的「语音中继」一项显示是否读到。
 
 
-| 文件 | 部署位置 |
-| --- | --- |
+## 部署
 
-安全组放行 `3478/UDP`、`3478/TCP`、`49160-49200/UDP`。服务启动日志里的「语音中继」一项显示是否读到了 TURN 配置。
+部署配置和服务器信息是本机私有文件，放在 `deploy/`（已加入 `.gitignore`，不入库）。
 
 ## 本地开发
 
@@ -196,7 +122,7 @@ HTTP 页面无法自动复制时，「复制邀请链接」会显示可全选的
 ## 目录
 
 ```
-deploy/              nginx 站点配置与 systemd 用户服务
+deploy/              部署配置（本机私有，已 gitignore，不入库）
 scripts/             start.sh / stop.sh / reload.sh（调用 local-nginx-sites 与 systemctl --user）
 reference/           UI 静态分析、36 张人物插画及交接包；一代 / 二代玩法与信息调研（胡闹运动会1代2代玩法与信息调研/）
 server.js            HTTP 静态资源 + WebSocket 入口，/racers-data.js 下发运动员与赛道数据
