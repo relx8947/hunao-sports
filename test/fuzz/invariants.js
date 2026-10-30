@@ -82,7 +82,7 @@ for (let i = 0; i < count; i++) {
           stats.races++;
           const fin = e.standings.filter((s) => s.finished);
           if (fin.length > 2) note('完赛人数超过 2', c, e.standings);
-          if (e.reason === 'finished' && fin.length < 2 && !g.finale && !/预言成真/.test(recent.join()) && !e.standings.some((s) => s.benched) && !e.standings.every((s) => s.finished || s.out)) note('还没两人冲线就结束了', c, { reason: e.reason, standings: e.standings });
+          if (e.reason === 'finished' && fin.length < 2 && !g.finale && !e.standings.some((s) => s.bonus || s.benched) && !e.standings.every((s) => s.finished || s.out)) note('还没两人冲线就结束了', c, { reason: e.reason, standings: e.standings });
           break;
         }
       }

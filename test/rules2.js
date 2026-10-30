@@ -662,12 +662,23 @@ test('水晶球生效时，AI/托管不会自己走进 6 格淘汰（鼹鼠、�
   assert.strictEqual(ask('mole', 'mode', ['roll', 'mole']), 'mole', '没有水晶球时照常打地洞');
   g.twistActive = new Set(['scrying']);
   assert.strictEqual(ask('mole', 'mode', ['roll', 'mole']), 'roll');
-  assert.strictEqual(ask('showoff', 'showoff', ['stop', 'more'], { roll: 2, sum: 2 }), 'more', '2 之后至少再掷 3，累加 5 还不出局');
-  assert.strictEqual(ask('showoff', 'showoff', ['stop', 'more'], { roll: 2, sum: 3 }), 'stop', '1+2 之后至少再掷 3，累加 6 会被看穿');
+  assert.strictEqual(ask('showoff', 'showoff', ['stop', 'more'], { roll: 1, sum: 1 }), 'stop', '再掷点数随机，水晶球下停下最稳');
+  assert.strictEqual(ask('cheatah', 'reroll', ['keep', 'magic'], { roll: 6 }), 'magic', '6 会被看穿，能重掷就重掷');
+  assert.strictEqual(ask('cheatah', 'rocket', ['yes', 'no'], { title: '火箭科学家：把 3 翻倍成 6？（之后会摔倒）' }), 'no');
   assert.strictEqual(ask('diceguy', 'diceguy', ['1', '5']), '5');
   for (let k = 0; k < 20; k++) assert(Number(ask('cheatah', 'cheatahSet', ['1', '2', '3', '4', '5', '6'])) <= 5);
   g.twistActive = new Set(['scrying', 'conveyor']);
   assert.strictEqual(ask('diceguy', 'diceguy', ['1', '5']), '1', '传送带 +3：5 会变成 8');
+});
+test('AI：伊卡洛斯掷出 6 会重掷；催眠蛇不拉大嘴怪；啦啦队长不把大嘴怪送到自己格子上', () => {
+  const { decide } = require('../game/ai');
+  const g = setup([['icarus', 0], ['hypnotist', 3], ['mouth', 12], ['hotel', 10], ['cheerleader', 5], ['gloth', 0]]);
+  const ask = (rid, kind, options, extra = {}) => decide(g, { kind, seat: R(g, rid).seat, rid, options: options.map((v) => ({ v, label: v })), ...extra }, R(g, rid).seat);
+  assert.strictEqual(ask('icarus', 'reroll', ['keep', 'dice'], { roll: 6 }), 'dice');
+  assert.strictEqual(ask('hypnotist', 'hypnotist', ['mouth', 'hotel', '_no']), 'hotel', '最远的是大嘴怪，但拉过来会被吃');
+  assert.strictEqual(ask('cheerleader', 'cheerleader', ['yes', 'no']), 'yes');
+  R(g, 'mouth').pos = 3; R(g, 'gloth').pos = 4; R(g, 'icarus').pos = 4; R(g, 'hypnotist').pos = 6;
+  assert.strictEqual(ask('cheerleader', 'cheerleader', ['yes', 'no']), 'no', '大嘴怪垫底，前进 2 正好停到我独占的第 5 格');
 });
 test('跳蚤市场：每人抽一张，同时暗中决定换不换', () => {
   const g = setup([['hotel', 14], ['gloth', 3]]);

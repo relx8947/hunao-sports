@@ -950,6 +950,14 @@ test('决斗家：别人停到我格子也能决斗，点大者前进 2', () => 
   assert.strictEqual(R(g, 'heckler').pos, 5);
   assert.strictEqual(R(g, 'duelist').pos, 3);
 });
+test('决斗家 AI：前进 2 格会踩箭头退回原格时不决斗，免得同一回合决斗几十次', () => {
+  const { decide } = require('../game/ai');
+  const g = setup([['duelist', 22], ['mouth', 22]], 'wild');
+  const opts = [{ v: 'mouth', label: '和大嘴怪决斗' }, { v: '_no', label: '不决斗' }];
+  assert.strictEqual(decide(g, { kind: 'duel', seat: 0, options: opts }, 0), '_no', '狂野荒原 24 号箭头后退 2');
+  R(g, 'duelist').pos = 20; R(g, 'mouth').pos = 20;
+  assert.strictEqual(decide(g, { kind: 'duel', seat: 0, options: opts }, 0), 'mouth');
+});
 test('催眠蛇：主移动前把一名运动员瞬移到自己格子', () => {
   const g = setup([['hypnotist', 5], ['heckler', 20]]);
   dice1(g, [2]);
