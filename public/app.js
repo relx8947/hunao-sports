@@ -4087,11 +4087,13 @@
       rows.push(`<li class="rec-row"><span class="rec-no">第 ${i + 1} 场</span><span class="rec-track">${esc(tname)}</span><span class="rec-meds">${medals}</span><span class="rec-gains">${gains}</span></li>`);
     }
     const totals = vs.players.slice().sort((a, b) => b.score - a.score || a.seat - b.seat).map((p, k) => `<span class="rec-t ${p.seat === you ? 'me' : ''}" style="--c:${PCOL[p.seat % 6]}"><em>${k + 1}</em>${esc(pname(p))}<b>${p.score}</b></span>`).join('');
-    m.innerHTML = `<div class="modal-box card modal-records"><div class="modal-head"><h3>赛事纪录</h3><button class="icon-btn" id="mClose" aria-label="关闭"><span class="ico">${icon('close')}</span></button></div><div class="modal-body"><ol class="rec-list">${rows.join('')}</ol><div class="rec-totals"><span class="rec-tl">当前总分</span>${totals}</div></div></div>`;
+    m.innerHTML = `<div class="modal-box card modal-records"><div class="modal-head"><h3>赛事纪录</h3><button class="icon-btn" id="mClose" aria-label="关闭"><span class="ico">${icon('close')}</span></button></div><div class="modal-body"><ol class="rec-list">${rows.join('')}</ol><div class="rec-totals"><span class="rec-tl">当前总分</span>${totals}</div><button type="button" class="rec-report" id="mReport">觉得哪里结算不对？反馈问题</button></div></div>`;
     m.hidden = false;
     modalKind = 'records';
     const close = () => { m.hidden = true; modalKind = null; };
     $('#mClose').onclick = close;
+    // 手机横屏顶栏放不下「反馈问题」按钮，纪录弹窗里也留一个入口
+    $('#mReport').onclick = () => { close(); Sound.click(); openReport(); };
     m.onclick = (e) => { if (e.target === m) close(); };
   }
 

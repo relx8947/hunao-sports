@@ -2798,3 +2798,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .rb-acts { display: flex; justify-content: flex-end; gap: 8px; }
 .rb-acts button { font: inherit; font-weight: 800; padding: 6px 14px; border: 2px solid var(--ink); border-radius: 99px; background: var(--paper); color: var(--ink); cursor: pointer; }
 .rb-acts .primary { background: #FFD43B; }
+.rec-report { display: block; margin: 12px auto 0; font: inherit; font-size: 13px; font-weight: 800; padding: 5px 14px; border: 2px solid var(--ink); border-radius: 99px; background: var(--paper); color: var(--ink); cursor: pointer; }
+/* 手机横屏顶栏按钮平铺、很挤：反馈入口改在赛事纪录弹窗里 */
+@media (max-width: 1000px) and (orientation: landscape) and (max-height: 550px) { #reportBtn { display: none; } }

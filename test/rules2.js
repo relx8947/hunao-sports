@@ -398,14 +398,21 @@ test('巨婴：空指针离开它身后、巨婴恢复技能的那一刻，把�
   assert(g.has(R(g, 'hugebaby'), 'hugebaby'));
   assert.strictEqual(R(g, 'hotel').pos, 4);
 });
-test('蘑菇：掷 1/2 抽一名运动员叠加技能（赛前技能跳过）', () => {
+test('蘑菇：掷 1/2 抽一名运动员叠加技能；抽到赛前技能这次白抽（卡牌注释）', () => {
   const g = setup([['mush', 0], ['hotel', 20]]);
-  g.deck = ['nepobaby', 'icarus'];
+  g.deck = ['icarus', 'nepobaby'];
   dice(g, [2]);
   turn(g, 'mush');
   assert.deepStrictEqual(R(g, 'mush').stack, ['icarus']);
   assert.strictEqual(R(g, 'mush').pos, 5, '叠上伊卡洛斯后本次主移动就 +3');
   assert.deepStrictEqual(g.deck, ['nepobaby']);
+  const h = setup([['mush', 0], ['hotel', 20]]);
+  h.deck = ['nepobaby', 'icarus'];
+  dice(h, [2]);
+  turn(h, 'mush');
+  assert.strictEqual(R(h, 'mush').stack, undefined, '抽到星二代（赛前技能）白抽，不再抽下一张');
+  assert.strictEqual(R(h, 'mush').pos, 2);
+  assert.deepStrictEqual(h.deck, ['icarus', 'nepobaby']);
 });
 test('蘑菇：长出咬痕的这一掷就变身', () => {
   const g = setup([['mush', 0], ['hotel', 20]]);
