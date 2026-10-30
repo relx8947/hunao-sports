@@ -30,19 +30,17 @@
 | `exports/characters.zip` | 独立人物插画素材包，附角色索引 |
 | `shared-sprites/` | 6 个共用精灵，供本游戏界面复原使用 |
 | `data/` | Prefab、精灵和位图字体数据 |
-| `source/MagicalAthlete/` | APK 中此模块的原始 JSON、PKM、JSC 与音频 |
-| `source/android/` | 原始来源对应的 Manifest 解码、版本与引擎配置 |
-| `apk/` | 完整原始安装包，供复核来源 |
+| `source/MagicalAthlete/` | APK 中此模块的原始 JSON、PKM 贴图与音频 |
 | `evidence/` | 下载来源、版本、校验和浏览检查结果 |
 | `scripts/` | 独立报告生成与验证脚本 |
 
-完整 APK 和原始引擎配置包含宿主应用信息，用于来源复核；分析页面只展示胡闹运动会。
+分析页面只展示胡闹运动会。
 
 ## 在游戏仓库中管理
 
-此目录的 PNG、JSON、目标模块源码和文档可纳入 `hunao-sports` 的 Git。原始 APK 与同级的完整交接 ZIP 由游戏项目的 `.gitignore` 排除，保留在本地；完整跨机器交接使用 ZIP。人物插画素材包 `exports/characters.zip` 体积较小，保留为直接使用入口。
+此目录的 PNG、JSON、素材和文档纳入 `hunao-sports` 的 Git。原始 APK、完整交接 ZIP、反编译出的安卓工程配置和编译后的游戏代码（`index.jsc`）有版权风险，已从仓库删除，并由 `.gitignore` 排除。人物插画素材包 `exports/characters.zip` 体积较小，保留为直接使用入口。
 
-Git 中没有 APK 时仍可浏览报告、使用插画、重新导出图片和生成报告；`verify_assets.py` 对原始资源逐字节校验需要 `apk/zhuosiyouxiang-4.26.2.apk`，来源见 `evidence/download.json`。
+没有 APK 也能浏览报告、使用插画、重新导出图片和生成报告；`verify_assets.py` 会跳过来源逐字节校验。需要校验时，按 `evidence/download.json` 自行取得 APK，放到 `apk/zhuosiyouxiang-4.26.2.apk`。
 
 ## 重新生成报告
 

@@ -6,7 +6,10 @@ node_modules/
 coverage/
 .DS_Store
 
-# 参考资料里的 APK 和打包 zip 体积大，走 Git LFS（见 .gitattributes）
+# 官方 APK 和含 APK 的打包 zip 有版权风险，不入库
+/reference/magical-athlete-analysis/apk/
+/reference/magical-athlete-analysis.zip
+/reference/magical-athlete-analysis.zip.sha256
 
 # 本地对局日志（server/gamelog.js）
 /logs/

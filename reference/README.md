@@ -5,6 +5,5 @@
 - [打开分析浏览页](magical-athlete-analysis/index.html)
 - [下载 36 张人物插画](magical-athlete-analysis/exports/characters.zip)
 - [阅读交接上下文](magical-athlete-analysis/HANDOFF.md)
-- [完整交接 ZIP](magical-athlete-analysis.zip)
 
-原始 APK 与完整交接 ZIP 保留在本地并由 Git 忽略。图片、解析数据、文档和脚本可纳入仓库；浏览和使用插画不依赖 APK。完整来源校验需要原始 APK。
+原始 APK 与完整交接 ZIP 有版权风险，不入库。图片、解析数据、文档和脚本纳入仓库；浏览和使用插画不依赖 APK。完整来源校验需要自行取得原始 APK。

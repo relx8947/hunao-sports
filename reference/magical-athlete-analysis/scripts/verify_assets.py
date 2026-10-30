@@ -53,20 +53,23 @@ def main():
         for link in re.findall(r'\]\(([^)]+)\)',(ROOT/file).read_text()):
             if not link.startswith(('http:','https:','#')) and not (ROOT/link).exists():errors.append('Broken Markdown link '+link)
     provenance=json.loads((ROOT/'evidence/download.json').read_text());apk=ROOT/'apk/zhuosiyouxiang-4.26.2.apk'
-    digest=hashlib.sha256()
-    with apk.open('rb') as stream:
-        for chunk in iter(lambda:stream.read(4*1024*1024),b''):digest.update(chunk)
-    sha256=digest.hexdigest()
-    if sha256!=provenance['sha256']:errors.append('APK SHA-256 differs from download record')
-    sources=0
-    with zipfile.ZipFile(apk) as archive:
-        for file in sorted((ROOT/'source/MagicalAthlete').rglob('*')):
-            if not file.is_file():continue
-            member='assets/assets/MagicalAthlete/'+file.relative_to(ROOT/'source/MagicalAthlete').as_posix()
-            if archive.read(member)!=file.read_bytes():errors.append('Source differs from APK '+member)
-            sources+=1
+    # 原始 APK 有版权风险，已不随仓库提供；自行按 evidence/download.json 取得并放到 apk/ 下才做来源逐字节校验
+    sha256=None;sources=None
+    if apk.is_file():
+        digest=hashlib.sha256()
+        with apk.open('rb') as stream:
+            for chunk in iter(lambda:stream.read(4*1024*1024),b''):digest.update(chunk)
+        sha256=digest.hexdigest()
+        if sha256!=provenance['sha256']:errors.append('APK SHA-256 differs from download record')
+        sources=0
+        with zipfile.ZipFile(apk) as archive:
+            for file in sorted((ROOT/'source/MagicalAthlete').rglob('*')):
+                if not file.is_file():continue
+                member='assets/assets/MagicalAthlete/'+file.relative_to(ROOT/'source/MagicalAthlete').as_posix()
+                if archive.read(member)!=file.read_bytes():errors.append('Source differs from APK '+member)
+                sources+=1
     if len(sprites)!=197 or len(shared)!=6 or len(prefabs)!=16:errors.append('Unexpected target resource counts')
-    result={'scope':'胡闹运动会 / MagicalAthlete','prefabs':len(prefabs),'sprites':len(sprites),'shared_sprites':len(shared),'ready_to_use_character_illustrations':len(characters),'source_files_match_apk':sources,'apk_sha256_matches_download':sha256==provenance['sha256'],'errors':errors,'passed':not errors}
+    result={'scope':'胡闹运动会 / MagicalAthlete','prefabs':len(prefabs),'sprites':len(sprites),'shared_sprites':len(shared),'ready_to_use_character_illustrations':len(characters),'source_files_match_apk':sources,'apk_sha256_matches_download':None if sha256 is None else sha256==provenance['sha256'],'errors':errors,'passed':not errors}
     (ROOT/'evidence/assets-check.json').write_text(json.dumps(result,ensure_ascii=False,indent=2));print(json.dumps(result,ensure_ascii=False,indent=2))
     if errors:raise SystemExit(1)
 

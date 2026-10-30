@@ -4,8 +4,8 @@
   "sprites": 197,
   "shared_sprites": 6,
   "ready_to_use_character_illustrations": 36,
-  "source_files_match_apk": 69,
-  "apk_sha256_matches_download": true,
+  "source_files_match_apk": null,
+  "apk_sha256_matches_download": null,
   "errors": [],
   "passed": true
 }

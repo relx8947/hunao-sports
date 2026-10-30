@@ -27,7 +27,6 @@
 | [36 张人物插画素材包](reference/magical-athlete-analysis/exports/characters.zip) | 256×256 透明 PNG，文件名直接使用角色名，可独立解压使用 |
 | [人物插画索引](reference/magical-athlete-analysis/data/characters.json) | 图片路径、角色名、尺寸、锚点、偏移和来源 UUID |
 | [交接说明与上下文](reference/magical-athlete-analysis/HANDOFF.md) | 已完成工作、证据边界、当前需求和路径迁移 |
-| [完整交接包](reference/magical-athlete-analysis.zip) | 包含报告、素材、原始目标资源及 APK 的可携带 ZIP |
 
 直接使用图片时，取 `reference/magical-athlete-analysis/assets/characters/` 中的 PNG。它们保留原插画像素，恢复了原始画布和偏移。`data/characters.json` 的 `asset_id` 是导出索引；游戏角色以 `game/racers.js` 的 `id` 为准，两套中文名称可能不同，需要按本项目的角色对应关系使用。
 
