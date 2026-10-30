@@ -4,21 +4,132 @@
   else root.Art = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   const INK = '#231F33';
+  const SKIN = '#F6C39B';
   const SW = 3;
   let uid = 0;
+  let sn = 0;
 
-  /* ---------- 基础图元 ---------- */
+  /* ---------- 手绘引擎（仅一代使用；kit 仍导出原版直线图元，二代不受影响） ---------- */
+  const f1 = (n) => (Math.round(n * 10) / 10).toString();
+  // 确定性伪随机：同一坐标永远得到同一抖动，叠层描边才能对齐
+  const nz = (x, y, s = 0) => { const v = Math.sin(x * 12.9898 + y * 78.233 + s * 37.719) * 43758.5453; return (v - Math.floor(v)) * 2 - 1; };
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const rgb = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const hex = (a) => '#' + a.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+  const shade = (h) => { const [r, g, b] = rgb(h); const l = (r + g + b) / 3; const k = l > 200 ? 0.78 : 0.68; return hex([r * k - 4, g * (k - 0.03) - 2, b * (k + 0.02) + 6]); };
+  const tint = (h, t = 0.5) => { const [r, g, b] = rgb(h); return hex([r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t]); };
+
+  // 路径抖动：顶点微抖 + 直线段改成轻微弯弓。仅处理 M L Q C Z（绝对坐标）
+  function wobble(d, amp = 0.7) {
+    if (/[^MLQCZ0-9.,\-\s]/.test(d)) return d;
+    const tk = d.match(/[MLQCZ]|-?\d*\.?\d+/g);
+    let out = '', i = 0, cx = 0, cy = 0, sx = 0, sy = 0, cmd = '';
+    const jp = (x, y) => [x + nz(x, y, 1) * amp, y + nz(x, y, 2) * amp];
+    const num = () => parseFloat(tk[i++]);
+    while (i < tk.length) {
+      if (/[MLQCZ]/.test(tk[i])) cmd = tk[i++];
+      if (cmd === 'Z') { out += 'Z'; cx = sx; cy = sy; continue; }
+      if (cmd === 'M') { const [x, y] = jp(num(), num()); out += `M${f1(x)} ${f1(y)}`; cx = sx = x; cy = sy = y; cmd = 'L'; }
+      else if (cmd === 'L') {
+        const [x, y] = jp(num(), num());
+        const len = Math.hypot(x - cx, y - cy);
+        if (len > 9) {
+          const b = nz(x + cx, y + cy, 3) * Math.min(len * 0.05, 1.3);
+          const mx = (x + cx) / 2 + (-(y - cy) / len) * b, my = (y + cy) / 2 + ((x - cx) / len) * b;
+          out += `Q${f1(mx)} ${f1(my)} ${f1(x)} ${f1(y)}`;
+        } else out += `L${f1(x)} ${f1(y)}`;
+        cx = x; cy = y;
+      } else if (cmd === 'Q') {
+        const [a, b] = jp(num(), num()); const [x, y] = jp(num(), num());
+        out += `Q${f1(a)} ${f1(b)} ${f1(x)} ${f1(y)}`; cx = x; cy = y;
+      } else if (cmd === 'C') {
+        const [a, b] = jp(num(), num()); const [c, e] = jp(num(), num()); const [x, y] = jp(num(), num());
+        out += `C${f1(a)} ${f1(b)} ${f1(c)} ${f1(e)} ${f1(x)} ${f1(y)}`; cx = x; cy = y;
+      } else break;
+    }
+    return out;
+  }
+  // 闭合平滑曲线（Catmull-Rom → 三次贝塞尔）
+  function blob(pts) {
+    const n = pts.length; let d = `M${f1(pts[0][0])} ${f1(pts[0][1])}`;
+    for (let i = 0; i < n; i++) {
+      const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+      d += `C${f1(p1[0] + (p2[0] - p0[0]) / 6)} ${f1(p1[1] + (p2[1] - p0[1]) / 6)} ${f1(p2[0] - (p3[0] - p1[0]) / 6)} ${f1(p2[1] - (p3[1] - p1[1]) / 6)} ${f1(p2[0])} ${f1(p2[1])}`;
+    }
+    return d + 'Z';
+  }
+  function ellipsePath(x, y, rx, ry, rot = 0) {
+    const n = Math.max(rx, ry) < 14 ? 8 : 12, ca = Math.cos((rot * Math.PI) / 180), sa = Math.sin((rot * Math.PI) / 180);
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (Math.PI * 2 * i) / n, k = 1 + 0.028 * nz(x + i, y, 5);
+      const px = rx * k * Math.cos(a), py = ry * k * Math.sin(a);
+      pts.push([x + px * ca - py * sa, y + px * sa + py * ca]);
+    }
+    return blob(pts);
+  }
+  const bbox = (d) => {
+    const v = d.match(/-?\d*\.?\d+/g).map(Number); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (let i = 0; i + 1 < v.length; i += 2) { x0 = Math.min(x0, v[i]); x1 = Math.max(x1, v[i]); y0 = Math.min(y0, v[i + 1]); y1 = Math.max(y1, v[i + 1]); }
+    return [x0, y0, x1, y1];
+  };
   const st = (w = SW) => `stroke="${INK}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
-  const C = (x, y, r, f, w) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}" ${st(w)}/>`;
-  const E = (x, y, rx, ry, f, w, rot) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${f}" ${st(w)}${rot ? ` transform="rotate(${rot} ${x} ${y})"` : ''}/>`;
-  const P = (d, f = 'none', w) => `<path d="${d}" fill="${f}" ${st(w)}/>`;
-  const R = (x, y, w, h, rx, f, sw) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${f}" ${st(sw)}/>`;
-  const L = (x1, y1, x2, y2, w = SW, col = INK) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;
-  const dot = (x, y, r, f = INK) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}"/>`;
-  // 描边粗线条（先画墨色粗线，再叠彩色细线）
-  const TL = (d, col, w = 8) => `<path d="${d}" fill="none" stroke="${INK}" stroke-width="${w + 5}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
-  const shadow = (cx = 50, rx = 28) => `<ellipse cx="${cx}" cy="91" rx="${rx}" ry="4.5" fill="${INK}" opacity=".14"/>`;
+  // 核心：粗细变化的轮廓 + 2 层色阶（受光面/背光面）+ 轻颗粒
+  function inkShape(d, f, w = SW, noShade = false) {
+    const wd = wobble(d);
+    if (f === 'none') return `<path d="${wd}" fill="none" ${st(w)}/>`;
+    if (!w) return `<path d="${wd}" fill="${f}"/>`;
+    const [x0, y0, x1, y1] = bbox(wd), bw = x1 - x0, bh = y1 - y0, size = Math.min(bw, bh);
+    if (noShade || size < 15 || !HEX.test(f)) return `<path d="${wd}" fill="${f}" ${st(w)}/>`;
+    const id = `h${uid}_${sn++}`, o = Math.min(5, Math.max(2.2, size * 0.12)), sh = shade(f);
+    let dots = '';
+    const n = Math.min(9, Math.round((bw * bh) / 380));
+    if (size >= 22) for (let i = 0; i < n; i++) dots += `M${f1(x0 + (nz(i, x0, 7) * 0.5 + 0.5) * bw)} ${f1(y0 + (nz(i, y0, 8) * 0.5 + 0.5) * bh)}h.01`;
+    return `<defs><path id="${id}" d="${wd}"/><clipPath id="${id}c"><use href="#${id}"/></clipPath></defs>` +
+      `<g clip-path="url(#${id}c)"><use href="#${id}" fill="${sh}"/><use href="#${id}" fill="${f}" transform="translate(${f1(-o)} ${f1(-o * 1.15)})"/>` +
+      (dots ? `<path d="${dots}" stroke="${INK}" stroke-opacity=".3" stroke-width="1.6" stroke-linecap="round" fill="none"/>` : '') + `</g>` +
+      `<use href="#${id}" fill="none" ${st(w * 1.08)}/><use href="#${id}" fill="none" ${st(w * 0.55)} transform="translate(.55 .6)"/>`;
+  }
+  const rrPath = (x, y, w, h, r) => {
+    r = Math.min(r, w / 2, h / 2);
+    return `M${x + r} ${y}L${x + w - r} ${y}Q${x + w} ${y} ${x + w} ${y + r}L${x + w} ${y + h - r}Q${x + w} ${y + h} ${x + w - r} ${y + h}L${x + r} ${y + h}Q${x} ${y + h} ${x} ${y + h - r}L${x} ${y + r}Q${x} ${y} ${x + r} ${y}Z`;
+  };
 
+  /* ---------- 基础图元：原版（kit 导出、二代沿用）与手绘版（一代内部使用） ---------- */
+  const classic = {
+    C: (x, y, r, f, w) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}" ${st(w)}/>`,
+    E: (x, y, rx, ry, f, w, rot) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${f}" ${st(w)}${rot ? ` transform="rotate(${rot} ${x} ${y})"` : ''}/>`,
+    P: (d, f = 'none', w) => `<path d="${d}" fill="${f}" ${st(w)}/>`,
+    R: (x, y, w, h, rx, f, sw) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${f}" ${st(sw)}/>`,
+    L: (x1, y1, x2, y2, w = SW, col = INK) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`,
+    TL: (d, col, w = 8) => `<path d="${d}" fill="none" stroke="${INK}" stroke-width="${w + 5}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`,
+    shadow: (cx = 50, rx = 28) => `<ellipse cx="${cx}" cy="91" rx="${rx}" ry="4.5" fill="${INK}" opacity=".14"/>`,
+  };
+  const handPrims = {
+    C: (x, y, r, f, w) => { x = +x; y = +y; return (r < 8 && f !== 'none' ? classic.C(x, y, r, f, w) : inkShape(ellipsePath(x, y, r, r), f, w)); },
+    E: (x, y, rx, ry, f, w, rot) => inkShape(ellipsePath(+x, +y, rx, ry, rot), f, w),
+    P: (d, f = 'none', w) => inkShape(d, f, w),
+    R: (x, y, w, h, rx, f, sw) => inkShape(rrPath(x, y, w, h, rx), f, sw),
+    L: (x1, y1, x2, y2, w = SW, col = INK) => {
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      if (len < 9) return classic.L(x1, y1, x2, y2, w, col);
+      const b = nz(x1 + x2, y1 + y2, 3) * Math.min(len * 0.05, 1.3);
+      const mx = (x1 + x2) / 2 - ((y2 - y1) / len) * b, my = (y1 + y2) / 2 + ((x2 - x1) / len) * b;
+      return `<path d="M${f1(x1)} ${f1(y1)}Q${f1(mx)} ${f1(my)} ${f1(x2)} ${f1(y2)}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;
+    },
+    // 四肢：墨边 + 本色 + 背光暗条
+    TL: (d, col, w = 8) => {
+      const wd = wobble(d, 0.5);
+      return `<path d="${wd}" fill="none" stroke="${INK}" stroke-width="${w + 5}" stroke-linecap="round" stroke-linejoin="round"/><path d="${wd}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>` +
+        (HEX.test(col) && w >= 4 ? `<path d="${wd}" fill="none" stroke="${shade(col)}" stroke-width="${f1(w * 0.34)}" stroke-linecap="round" transform="translate(${f1(w * 0.24)} ${f1(w * 0.2)})"/>` : '');
+    },
+    // 脚下地面阴影：硬边双层 + 两笔草痕
+    shadow: (cx = 50, rx = 28) => `<ellipse cx="${cx}" cy="91.5" rx="${rx}" ry="4.8" fill="${INK}" opacity=".13"/><ellipse cx="${cx + 2}" cy="91" rx="${f1(rx * 0.7)}" ry="3.2" fill="${INK}" opacity=".16"/><path d="M${cx - rx - 2} 92.5h5M${cx + rx - 3} 92.5h5" stroke="${INK}" stroke-width="1.6" stroke-linecap="round" opacity=".28"/>`,
+  };
+
+  function makeKit(prims) {
+    const { C, E, P, R, L, TL, shadow } = prims;
+    const dot = (x, y, r, f = INK) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}"/>`;
   function eye(x, y, r = 6, dx = 0.22, dy = 0.08) {
     const pr = r * 0.52;
     const px = x + dx * r, py = y + dy * r;
@@ -65,6 +176,11 @@
     }
     return t + L(x - w + 2, y + h / 2, x + w - 2, y + h / 2, 1.5);
   }
+    return { INK, SKIN, C, E, P, R, L, dot, TL, shadow, eye, lid, sleepy, spiralEye, heart, star, smile, openMouth, teethGrin };
+  }
+  const KIT = makeKit(classic);   // 原版：kit 导出，二代沿用
+  const HAND = makeKit(handPrims); // 手绘版：一代内部使用
+  const { C, E, P, R, L, TL, dot, shadow, eye, lid, sleepy, spiralEye, heart, star, smile, openMouth, teethGrin } = HAND;
 
   const wrap = (inner, cls = 'racer-svg') => `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="${cls}">${inner}</svg>`;
 
@@ -93,7 +209,6 @@
     romantic: '#FF7EB9', skipper: '#F4845F', thirdwheel: '#FFE66D', scoocher: '#A9713C', stickler: '#FF8FCB',
     twin: '#A7C957',
   };
-  const SKIN = '#F6C39B';
 
   const DRAW = {
     alchemist() {
@@ -105,6 +220,7 @@
         eye(44, 44, 4.6) + eye(56, 44, 4.6) +
         P('M34 50 Q35 70 50 82 Q65 70 66 50 Q58 57 50 55 Q42 57 34 50 Z', '#F28A2E') +
         P('M44 60 Q50 66 56 60', 'none', 2) +
+        P('M40 66 L42 72 M50 70 L50 77 M60 66 L58 72', 'none', 1.5) +
         C(50, 51, 3.6, '#F28482', 2.2) +
         R(72, 44, 7, 12, 2, '#E8F1FF', 2.6) +
         C(75.5, 68, 12, '#E8F1FF') +
@@ -120,6 +236,8 @@
         P('M20 36 Q46 30 76 38', 'none', 2) + P('M16 49 L80 49', 'none', 2) + P('M20 62 Q46 68 76 60', 'none', 2) +
         E(46, 49, 36, 21, 'none') +
         R(36, 70, 20, 9, 4, '#F25C54', 2.6) + L(40, 68, 40, 71, 2) + L(52, 68, 52, 71, 2) +
+        `<path d="M24 40 Q46 33 70 40" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="3.4" stroke-linecap="round"/>` +
+        dot(42, 52, 1.3) + dot(50, 52, 1.3) + dot(58, 52, 1.3) + dot(66, 51, 1.3) + P('M10 40 L4 36 M10 58 L4 62', 'none', 2.4) +
         eye(22, 44, 6.5, -0.1, 0) + eye(35, 42, 6.5, -0.1, 0) +
         E(27, 57, 4, 5, '#5A1A2E', 2.4) +
         P('M16 36 L22 38 M30 34 L36 36', 'none', 2.2);
@@ -130,6 +248,7 @@
         E(48, 66, 22, 22, '#6CC24A') +
         E(48, 72, 13, 14, '#D8F0B8', 2.4) +
         P('M26 60 L20 56 L24 52 M24 70 L18 68 L22 64', '#C5E86C', 2.2) +
+        TL('M40 56 L47 68', '#F4F1FF', 1.6) + R(42, 66, 11, 6, 3, '#FFD23F', 2) + dot(46, 69, 1.4) +
         P('M22 40 Q22 22 46 22 Q70 22 70 40 Q70 54 46 54 Q16 54 22 40 Z', '#6CC24A') +
         P('M20 38 Q14 42 20 48 L30 50', '#6CC24A', 2.6) +
         P('M22 30 Q44 6 68 28 Z', '#E63946') +
@@ -146,6 +265,7 @@
         TL('M26 88 L34 86 L40 90 M34 86 L32 92', '#F4A259', 3) + TL('M60 90 L66 86 L74 88 M66 86 L68 92', '#F4A259', 3) +
         R(24, 38, 52, 34, 3, '#FFC93C') +
         L(24, 48, 76, 48, 1.6, '#C98A1B') + L(24, 58, 76, 58, 1.6, '#C98A1B') + R(24, 38, 52, 34, 3, 'none') +
+        C(70, 8, 4, '#EFEAF7', 1.8) + C(77, 3.5, 3, '#EFEAF7', 1.6) +
         R(64, 12, 8, 16, 1.5, '#9C6644', 2.6) +
         P('M16 42 L50 12 L84 42 Z', '#E63946') + P('M28 32 L50 18 L72 32', 'none', 1.8) +
         R(31, 44, 13, 12, 2, '#fff', 2.6) + dot(39, 51, 3.2) +
@@ -154,9 +274,11 @@
     },
     centaur() {
       return shadow(54, 32) +
+        star(92, 76, 6.5, '#FFD23F', 1.8, 8, 0.45) + C(88, 89, 3, '#E9E4F2', 1.8) + C(94, 90, 2.4, '#E9E4F2', 1.6) +
         TL('M40 70 L36 88', '#C1121F', 5) + TL('M50 72 L50 88', '#C1121F', 5) + TL('M68 72 L70 88', '#C1121F', 5) + TL('M78 68 L84 86', '#C1121F', 5) +
         P('M82 56 Q98 50 94 68 Q92 80 84 72 Q90 66 84 62 Z', '#fff', 2.6) +
         E(60, 60, 26, 14, '#E23D4B') +
+        E(36, 89, 5.5, 2.8, INK, 0) + E(50, 89, 5.5, 2.8, INK, 0) + E(70, 89, 5.5, 2.8, INK, 0) + E(84, 87, 5.5, 2.8, INK, 0) +
         P('M34 18 Q56 6 64 22 Q76 30 78 48 Q68 40 62 42 Q64 32 50 28 Z', '#fff') +
         P('M24 66 Q18 46 28 38 L48 38 Q56 50 48 66 Z', '#F4A259') +
         C(37, 26, 12, '#F4A259') +
@@ -320,18 +442,20 @@
         P('M46 53 Q54 58 62 53', 'none', 2.2) + R(49, 54, 10, 8, 1.5, '#fff', 2.2) + L(54, 55, 54, 61, 1.6);
     },
     hypnotist() {
-      const body = 'M22 86 C6 80 10 64 30 64 C54 64 74 74 74 58 C74 48 62 44 54 44';
+      const body = 'M22 86 C6 80 10 64 30 64 C54 64 74 74 74 58 C74 48 62 46 54 46';
       return shadow(46, 30) +
         `<path d="${body}" fill="none" stroke="${INK}" stroke-width="19" stroke-linecap="round"/>` +
         `<path d="${body}" fill="none" stroke="#2EC4B6" stroke-width="13" stroke-linecap="round"/>` +
         `<path d="${body}" fill="none" stroke="#3A5BD9" stroke-width="13" stroke-dasharray="7 9" stroke-linecap="butt"/>` +
-        E(50, 30, 18, 15, '#3A5BD9') +
-        P('M50 44 L40 38 L40 50 Z M50 44 L60 38 L60 50 Z', '#E63946', 2.2) + C(50, 44, 3, '#E63946', 2.2) +
-        spiralEye(42, 26, 7) + spiralEye(58, 26, 7) +
-        P('M36 35 Q50 42 64 35', 'none', 2.4) +
-        P('M44 37 L44 43 M56 37 L56 43', '#fff', 1.6) +
-        P('M50 40 L50 52 L46 58 M50 52 L54 58', 'none', 0) +
-        P('M34 38 L22 42 L18 38 M22 42 L18 46', 'none', 2.2) + `<path d="M34 38 L22 42 L18 38 M22 42 L18 46" fill="none" stroke="#E63946" stroke-width="1.6" stroke-linecap="round"/>`;
+        P('M50 50 Q20 48 22 26 Q28 8 50 10 Q72 8 78 26 Q80 48 50 50 Z', '#2EC4B6') +
+        P('M50 50 Q32 46 32 28 Q34 16 50 16 Q66 16 68 28 Q68 46 50 50 Z', '#3A5BD9') +
+        P('M34 24 Q50 14 66 24', 'none', 2) +
+        spiralEye(42, 28, 7) + spiralEye(58, 28, 7) +
+        P('M37 38 Q50 46 63 38', 'none', 2.4) + P('M43 40 L44 45 M57 40 L56 45', '#fff', 1.6) +
+        P('M50 46 L50 54 L46 60 M50 54 L54 60', 'none', 2.4) + `<path d="M50 46 L50 54 L46 60 M50 54 L54 60" fill="none" stroke="#E63946" stroke-width="1.6" stroke-linecap="round"/>` +
+        L(84, 4, 84, 20, 2) + C(84, 4, 2, '#FFD23F', 1.6) +
+        C(84, 28, 9, '#FFD23F') + C(84, 28, 5.5, '#fff', 1.8) + P('M84 28 L84 24 M84 28 L87 29', 'none', 1.6) + R(82, 17, 4, 4, 1, '#FFD23F', 1.6) +
+        P('M70 50 Q74 54 82 52 M94 36 Q96 44 92 50', 'none', 1.4);
     },
     inchworm() {
       const seg = [[14, 80], [22, 70], [30, 60], [40, 52], [51, 50], [61, 56], [69, 66]];
@@ -347,26 +471,32 @@
         L(14, 88, 14, 91, 3) + L(80, 85, 80, 90, 3);
     },
     legs() {
-      const leg = (d) => `<path d="${d}" fill="none" stroke="${INK}" stroke-width="13" stroke-linecap="round"/><path d="${d}" fill="none" stroke="#3BB273" stroke-width="8" stroke-linecap="round"/><path d="${d}" fill="none" stroke="#1E7F4F" stroke-width="8" stroke-dasharray="3 6"/>`;
+      const leg = (d) => TL(d, '#3BB273', 8) + `<path d="${d}" fill="none" stroke="#1E7F4F" stroke-width="8" stroke-dasharray="3 6"/>`;
       return shadow(50, 36) +
-        leg('M44 34 L22 82') + leg('M56 34 L78 82') +
-        E(18, 86, 10, 5, '#E63946', 2.6) + E(82, 86, 10, 5, '#E63946', 2.6) +
-        P('M36 36 Q50 26 64 36 L60 42 Q50 38 40 42 Z', '#3BB273', 2.6) +
-        E(50, 20, 15, 13, '#FFD23F') +
+        leg('M45 54 L22 82') + leg('M55 54 L78 82') +
+        E(17, 86, 10, 5, '#E63946', 2.6) + E(83, 86, 10, 5, '#E63946', 2.6) +
+        TL('M37 38 Q27 44 25 55', '#F4F1FF', 4) + TL('M63 38 Q73 44 75 55', '#F4F1FF', 4) +
+        C(25, 58, 4.2, '#FFD23F', 2.4) + C(75, 58, 4.2, '#FFD23F', 2.4) +
+        P('M35 34 Q50 28 65 34 L62 57 Q50 61 38 57 Z', '#F4F1FF') +
+        P('M44 44 L56 44 M43 50 L57 50', 'none', 1.6) +
+        E(50, 19, 15, 13, '#FFD23F') +
+        P('M45 7 Q49 1 53 7 M50 6 Q56 2 58 8', 'none', 2.2) +
         eye(44, 16, 5, 0.1, 0.1) + eye(56, 16, 5, 0.1, 0.1) +
         teethGrin(50, 23, 7, 5) +
-        P('M50 34 L40 28 L40 40 Z M50 34 L60 28 L60 40 Z', '#E63946', 2.2) + C(50, 34, 2.8, '#E63946', 2);
+        P('M50 33 L40 27 L40 39 Z M50 33 L60 27 L60 39 Z', '#E63946', 2.2) + C(50, 33, 2.8, '#E63946', 2);
     },
     mastermind() {
       return shadow(50, 30) +
-        P('M20 88 Q22 62 50 60 Q78 62 80 88 Z', '#2D6A4F') + P('M42 62 L50 76 L58 62', '#fff', 2.2) + P('M47 66 L50 70 L53 66 L52 76 L48 76 Z', '#E63946', 1.8) +
-        E(46, 46, 16, 14, '#F6C39B') +
-        E(48, 24, 27, 16, '#D8F3DC') +
-        P('M28 22 Q34 14 40 22 Q46 12 52 20 Q58 12 64 22 Q70 18 72 28', 'none', 2) + P('M34 30 Q40 26 46 32 Q54 26 60 32', 'none', 2) +
-        P('M38 36 L46 40 M58 36 L50 40', 'none', 2.8) +
-        eye(42, 42, 4.5, 0.2, 0) + eye(54, 42, 4.5, 0.2, 0) +
-        P('M48 46 Q66 42 82 58 Q64 58 48 54 Z', '#F7801E') + L(52, 50, 74, 54, 1.6) +
-        C(46, 70, 5, '#F6C39B', 2.4) + C(54, 70, 5, '#F6C39B', 2.4);
+        P('M14 88 Q14 54 50 50 Q86 54 86 88 Z', '#2D6A4F') + P('M50 54 L50 88', 'none', 2) + P('M30 66 Q34 76 30 86 M70 66 Q66 76 70 86', 'none', 1.6) +
+        P('M22 54 Q16 14 50 10 Q84 14 78 54 Q64 46 50 48 Q36 46 22 54 Z', '#1F5A40') +
+        E(50, 36, 18, 16, '#14221B', 2.6) +
+        E(42, 36, 6, 5.5, '#FFE66D', 2) + E(58, 36, 6, 5.5, '#FFE66D', 2) + dot(43.5, 37, 2.8) + dot(59.5, 37, 2.8) +
+        P('M33 28 L47 33 M67 28 L53 33', 'none', 3) +
+        P('M50 38 L66 47 L52 48 Z', '#F6C39B', 2.4) +
+        P('M40 52 Q50 58 60 52', 'none', 2.4) + P('M45 54 L46 58 L48 55 M52 55 L54 58 L56 54', '#fff', 1.4) +
+        C(73, 66, 13, '#BDE0FE') + P('M64 62 Q66 56 73 55', 'none', 2.2) + star(73, 67, 6, '#FFD23F', 1.6) +
+        P('M63 78 L83 78 L80 86 L66 86 Z', '#7A4E1D', 2.4) +
+        C(58, 72, 5.4, '#F6C39B', 2.4);
     },
     lackey() {
       return shadow(50, 30) +
@@ -574,9 +704,13 @@
       P('M42 22 Q42 12 50 12 Q58 12 58 20 Q58 26 50 28 L50 32', 'none', 3.4) + dot(50, 38, 2.4) + smile(50, 64, 6, 2);
   }
 
+  // 一代 36 名有 APK 原画 PNG（public/img/racers/<id>.png，256×256 透明底）；页面加 ?art=svg 可切回自绘 SVG
+  const PHOTO = new Set('alchemist blimp coach babayaga centaur copycat banana cheerleader dicemonger duelist genius heckler egg gunk hugebaby flipflop hare hypnotist inchworm legs mastermind lackey loser mouth leaptoad magician partyanimal rocket sisyphus suckerfish romantic skipper thirdwheel scoocher stickler twin'.split(' '));
+  const usePhoto = !(typeof location !== 'undefined' && /[?&]art=svg\b/.test(location.search));
   function racer(id) {
+    if (usePhoto && PHOTO.has(id)) return wrap(`<image href="img/racers/${id}.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet"/>`, 'racer-svg racer-photo');
     const f = DRAW[id];
-    uid++;
+    uid++; sn = 0;
     return wrap(f ? f() : unknown());
   }
   function color(id) { return COLORS[id] || '#C9C3D9'; }
@@ -591,11 +725,13 @@
     arrowL: '<path d="M20 12H5M11 6l-6 6 6 6"/>',
     sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
     mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
+    music: '<path d="M9 17.5V5.5l10-2v12"/><path d="M9 9.5l10-2"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
     bolt: '<path d="M13.5 3L5.5 13.5H12L10.5 21l8-10.5H12z"/>',
     robot: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M9.5 16.2h5M3 12.5v3M21 12.5v3"/><circle cx="12" cy="4" r="1"/>',
     copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/>',
     users: '<circle cx="9" cy="8.5" r="3.5"/><path d="M3 19.5a6 6 0 0 1 12 0"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M17.5 14.2a6 6 0 0 1 3.5 5.3"/>',
     play: '<path d="M7.5 4.5v15l12-7.5z"/>',
+    eye: '<path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
     door: '<path d="M5 20.5h14M7 20.5V4.5h8.5v16"/><path d="M15.5 6.5l3.5 1.5v12.5M12.5 12.5h.01"/>',
     book: '<path d="M4 5.5a2 2 0 0 1 2-2h13v14H6a2 2 0 0 0-2 2z"/><path d="M4 19.5a2 2 0 0 0 2 2h13v-4M8 7.5h7"/>',
     check: '<path d="M4.5 12.5l5 5 10-11"/>',
@@ -609,11 +745,26 @@
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     chevron: '<path d="M9 5.5l6.5 6.5L9 18.5"/>',
     link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    more: '<circle cx="5.5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18.5" cy="12" r="1.6" fill="currentColor"/>',
+    chat: '<path d="M4.5 6.5a2.5 2.5 0 0 1 2.5-2.5h10a2.5 2.5 0 0 1 2.5 2.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4H7a2.5 2.5 0 0 1-2.5-2.5z"/><path d="M9 9.5h6M9 12.5h3.5"/>',
+    map: '<path d="M3.5 6.5l5.5-2.5 6 2.5 5.5-2.5v13.5L15 20l-6-2.5-5.5 2.5z"/><path d="M9 4v13.5M15 6.5V20"/>',
+    mic: '<rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/>',
+    micOff: '<rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7M4 4l16 16"/>',
+    ear: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="14" width="4" height="6.5" rx="1.5"/><rect x="16.5" y="14" width="4" height="6.5" rx="1.5"/>',
+    earOff: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="14" width="4" height="6.5" rx="1.5"/><rect x="16.5" y="14" width="4" height="6.5" rx="1.5"/><path d="M3 3l18 18"/>',
   };
   function icon(name, cls = 'icon') {
     const body = IC[name] || IC.star;
     return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" class="${cls}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
   }
 
-  return { racer, color, die, icon, ids: Object.keys(DRAW), INK };
+  // 扩展钩子：art2.js 等通过 register 追加运动员画法与主色，kit 暴露同一套基础图元
+  const ids = Object.keys(DRAW);
+  function register(id, fn, col) {
+    if (!DRAW[id]) ids.push(id);
+    DRAW[id] = fn;
+    if (col) COLORS[id] = col;
+  }
+  const kit = Object.assign({}, KIT, { dieInner, hand: HAND });
+  return { racer, color, die, icon, ids, INK, register, kit };
 });

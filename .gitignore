@@ -5,3 +5,8 @@ node_modules/
 *.log
 coverage/
 .DS_Store
+
+# 参考资料里的 APK 和打包 zip 体积大，走 Git LFS（见 .gitattributes）
+
+# 本地对局日志（server/gamelog.js）
+/logs/

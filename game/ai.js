@@ -9,8 +9,25 @@ function decide(game, d, seat) {
   const rnd = game.rand;
   const opts = d.simul ? d.optionsBySeat[seat] : d.options;
   const vals = opts.map((o) => o.v);
-  const me = game.racerOfSeat(seat);
+  // 二代的决策会带上发起技能的运动员 rid（一名玩家可能控制多名运动员）
+  const me = (d.rid && game.byRid(d.rid)) || game.racerOfSeat(seat);
   const has = (v) => vals.includes(v);
+  // 运动员本身带的技能（不管眼下有没有被空指针屏蔽：挪了位置可能就恢复了）
+  const innate = (o, k) => game.power(o) === k || !!(o.stack && o.stack.includes(k));
+  // 从 pos 走 n 格实际停在哪（算上箭头）
+  const landing = (pos, n) => { const sp = game.track && game.track.spaces[pos + n]; return pos + n + (sp && sp.type === 'arrow' ? sp.n : 0); };
+  // 水晶球：主移动达到 6 格直接淘汰。按常见的固定加成估一下，这次主移动的点数最多能到几还不出局（没有水晶球时不设上限）
+  const scryCap = () => {
+    if (!me || !game.twistOn('scrying')) return Infinity;
+    let lift = 0;
+    if (game.twistOn('conveyor')) lift += 3;
+    if (me.hogs) lift += 2 * me.hogs;
+    if (game.has(me, 'icarus')) lift += 3;
+    if (game.has(me, 'hare')) lift += 2;
+    if (game.has(me, 'speeddemon')) lift += game.score(me.seat);
+    if (game.holders('stepdad').some((sd) => sd !== me && game.stepchild(sd) === me)) lift += 2;
+    return 5 - lift;
+  };
 
   switch (d.kind) {
     case 'draft':
@@ -20,6 +37,8 @@ function decide(game, d, seat) {
     }
     case 'twin':
       return vals.filter((v) => v !== '_skip').sort((a, b) => tier(b) - tier(a))[0] || '_skip';
+    case 'copycat':
+      return vals.slice().sort((a, b) => tier(game.byRid(b)?.power) - tier(game.byRid(a)?.power))[0];
     case 'pickRacer': {
       // 后面的比赛分更高：先派弱的，强的留到后面
       const sorted = vals.slice().sort((a, b) => tier(a) - tier(b));
@@ -29,8 +48,11 @@ function decide(game, d, seat) {
       return vals[0];
     case 'mode': {
       const pos = me ? me.pos : 0;
+      const cap = scryCap();
       let best = 'roll', bestGain = 3.5;
-      if (has('legs')) { best = 'legs'; bestGain = 5; }
+      if (has('cheat')) { best = 'cheat'; bestGain = 4.2; }
+      if (has('legs') && cap >= 5) { best = 'legs'; bestGain = 5; }
+      if (has('mole') && cap >= 6) { best = 'mole'; bestGain = 6; }
       for (const v of vals) {
         if (!v.startsWith('flip:')) continue;
         const o = game.byRid(v.slice(5));
@@ -44,6 +66,9 @@ function decide(game, d, seat) {
     case 'reroll': {
       const roll = d.roll;
       const need = me ? FINISH - me.pos : 99;
+      // 伊卡洛斯掷出 6、水晶球下加上加成到 6，都是直接出局（冲线也救不了）：能重掷就重掷
+      const again = vals.find((v) => v !== 'keep');
+      if (again && ((me && game.has(me, 'icarus') && roll === 6) || roll > scryCap())) return again;
       const stickler = me && game.holders('stickler').some((s) => s !== me);
       if (stickler && need <= 6) return roll === need ? 'keep' : (vals.find((v) => v !== 'keep') || 'keep');
       if (roll >= need) return 'keep';
@@ -58,16 +83,23 @@ function decide(game, d, seat) {
       const need = me ? FINISH - me.pos : 99;
       const base = d.title.match(/把 (\d+) 翻倍/);
       const b = base ? Number(base[1]) : 3;
+      if (b * 2 > scryCap()) return 'no';
       if (b * 2 >= need && b < need) return 'yes';
       return b >= 3 ? 'yes' : 'no';
     }
     case 'cheerleader': {
-      // 如果自己就是最后一名，或者最后一名不是对手的领先威胁，就喊
-      return 'yes';
+      // 最后一名先各走 2 格（我也垫底就跟着走）：大嘴怪要是停到我那格，可能把我吃掉，稳妥起见不喊
+      if (!me) return 'yes';
+      const lasts = game.lasts();
+      const mine = lasts.includes(me) ? landing(me.pos, 2) : me.pos;
+      return lasts.some((l) => l !== me && landing(l.pos, 2) === mine && innate(l, 'mouth')) ? 'no' : 'yes';
     }
     case 'hypnotist': {
-      // 把跑得最快的对手拉回来（只拉在我前面的）
-      const cands = vals.filter((v) => v !== '_no').map((v) => game.byRid(v)).filter((o) => o && me && o.pos > me.pos + 1);
+      // 把跑得最快的对手拉回来（只拉在我前面的）；大嘴怪、芭芭雅嘎停到我格子上会吃掉/绊倒我，不拉。
+      // 模仿猫随时抄领跑者的技能，场上有这两种技能就也别拉它
+      const harmful = (o) => innate(o, 'mouth') || innate(o, 'babayaga');
+      const risky = (o) => harmful(o) || (o.power === 'copycat' && game.onTrack().some((x) => x.power !== 'copycat' && harmful(x)));
+      const cands = vals.filter((v) => v !== '_no').map((v) => game.byRid(v)).filter((o) => o && me && o.pos > me.pos + 1 && !risky(o));
       if (!cands.length) return '_no';
       cands.sort((a, b) => b.pos - a.pos);
       return cands[0].rid;
@@ -80,13 +112,80 @@ function decide(game, d, seat) {
       if (d.target == null) return 'yes';
       return me && d.target > me.pos ? 'yes' : 'no';
     }
-    case 'duel':
+    case 'duel': {
+      // 前进 2 格正好踩到退回本格的箭头：谁赢都会回到原地再决斗，没完没了（和大嘴怪这样决斗还会被它吃掉）
+      if (me && landing(me.pos, 2) === me.pos) return '_no';
       return vals.find((v) => v !== '_no') || '_no';
+    }
     case 'mastermind': {
       // 预言当前场上最强的运动员（包括自己）
       const on = game.onTrack();
       on.sort((a, b) => tier(b.power) + rnd() - (tier(a.power) + rnd()));
       return on.length ? on[0].rid : vals[0];
+    }
+    /* ---------- 二代 ---------- */
+    case 'soulmate': {
+      // 挑跑得最快（位置最靠前、强度最高）的对手做伴
+      const cands = vals.map((v) => game.byRid(v)).filter(Boolean);
+      cands.sort((a, b) => (tier(b.power) + b.pos * 0.3 + rnd()) - (tier(a.power) + a.pos * 0.3 + rnd()));
+      return cands.length ? cands[0].rid : vals[0];
+    }
+    case 'understudy':
+      return vals.slice().sort((a, b) => tier(game.byRid(b)?.power) + rnd() - tier(game.byRid(a)?.power) - rnd())[0];
+    case 'diva':
+      return vals[0];
+    case 'kingtripper': {
+      const foe = vals.find((v) => v !== '_no' && game.byRid(v) && game.byRid(v).seat !== seat);
+      return foe || '_no';
+    }
+    case 'kraken': {
+      if (!me) return 'no';
+      const gain = game.others(me).reduce((s, o) => s + (o.pos - me.pos), 0);
+      return gain >= 3 ? 'yes' : 'no';
+    }
+    case 'tail':
+      return 'yes';
+    case 'cheatahSet': {
+      const cap = Math.min(6, scryCap());
+      if (cap < 6) return String(Math.max(1, Math.ceil(rnd() * cap)));
+      return String(3 + Math.floor(rnd() * 4));
+    }
+    case 'cheatahGuess':
+      return String(rnd() < 0.8 ? 4 + Math.floor(rnd() * 3) : 1 + Math.floor(rnd() * 3));
+    case 'critic': {
+      const target = d.target && game.byRid(d.target);
+      return target && target.seat !== seat && (d.roll || 0) >= 4 ? 'yes' : 'no';
+    }
+    case 'nemesis':
+      return 'yes';
+    case 'showoff':
+      // 水晶球下再掷很容易累加过 6 出局，停下最稳
+      if (scryCap() < Infinity) return 'stop';
+      return (d.roll || 6) <= 2 ? 'more' : 'stop';
+    case 'diceguy': {
+      let nums = vals.map(Number);
+      const need = me ? FINISH - me.pos : 99;
+      // 水晶球：只在不出局的点数里挑；全都会出局就挑最小的
+      const cap = scryCap();
+      nums = nums.some((v) => v <= cap) ? nums.filter((v) => v <= cap) : [Math.min(...nums)];
+      if (nums.includes(need)) return String(need);
+      return String(Math.max(...nums));
+    }
+    case 'athleteWarp': {
+      const cands = vals.map((v) => game.byRid(v)).filter(Boolean);
+      cands.sort((a, b) => b.pos - a.pos);
+      return cands.length ? cands[0].rid : vals[0];
+    }
+    case 'switcharoo': {
+      if (!me) return '_no';
+      const better = vals.filter((v) => v !== '_no').map((v) => game.byRid(v)).filter((o) => o && o.pos > me.pos);
+      return better.length ? better[0].rid : '_no';
+    }
+    case 'swapmeet': {
+      const swap = opts.find((o) => o.v === 'swap');
+      const cur = game.racers.find((r) => r.seat === seat && !r.finished && !r.out);
+      if (!swap || !swap.card) return 'keep';
+      return tier(swap.card) > tier(cur ? cur.power : null) + 1 ? 'swap' : 'keep';
     }
     default:
       return vals[0];

@@ -1,0 +1,14 @@
+{
+  "roles": 36,
+  "prefabs": 16,
+  "role_search": [
+    "火箭专家"
+  ],
+  "zoom": true,
+  "assets": 197,
+  "dice": 37,
+  "dice_dialog_table": true,
+  "mobile_overflow": false,
+  "errors": [],
+  "passed": true
+}

@@ -1,0 +1,11 @@
+{
+  "source_page": "https://www.yrtgame.com/download.html",
+  "download_script": "https://www.yrtgame.com/src/download.js?v=47",
+  "official_redirect": "https://api.platform.yrtgame.com/api/other/android",
+  "distribution_page": "https://www.pgyer.com/dz93w3",
+  "download_url": "https://www.pgyer.com/app/install/70bd56cfaa864baacd4fe33e5187c1bd",
+  "resolved_url_without_temporary_signature": "https://oss.pgyer.com/989bb3db56ba1dda8603d9cf471a9945.apk",
+  "bytes": 128417197,
+  "sha256": "2935869dda4b5789a03dd4b0b2b721b1ca38c2204852bc4763d56e3f40de10a6",
+  "downloaded_at_utc": "2026-10-24T20:54:00Z"
+}

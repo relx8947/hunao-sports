@@ -1,0 +1,20 @@
+{
+  "application": "桌思游想",
+  "version_name": "4.26.2",
+  "version_code": 42602,
+  "package": "com.yrt.game.board",
+  "engine": "Cocos Creator 3.8.7",
+  "design_resolution": [
+    1080,
+    1920
+  ],
+  "abis": [
+    "arm64-v8a"
+  ],
+  "analysis_scope": "胡闹运动会 / MagicalAthlete",
+  "prefabs": 16,
+  "sprites": 197,
+  "shared_sprites": 6,
+  "role_count": 36,
+  "apk": "apk/zhuosiyouxiang-4.26.2.apk"
+}

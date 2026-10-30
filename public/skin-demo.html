@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>胡闹运动会 · 皮肤素材展示</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="skin.css">
+  <style>
+    body { overflow-y: auto; height: auto; padding: 16px 14px 60px; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 6px 0 2px; }
+    h2 { font-size: 15px; margin: 26px 0 10px; padding-left: 10px; border-left: 5px solid var(--yellow); }
+    .note { color: var(--ink2); font-size: 12.5px; margin: 0 0 8px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; }
+    .row figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .row figcaption { font-size: 11px; color: var(--ink3); }
+    .panel { background: var(--paper); border: 2.5px solid var(--ink); border-radius: 18px; box-shadow: var(--shadow); padding: 14px; }
+    .dark { background: #3a3550; border-radius: 14px; padding: 14px; }
+    /* 迷你赛道：蛇形 6 列 × 5 行 = 30 格 */
+    .track { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; max-width: 560px; margin: 0 auto; }
+    .track .c { position: relative; aspect-ratio: 1; }
+    .track .pc { position: absolute; width: 17%; pointer-events: none; transform: translate(-50%, -78%); z-index: 2; }
+    .piece { position: absolute; left: 0; width: 100%; bottom: 20%; }
+    .piece > .pic { position: absolute; left: 12%; width: 76%; bottom: 14%; }
+    .piece > .seatbox { display: block; width: 100%; }
+    .cards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; max-width: 560px; margin: 0 auto; }
+    .stat { font-size: 12px; color: var(--ink2); margin-top: 8px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>皮肤素材展示 <small style="font-weight:600;font-size:12px;color:var(--ink3)">skin.js · skin.css</small></h1>
+  <p class="note">全部原创 SVG / 纯 CSS：滤镜与 symbol 只注入一次，页面上的素材都是 &lt;use&gt; 引用。</p>
+
+  <h2>1 · 赛道格（红 黄 绿 蓝 紫 黑 白 · 28 / 48 / 72 / 120 / 200px）</h2>
+  <div class="panel" id="cells"></div>
+
+  <h2>1b · 角标数字与效果图标</h2>
+  <div class="panel row" id="marks"></div>
+
+  <h2>2 · 玩家底座（六色 + 备用粉橙）</h2>
+  <div class="panel" id="seats"></div>
+
+  <h2>3 · 骰子 · VS · 结果徽标</h2>
+  <div class="panel" id="dice"></div>
+
+  <h2>4 · 按钮（金黄主按钮 / 浅紫辅助按钮，可点按试回弹）</h2>
+  <div class="panel row" id="btns"></div>
+
+  <h2>5 · 玩家卡饰：头像双描边 · ★积分 · 名字条 · 奖牌 · 旗帜 · 绊倒 · 闪光</h2>
+  <div class="panel"><div class="cards" id="cards"></div></div>
+  <div class="panel row" id="deco" style="margin-top:12px"></div>
+
+  <h2>6 · 单个矢量爆花（深色底）</h2>
+  <div class="dark row" id="bursts"></div>
+
+  <h2>7 · 提示框 .sk-banner（700×90 比例）</h2>
+  <div class="panel" id="banners"></div>
+
+  <h2>综合：30 格赛道 + 6 棋子 + 骰子同屏</h2>
+  <div class="panel">
+    <div id="banner0" style="margin-bottom:10px"></div>
+    <div class="cards" id="cards2" style="margin-bottom:10px"></div>
+    <div class="track" id="track"></div>
+    <div style="display:flex;justify-content:center;gap:14px;align-items:center;margin-top:12px" id="roll"></div>
+    <div class="stat" id="stat"></div>
+  </div>
+</div>
+<script src="art.js"></script>
+<script src="art2.js"></script>
+<script src="skin.js"></script>
+<script>
+(function () {
+  const t0 = performance.now();
+  const $ = id => document.getElementById(id);
+  const fig = (svg, cap) => `<figure>${svg}<figcaption>${cap}</figcaption></figure>`;
+  const names = { red: '红', yellow: '黄', green: '绿', blue: '蓝', purple: '紫', black: '黑·起点', white: '白·终点' };
+
+  // 1 赛道格：每个尺寸一行
+  $('cells').innerHTML = [28, 48, 72, 120, 200].map(s =>
+    `<div class="row" style="margin-bottom:10px">${Skin.CELL_ORDER.map(c => fig(Skin.cell(c, { size: s, title: names[c] }), names[c])).join('')}</div>`
+  ).join('');
+
+  $('marks').innerHTML =
+    [5, 10, 15, 20, 25].map((n, i) => fig(Skin.cell(Skin.CELL_ORDER[i], { size: 72, num: n }), '角标 ' + n)).join('') +
+    ['score', 'move', 'trip', 'finish', 'start'].map((k, i) => fig(Skin.cell(['yellow', 'blue', 'green', 'white', 'black'][i], { size: 72, icon: k, label: false }), '图标 ' + k)).join('') +
+    ['score', 'move', 'trip'].map(k => fig(Skin.mark(k, { size: 56 }), k)).join('');
+
+  // 2 底座
+  $('seats').innerHTML = [28, 56, 96, 200].map(s =>
+    `<div class="row" style="margin-bottom:8px">${[...Skin.SEAT_ORDER, 'pink', 'orange'].map(c => fig(Skin.seat(c, { size: s }), c)).join('')}</div>`
+  ).join('');
+
+  // 3 骰子
+  const diceRow = (size, state) => `<div class="row" style="margin-bottom:8px">${[1, 2, 3, 4, 5, 6].map(n => fig(Skin.dice(n, { ...(typeof state === 'string' ? { } : state), size }), '')).join('')}</div>`;
+  $('dice').innerHTML =
+    `<div class="row">${[1, 2, 3, 4, 5, 6].map(n => fig(Skin.dice(n, 'idle').replace('class="sk ', 'style="width:84px" class="sk '), '')).join('')}</div>` +
+    `<p class="note">状态：idle / rolling（点击旋转）/ win / dim / flat，及 28 / 48px 小尺寸</p>` +
+    `<div class="row">${['idle', 'rolling', 'win', 'dim', 'flat'].map(s => fig(Skin.dice(5, s).replace('class="sk ', 'style="width:84px" class="sk '), s)).join('')}` +
+    `${[-24, 0, 24].map(t => fig(Skin.dice(3, { tilt: t, size: 84 }), '倾斜 ' + t + '°')).join('')}</div>` +
+    `<div class="row" style="margin-top:8px">${[1, 2, 3, 4, 5, 6].map(n => fig(Skin.dice(n, { size: 28, tilt: 0 }), '')).join('')}${[1, 2, 3, 4, 5, 6].map(n => fig(Skin.dice(n, { size: 48 }), '')).join('')}</div>` +
+    `<div class="row" style="margin-top:14px;justify-content:center;gap:0">` +
+    `<div style="width:120px;margin-right:-14px">${Skin.dice(5, { tilt: -10, win: true })}</div>` +
+    `<div style="width:100px;z-index:2;margin:0 -8px 0 -8px">${Skin.vs()}</div>` +
+    `<div style="width:120px;margin-left:-14px">${Skin.dice(2, { tilt: 12 })}</div></div>` +
+    `<div class="row" style="margin-top:12px;justify-content:center">${[28, 64, 120].map(s => fig(Skin.vs({ size: s }), 'VS ' + s)).join('')}` +
+    `${fig(Skin.plus(3, { size: 90 }), '+3')}${fig(Skin.plus(12, { size: 90 }), '+12')}${fig(Skin.plus(-2, { size: 90 }), '-2')}${fig(Skin.plus(5, { size: 48 }), '+5 48px')}</div>`;
+  document.querySelectorAll('#dice .sk-dice').forEach(el => el.addEventListener('click', () => el.classList.toggle('is-rolling')));
+
+  // 4 按钮
+  $('btns').innerHTML =
+    Skin.button('投掷骰子', '根据点数前进', 'primary') +
+    Skin.button('双倍前进', '骰子商人 0/1', 'secondary') +
+    Skin.button('确认移动', '前进 5 格', 'primary', 'style="font-size:20px"') +
+    Skin.button('状态恢复', '解除绊倒状态', 'secondary', 'style="font-size:13px"') +
+    Skin.button('准备', '', 'primary') +
+    Skin.button('不可用', '等待其他玩家', 'primary', 'disabled') +
+    `<button class="sk-btn primary" style="font-size:12px"><b class="sk-t">一个很长很长的标题文字</b><small class="sk-s">说明文字也会撑开宽度</small></button>`;
+
+  // 5 卡饰
+  const cols = ['#F2553C', '#4D9DF7', '#33B679', '#FFC53D', '#8B6CF0', '#3A3647'];
+  const nm = ['火箭专家', '天才', '飞艇', '骰子商人', '西西弗斯', '魔术师'];
+  const ids = Art.ids.slice(0, 6);
+  const card = (i, extra = {}) => Skin.pcard({ name: nm[i], color: cols[i], score: i === 4 ? 4 : 0, avatar: Art.racer(ids[i]), ...extra });
+  $('cards').innerHTML = cols.map((_, i) => card(i, i === 2 ? { active: true } : i === 5 ? { tripped: true } : {})).join('');
+  $('deco').innerHTML =
+    [1, 2, 3].map(r => fig(Skin.medal(r, { size: 80 }), 'rank_' + r)).join('') +
+    [1, 2].map(r => fig(Skin.medal(r, { size: 32 }), '32px')).join('') +
+    fig(Skin.star({ size: 48 }), '★ 48') + fig(Skin.star({ size: 20 }), '★ 20') + fig(Skin.star({ size: 48, empty: true }), '空星') +
+    fig(Skin.flag({ size: 56 }), '旗帜') + fig(Skin.flag({ size: 28 }), '28') + fig(Skin.finishFlag({ size: 56 }), '终点旗') + fig(Skin.startFlag({ size: 56 }), '起点旗') +
+    fig(Skin.tripMask({ size: 110 }), '绊倒遮罩') + fig(Skin.mark('trip', { size: 56 }), '绊倒') +
+    ['#FFC53D', '#F27AB8', '#4D9DF7', '#33B679'].map(c => fig(Skin.flash(c, { size: 64 }), '闪光')).join('');
+
+  // 6 爆花
+  $('bursts').innerHTML = ['#F2553C', '#FFC53D', '#4D9DF7', '#33B679', '#F27AB8', '#8B6CF0'].map((c, i) => fig(Skin.burst(c, { size: i % 2 ? 72 : 120, small: i === 3 }), '').replace('<figcaption></figcaption>', '')).join('');
+
+  // 7 提示框
+  $('banners').innerHTML =
+    Skin.banner('请选择 飞艇 要进行的回合操作', { round: '1/4' }) + '<div style="height:10px"></div>' +
+    Skin.banner('西西弗斯 触发了能力：全体后退 2 格', { round: '12/20' }) + '<div style="height:10px"></div>' +
+    Skin.banner('轮到你了，快掷骰子') ;
+
+  // 综合赛道
+  const order = ['red', 'yellow', 'blue', 'green', 'purple', 'yellow', 'green', 'red', 'blue', 'purple', 'green', 'yellow', 'red', 'purple', 'blue', 'yellow', 'green', 'blue', 'red', 'purple', 'blue', 'green', 'yellow', 'purple', 'red', 'green', 'blue', 'yellow', 'red', 'blue'];
+  // 蛇形路径：仿原作 U 形折返，6 列
+  const grid = [];
+  const colorAt = i => order[i % order.length];
+  let html = '';
+  for (let i = 0; i < 30; i++) {
+    const r = Math.floor(i / 6), c0 = i % 6, c = r % 2 ? 5 - c0 : c0;
+    grid.push({ i, r, c });
+  }
+  grid.sort((a, b) => a.r - b.r || a.c - b.c);
+  grid.forEach(g => {
+    const i = g.i;
+    const color = i === 0 ? 'black' : i === 29 ? 'white' : colorAt(i);
+    html += `<div class="c">${Skin.cell(color, i % 5 === 0 && i && i < 29 ? { num: i } : {})}</div>`;
+  });
+  $('track').innerHTML = html;
+  const where = [0, 3, 8, 8, 14, 21];
+  const seatCols = Skin.SEAT_ORDER;
+  const track = $('track');
+  where.forEach((idx, k) => {
+    const g = grid.find(x => x.i === idx);
+    const off = (k % 3) * 8 - 8; // 同格错开
+    const p = document.createElement('div');
+    p.className = 'pc';
+    p.style.left = ((g.c + 0.5) / 6 * 100 + (idx === 8 ? off * 0.5 : 0)) + '%';
+    p.style.top = ((g.r + 0.78) / 5 * 100) + '%';
+    p.innerHTML = `<div class="piece"><span class="seatbox">${Skin.seat(seatCols[k])}</span><span class="pic">${Art.racer(ids[k])}</span></div>`;
+    track.appendChild(p);
+  });
+  $('banner0').innerHTML = Skin.banner('请选择 飞艇 要进行的回合操作', { round: '1/4' });
+  $('cards2').innerHTML = cols.map((_, i) => card(i)).join('');
+  $('roll').innerHTML = `<div style="width:84px">${Skin.dice(4, { tilt: -10 })}</div><div style="width:84px">${Skin.dice(2, { tilt: 10 })}</div>` +
+    Skin.button('投掷骰子', '根据点数前进', 'primary');
+  const n = document.querySelectorAll('svg').length;
+  $('stat').textContent = `页面内 ${n} 个 SVG；共享 defs 约 ${(Skin.defs().length / 1024).toFixed(0)} KB；渲染脚本耗时 ${(performance.now() - t0).toFixed(0)} ms`;
+})();
+</script>
+</body>
+</html>

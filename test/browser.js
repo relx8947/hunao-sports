@@ -1,76 +1,70 @@
 'use strict';
-// 真实浏览器冒烟：首页 → 和 AI 开一局 → 选秀 → 出牌 → 比赛若干回合，截图并收集控制台错误
-const path = require('path');
-const PW_DIR = '/home/dev/project/playgroud/orca/node_modules/.pnpm/playwright@1.59.1/node_modules';
-const { chromium } = require(path.join(PW_DIR, 'playwright'));
+// 单人整局验收：隔离后端、实际按钮操作、四场成绩和总冠军强断言。
+// 一代（默认）、二代、混合三种模式各从首页选模式开一局快速局，并行跑完四场；EDITIONS=v1,v2 可只跑部分模式。
+const assert = require('node:assert/strict');
+const { launch, step, state, snapshot, assertFinished, clickTop } = require('./browser-helper');
 
-const BASE = process.env.BASE || 'http://localhost:18160';
-const OUT = process.env.OUT || '/tmp/hunao';
-const W = Number(process.env.W || 1440), H = Number(process.env.H || 900);
-const MAX_MS = Number(process.env.MAX_MS || 150000);
-const FULL = !!process.env.FULL;
-const domClick = (page, sel) => page.evaluate((s) => { const n = document.querySelector(s); if (!n) return false; n.click(); return true; }, sel);
+const EDITION_NAME = { v1: '一代', v2: '二代', mix: '混合' };
+
+async function playOne(app, edition) {
+  const width = Number(process.env.W || 390), height = Number(process.env.H || 844);
+  const page = await app.page(`浏览器测试${EDITION_NAME[edition]}`, { width, height });
+  const tag = edition === 'v1' ? '' : `${edition}-`;
+  const home = await snapshot(page, app.out, `${tag}01-home`);
+  assert(home.scrollWidth <= home.width + 1, '首页不能横向溢出');
+  // 默认一代；其他模式在首页的分段选择器里切换
+  assert.equal(await page.locator('#editionSeg [data-ed="v1"]').getAttribute('aria-checked'), 'true', '首页默认一代');
+  if (edition !== 'v1') await page.locator(`#editionSeg [data-ed="${edition}"]`).click();
+  await page.locator('#aiCount [data-v="2"]').click();
+  await page.locator('#quickBtn').click();
+  await page.locator('#game').waitFor({ state: 'visible' });
+  const sent = await page.evaluate(() => window.__testSent.filter(message => message.type === 'quick').at(-1));
+  assert.deepEqual(sent, { type: 'quick', ai: 2, edition }, 'quick 必须携带所选模式');
+  await clickTop(page, '#speedBtn');
+  await clickTop(page, '#speedBtn');
+  const started = Date.now();
+  const limit = Number(process.env.MAX_MS || 600000);
+  const shots = new Set();
+  const kinds = new Set();
+  let actions = 0, final, idleSince = Date.now(), lastSeq = -1;
+  while (Date.now() - started < limit) {
+    const st = await state(page);
+    if (st.final && st.visual.phase === 'over' && !st.visual.playing) { final = st; break; }
+    const phase = st.visual.phase;
+    if (st.visual.pending && st.visual.pending.kind) kinds.add(st.visual.pending.kind);
+    if (phase && !shots.has(phase) && !st.visual.playing && !st.visual.queue) {
+      await snapshot(page, app.out, `${tag}phase-${phase}`);
+      shots.add(phase);
+    }
+    // 卡死检测：快照序号长时间不前进且轮到自己却没有可点的选项，说明有未覆盖的决策
+    const seq = st.game && st.game.snap.seq;
+    if (seq !== lastSeq) { lastSeq = seq; idleSince = Date.now(); }
+    if (Date.now() - idleSince > 60000) {
+      const pending = st.game && st.game.snap.pending;
+      throw new Error(`${EDITION_NAME[edition]}快速局卡住：pending=${JSON.stringify(pending && { kind: pending.kind, seat: pending.seat })}`);
+    }
+    if (await step(page)) actions++;
+    else await page.waitForTimeout(150);
+  }
+  assert(final, `${EDITION_NAME[edition]}：在 ${limit}ms 内必须完成四场，最后状态 ${JSON.stringify((await state(page)).visual)}`);
+  assertFinished(final);
+  assert.equal(final.game.snap.edition, edition, '对局模式与所选一致');
+  assert.equal(final.visual.edition, edition, '前端识别到本局模式');
+  const badge = await page.evaluate(() => [...document.querySelectorAll('#races .race-ed, #topTitle .tt-ed')].filter(e => e.getClientRects().length).map(e => e.textContent));
+  assert.deepEqual(badge, [EDITION_NAME[edition]], '游戏页显示且只显示一枚本局模式标签');
+  assert(final.accepted >= 8, '必须有至少八次服务端确认的真人操作');
+  assert.equal(final.rejected.length, 0, '正常操作不应被服务器拒绝');
+  await snapshot(page, app.out, `${tag}06-final`);
+  return { edition, actions, scores: final.game.snap.players.map(p => p.score).join('/'), kinds: [...kinds] };
+}
 
 (async () => {
-  require('fs').mkdirSync(OUT, { recursive: true });
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: '/home/dev/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell',
-  });
-  const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, isMobile: W < 600, hasTouch: W < 600 });
-  const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
-
-  await page.goto(BASE, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1200);
-  await page.screenshot({ path: `${OUT}/01-home.png` });
-  await page.fill('#nameInput', '测试选手');
-  await page.click('#quickBtn');
-  await page.waitForSelector('#game:not([hidden])');
-  // 房主加速
-  if (!process.env.SLOW) { await page.click('#speedBtn'); await page.click('#speedBtn'); }
-
-  const t0 = Date.now();
-  const shots = { draft: false, pick: false, race: false, results: false, final: false, prompt: false };
-  let actions = 0;
-  while (Date.now() - t0 < MAX_MS) {
-    await page.waitForTimeout(250);
-    const st = await page.evaluate(() => ({
-      draft: !document.querySelector('#draft').hidden,
-      draftPick: !!document.querySelector('#draftCards .rcard.pickable'),
-      ov: document.querySelector('#overlay').hidden ? null : (document.querySelector('#overlay .ov-box h2') || {}).textContent,
-      pickCards: !!document.querySelector('#pickCards .rcard.pickable'),
-      chooseCards: !!document.querySelector('#overlay .rcard.pickable') && !document.querySelector('#pickCards'),
-      dockBtns: [...document.querySelectorAll('#dock .prompt.mine [data-v]')].filter((b) => !b.disabled).map((b) => b.dataset.v),
-      final: !!document.querySelector('#toHome'),
-      results: !!document.querySelector('#overlay .podium') && !document.querySelector('#toHome'),
-      tokens: document.querySelectorAll('#tokens .token').length,
-    }));
-    if (!shots.wild && st.tokens && /第 2 场/.test(await page.textContent('#topTitle')) && st.dockBtns.length) { await page.screenshot({ path: `${OUT}/07-wild.png` }); shots.wild = true; if (process.env.STOP_AT_WILD) break; }
-    if (st.draft && !shots.draft) { await page.waitForTimeout(900); await page.screenshot({ path: `${OUT}/02-draft.png` }); shots.draft = true; }
-    if (st.draftPick) { await domClick(page, '#draftCards .rcard.pickable'); actions++; continue; }
-    if (st.pickCards) {
-      if (!shots.pick) { await page.waitForTimeout(700); await page.screenshot({ path: `${OUT}/03-pick.png` }); shots.pick = true; }
-      await domClick(page, '#pickCards .rcard.pickable'); actions++; continue;
-    }
-    if (st.chooseCards) { await domClick(page, '#overlay .rcard.pickable'); actions++; continue; }
-    if (st.results && !shots.results) { await page.waitForTimeout(900); await page.screenshot({ path: `${OUT}/05-results.png` }); shots.results = true; if (process.env.STOP_AT_RESULTS) break; }
-    if (st.final) {
-      await page.waitForTimeout(800);
-      await page.screenshot({ path: `${OUT}/06-final.png` }); shots.final = true; break;
-    }
-    if (st.dockBtns.length) {
-      if (!shots.prompt && st.dockBtns.length > 1) { await page.screenshot({ path: `${OUT}/04b-prompt.png` }); shots.prompt = true; }
-      if (!shots.race && st.tokens) { await page.screenshot({ path: `${OUT}/04-race.png` }); shots.race = true; }
-      const v = st.dockBtns.includes('roll') ? 'roll' : st.dockBtns[0];
-      await domClick(page, `#dock [data-v="${v}"]`);
-      actions++;
-      if (!FULL && shots.race && actions > 40) break;
-    }
-  }
-  await page.screenshot({ path: `${OUT}/99-last.png` });
-  console.log('动作数', actions, '截图', Object.entries(shots).filter(([, v]) => v).map(([k]) => k).join(','));
-  console.log('控制台错误', errors.length ? errors : '无');
-  await browser.close();
-})().catch((e) => { console.error(e); process.exit(1); });
+  const app = await launch();
+  try {
+    const editions = (process.env.EDITIONS || 'v1,v2,mix').split(',').filter(Boolean);
+    const results = await Promise.all(editions.map(edition => playOne(app, edition)));
+    assert.equal(app.errors.length, 0, app.errors.join('\n'));
+    for (const r of results) console.log(`${EDITION_NAME[r.edition]}四场验收通过：${r.actions} 次操作；比分 ${r.scores}；决策 ${r.kinds.join(',')}`);
+    console.log('单人四场验收通过（含模式）：页面/资源错误 0');
+  } finally { await app.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

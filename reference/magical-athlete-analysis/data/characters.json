@@ -1,0 +1,770 @@
+{
+  "schema_version": 1,
+  "source": "桌思游想 4.26.2 / MagicalAthlete",
+  "count": 36,
+  "format": "PNG RGBA",
+  "canvas": [
+    256,
+    256
+  ],
+  "placement_rule": "left=(originalWidth-trimmedWidth)/2+offset.x; top=(originalHeight-trimmedHeight)/2-offset.y",
+  "asset_id_note": "Export identifiers follow the extracted reference order and are not runtime character IDs.",
+  "characters": [
+    {
+      "asset_id": "athlete_01",
+      "name": "乐子人",
+      "image": "assets/characters/乐子人.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        175,
+        241
+      ],
+      "placement": [
+        41,
+        8
+      ],
+      "source_uuid": "dae7aebc-eb27-441c-a6fe-fbcb71474f63@f9941",
+      "sha256": "0f634b6c22d478ea09fd40c650303534a2a4b28fddf85ef0786deb3bdc1dda27"
+    },
+    {
+      "asset_id": "athlete_02",
+      "name": "死脑筋",
+      "image": "assets/characters/死脑筋.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        123,
+        248
+      ],
+      "placement": [
+        67,
+        5
+      ],
+      "source_uuid": "77e4a482-2ac4-426f-b7a5-c9e199a61044@f9941",
+      "sha256": "b722c17b458afcba0fca83cc1e441307ac901abbf46b984575a64ee5c543d5cc"
+    },
+    {
+      "asset_id": "athlete_03",
+      "name": "人字拖",
+      "image": "assets/characters/人字拖.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        115,
+        245
+      ],
+      "placement": [
+        71,
+        6
+      ],
+      "source_uuid": "832a3a73-daa9-40f1-84bb-f7122ce92105@f9941",
+      "sha256": "bc08c248698249a39ff54c805fbc3d92b10e02e8bee8aaf3a72ad6585df2dc11"
+    },
+    {
+      "asset_id": "athlete_04",
+      "name": "催眠大师",
+      "image": "assets/characters/催眠大师.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        233,
+        247
+      ],
+      "placement": [
+        12,
+        5
+      ],
+      "source_uuid": "df2efe35-2f96-45d0-9fd0-c4324043255c@f9941",
+      "sha256": "05850c655fad95817c2dd455feb9a053640604cd32b185d14cfdde95a177eb14"
+    },
+    {
+      "asset_id": "athlete_05",
+      "name": "决斗者",
+      "image": "assets/characters/决斗者.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        159,
+        245
+      ],
+      "placement": [
+        48,
+        6
+      ],
+      "source_uuid": "00b86b0b-fa8c-4292-8efd-1918c4747611@f9941",
+      "sha256": "7c84ffbfc451cfe6692ba404678505bfc44b535da5d4d0c86ecb43c9b810159f"
+    },
+    {
+      "asset_id": "athlete_06",
+      "name": "半人马",
+      "image": "assets/characters/半人马.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        214,
+        245
+      ],
+      "placement": [
+        22,
+        6
+      ],
+      "source_uuid": "92952fdb-8a43-4eee-af95-ffe6c0113542@f9941",
+      "sha256": "2c3fa8083ae35be1419cacccfb32914ea272a9c7bf5dc9aa717bff02a950694e"
+    },
+    {
+      "asset_id": "athlete_07",
+      "name": "双胞胎",
+      "image": "assets/characters/双胞胎.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        170,
+        249
+      ],
+      "placement": [
+        44,
+        4
+      ],
+      "source_uuid": "95701c39-5987-4f96-9982-64b1a685df0e@f9941",
+      "sha256": "4abe4285d20349ad8357319661218fbe76641f09a7089b114facbb2f52a5b461"
+    },
+    {
+      "asset_id": "athlete_08",
+      "name": "吸盘鱼",
+      "image": "assets/characters/吸盘鱼.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        245,
+        157
+      ],
+      "placement": [
+        6,
+        50
+      ],
+      "source_uuid": "eccf6243-58f3-43f2-a186-197ffd8714b8@f9941",
+      "sha256": "88da3fc81e1b3868342edbe2cabd081fa30caa83eb5b87714fe07cfbc9b97cd2"
+    },
+    {
+      "asset_id": "athlete_09",
+      "name": "大嘴巴",
+      "image": "assets/characters/大嘴巴.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        161,
+        246
+      ],
+      "placement": [
+        48,
+        6
+      ],
+      "source_uuid": "516665ab-2f0c-4ac8-acaa-7010e3065f4e@f9941",
+      "sha256": "11c6e314e0b7fec949fe902a7942b2b1c23a24f376f151290326aa1b20c1335b"
+    },
+    {
+      "asset_id": "athlete_10",
+      "name": "大长腿",
+      "image": "assets/characters/大长腿.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        95,
+        245
+      ],
+      "placement": [
+        81,
+        6
+      ],
+      "source_uuid": "a0cfd219-17ab-49cc-bee6-9511ad283da9@f9941",
+      "sha256": "6d76e9f53233f6628e06d6763132d676262dd03c4762ad93338b2676eed933bc"
+    },
+    {
+      "asset_id": "athlete_11",
+      "name": "天才",
+      "image": "assets/characters/天才.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        177,
+        240
+      ],
+      "placement": [
+        40,
+        9
+      ],
+      "source_uuid": "5f8e6750-92c1-44e8-b03d-f08261a638f7@f9941",
+      "sha256": "930689825447c852c1294c860a85c6cf5e0aacecfe3b10a5f6c1e787eaa58873"
+    },
+    {
+      "asset_id": "athlete_12",
+      "name": "小可怜",
+      "image": "assets/characters/小可怜.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        237,
+        194
+      ],
+      "placement": [
+        10,
+        32
+      ],
+      "source_uuid": "e7a48bc7-3d4a-450e-bc91-655b826b5916@f9941",
+      "sha256": "2a0fa3e6ec87214da64f79ac9d7f4045ee3ead7523f47e1df5aa13b6977853e6"
+    },
+    {
+      "asset_id": "athlete_13",
+      "name": "巨婴",
+      "image": "assets/characters/巨婴.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        152,
+        242
+      ],
+      "placement": [
+        53,
+        6
+      ],
+      "source_uuid": "cf018687-c7a5-4c0e-b957-9a9f188d483b@f9941",
+      "sha256": "599873836dc62df861dba58685a1fa7d0a9dfbc9beddd86dca748491b6c0aed7"
+    },
+    {
+      "asset_id": "athlete_14",
+      "name": "幕后黑手",
+      "image": "assets/characters/幕后黑手.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        190,
+        245
+      ],
+      "placement": [
+        34,
+        6
+      ],
+      "source_uuid": "1d29a9b4-a5ab-492f-bf32-59a24d7ff854@f9941",
+      "sha256": "e40940c21461ab2bdcc31d1b36c36a96f74b632a8e2ce674a2b6619cda988a2d"
+    },
+    {
+      "asset_id": "athlete_15",
+      "name": "恋爱脑",
+      "image": "assets/characters/恋爱脑.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        213,
+        240
+      ],
+      "placement": [
+        22,
+        9
+      ],
+      "source_uuid": "c42cca99-80b1-48de-997e-bbb9d12aa028@f9941",
+      "sha256": "6ec88c7230a7b736b8b7bc69b878857794177ccddf5539a80d83de2bb64b360f"
+    },
+    {
+      "asset_id": "athlete_16",
+      "name": "拉拉队",
+      "image": "assets/characters/拉拉队.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        177,
+        245
+      ],
+      "placement": [
+        40,
+        4
+      ],
+      "source_uuid": "82078666-cd53-4528-9c3e-d4c523e27465@f9941",
+      "sha256": "ac047d9e03c8e633ac7a6fef808c06fc4c4478b0acbd5923361d4e27fdb7003e"
+    },
+    {
+      "asset_id": "athlete_17",
+      "name": "教练",
+      "image": "assets/characters/教练.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        193,
+        247
+      ],
+      "placement": [
+        14,
+        5
+      ],
+      "source_uuid": "74e3d531-294e-4e57-b69b-668a0717197f@f9941",
+      "sha256": "9967f537e267ec8ea88bf466937c697088b26c770263b1f40f4962736c1f3003"
+    },
+    {
+      "asset_id": "athlete_18",
+      "name": "模仿猫",
+      "image": "assets/characters/模仿猫.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        252,
+        253
+      ],
+      "placement": [
+        2,
+        2
+      ],
+      "source_uuid": "a457142d-7edb-47c7-acbe-89735bfa0d76@f9941",
+      "sha256": "2abc8752db8807c7b4019534cca5a33e98074017c123c3957a7632d24d7cc0b8"
+    },
+    {
+      "asset_id": "athlete_19",
+      "name": "派对高手",
+      "image": "assets/characters/派对高手.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        132,
+        246
+      ],
+      "placement": [
+        63,
+        5
+      ],
+      "source_uuid": "0eb8e379-aac4-424c-8869-1209661b86b8@f9941",
+      "sha256": "ac2e31dac775e800c73cb04c536037888a36e35063dc34a759ee7c879c27c764"
+    },
+    {
+      "asset_id": "athlete_20",
+      "name": "火箭专家",
+      "image": "assets/characters/火箭专家.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        162,
+        242
+      ],
+      "placement": [
+        48,
+        6
+      ],
+      "source_uuid": "12b24524-7d03-4fdd-9530-de6721b617b9@f9941",
+      "sha256": "7afbf61ed552514de31cb3469dfec6e1b15b87c5619389ad1cbc06dd640d8f77"
+    },
+    {
+      "asset_id": "athlete_21",
+      "name": "炼金术士",
+      "image": "assets/characters/炼金术士.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        189,
+        246
+      ],
+      "placement": [
+        34,
+        6
+      ],
+      "source_uuid": "6d146cc2-de79-469e-ae9e-32979c80ff76@f9941",
+      "sha256": "4f756616e79a26bc98fbdbab67a1eb71ac0ed72c7e3eabcc816c2a0bfc2955b5"
+    },
+    {
+      "asset_id": "athlete_22",
+      "name": "狗腿子",
+      "image": "assets/characters/狗腿子.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        163,
+        237
+      ],
+      "placement": [
+        45,
+        8
+      ],
+      "source_uuid": "ef32c58d-b6d3-4a46-aeb1-dd76cc4b616d@f9941",
+      "sha256": "261d4e158bebb98c60241f0e78ecceaa6771ecae37c329a7397229ec6bc7f23d"
+    },
+    {
+      "asset_id": "athlete_23",
+      "name": "电灯泡",
+      "image": "assets/characters/电灯泡.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        147,
+        245
+      ],
+      "placement": [
+        55,
+        6
+      ],
+      "source_uuid": "ce59499e-018f-4d17-859c-88e3de550394@f9941",
+      "sha256": "6894e156bb68ee098f2e7e6513602f4ddfcaf2e473cbce40f824163d31c0e037"
+    },
+    {
+      "asset_id": "athlete_24",
+      "name": "船长",
+      "image": "assets/characters/船长.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        149,
+        242
+      ],
+      "placement": [
+        54,
+        8
+      ],
+      "source_uuid": "77a88a0c-c55e-4696-9b1a-3daab5aec40b@f9941",
+      "sha256": "1efc1184ef282f8c1e57f37f0fff9a3a64a88338d1d11bc4d215bde6017d798e"
+    },
+    {
+      "asset_id": "athlete_25",
+      "name": "芭芭雅嘎",
+      "image": "assets/characters/芭芭雅嘎.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        144,
+        242
+      ],
+      "placement": [
+        57,
+        6
+      ],
+      "source_uuid": "941ab862-ecb8-4184-af78-1fb323191873@f9941",
+      "sha256": "f57eaf1ed3faad48e97be3d481f83f001efd739ddadbbac3e3545b075db19f9a"
+    },
+    {
+      "asset_id": "athlete_26",
+      "name": "蛋蛋",
+      "image": "assets/characters/蛋蛋.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        167,
+        244
+      ],
+      "placement": [
+        45,
+        6
+      ],
+      "source_uuid": "6aa3d784-5a5b-4cfb-98bb-98e71a41d9a2@f9941",
+      "sha256": "f69efe36fe444be7b100c07845157beafe862ea172f2251cec97bab39a3533cf"
+    },
+    {
+      "asset_id": "athlete_27",
+      "name": "蠕虫",
+      "image": "assets/characters/蠕虫.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        162,
+        246
+      ],
+      "placement": [
+        47,
+        6
+      ],
+      "source_uuid": "cc710810-e7e1-48e1-a998-427831557c66@f9941",
+      "sha256": "3476362dc09e1366d8fbd28cd325674c41e939318b777fd2a6bac14fca515cae"
+    },
+    {
+      "asset_id": "athlete_28",
+      "name": "西西弗斯",
+      "image": "assets/characters/西西弗斯.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        242,
+        215
+      ],
+      "placement": [
+        8,
+        21
+      ],
+      "source_uuid": "f4d1528a-8e96-4ddb-8de1-6cc7a9d29580@f9941",
+      "sha256": "b6b187f2e4fed7e9de6388087b2b1335c40f21bbd915e8b326623f0c51ab0d98"
+    },
+    {
+      "asset_id": "athlete_29",
+      "name": "跳跳蛙",
+      "image": "assets/characters/跳跳蛙.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        245,
+        233
+      ],
+      "placement": [
+        6,
+        12
+      ],
+      "source_uuid": "b0cea7b3-35e1-439f-be5f-246ca67fa87e@f9941",
+      "sha256": "bd4e6859f7b951d60a43b2c6185942dd80e505ba08e3f11af5d2d9d36c2aec92"
+    },
+    {
+      "asset_id": "athlete_30",
+      "name": "蹭蹭狗",
+      "image": "assets/characters/蹭蹭狗.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        207,
+        251
+      ],
+      "placement": [
+        25,
+        3
+      ],
+      "source_uuid": "d12482a1-1558-43bd-b422-e3db31e11bc3@f9941",
+      "sha256": "b8dfb6b97e0da9656401a824731674aa8a0756bd123f3d08dc6b4ae0207c9a6a"
+    },
+    {
+      "asset_id": "athlete_31",
+      "name": "飞兔",
+      "image": "assets/characters/飞兔.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        152,
+        245
+      ],
+      "placement": [
+        53,
+        6
+      ],
+      "source_uuid": "33c850d4-d8a8-456e-a09d-a2933f4e7eac@f9941",
+      "sha256": "0dc24eea7e0c37456e5326c27dd805420153b979301b5dd04ca2285bd30717f1"
+    },
+    {
+      "asset_id": "athlete_32",
+      "name": "飞艇",
+      "image": "assets/characters/飞艇.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        246,
+        139
+      ],
+      "placement": [
+        6,
+        59
+      ],
+      "source_uuid": "54e82501-daa2-43c9-89fa-1a123d5d15f4@f9941",
+      "sha256": "e52e0f705731c64c42cea9a42e4b3ec597bb17142443f6b6808fafa148adf8c8"
+    },
+    {
+      "asset_id": "athlete_33",
+      "name": "香蕉人",
+      "image": "assets/characters/香蕉人.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        145,
+        247
+      ],
+      "placement": [
+        55,
+        5
+      ],
+      "source_uuid": "efddf8ef-ba77-4c17-94eb-ea3684ec5f8f@f9941",
+      "sha256": "115a4bc193fb2458aeb08f1ee5a100a8713f98399b830faf72992c55a23de9e3"
+    },
+    {
+      "asset_id": "athlete_34",
+      "name": "骰子商人",
+      "image": "assets/characters/骰子商人.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        137,
+        247
+      ],
+      "placement": [
+        60,
+        5
+      ],
+      "source_uuid": "4fe4bdcb-82e4-4a6d-ac79-f9405f284a46@f9941",
+      "sha256": "6048d9ef5415023a8a7432c35d2a8f8647a38849e16863a11ae761c3c4f13f26"
+    },
+    {
+      "asset_id": "athlete_35",
+      "name": "魔术师",
+      "image": "assets/characters/魔术师.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        195,
+        245
+      ],
+      "placement": [
+        31,
+        6
+      ],
+      "source_uuid": "c726930c-5c0f-4fb8-94d8-a668821ac929@f9941",
+      "sha256": "c7ee93ec7db7d3e4feb1ccacab1c18cf5f5e197ac2bef689b200985c061866e9"
+    },
+    {
+      "asset_id": "athlete_36",
+      "name": "黏糊糊",
+      "image": "assets/characters/黏糊糊.png",
+      "width": 256,
+      "height": 256,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "trimmed_size": [
+        231,
+        241
+      ],
+      "placement": [
+        13,
+        8
+      ],
+      "source_uuid": "e951567b-1db9-42d5-b333-3cc1f3eb15b1@f9941",
+      "sha256": "95c1b537c55b5bd9211b1f9e5fb8e9f335bccccdad44e810c499e132937713da"
+    }
+  ]
+}
