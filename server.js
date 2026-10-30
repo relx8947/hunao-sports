@@ -216,6 +216,7 @@ function createServer({ publicDir = PUBLIC, hub } = {}) {
 module.exports = { createServer };
 
 if (require.main === module) {
+  // 对局日志目录：HUNAO_LOG_DIR > systemd StateDirectory（如 /var/lib/hunao-sports）> 仓库内 logs/（已 gitignore）
   const logDir = process.env.HUNAO_LOG_DIR
     || (process.env.STATE_DIRECTORY ? path.join(process.env.STATE_DIRECTORY.split(':')[0], 'games') : path.join(__dirname, 'logs', 'games'));
   // 语音 TURN 中继（可选）：HUNAO_TURN_URLS 逗号分隔，HUNAO_TURN_SECRET 与 coturn 的 static-auth-secret 一致

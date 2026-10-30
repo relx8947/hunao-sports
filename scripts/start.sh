@@ -8,4 +8,4 @@ systemctl --user enable --now hunao-sports.service
 sudo install -m 644 -o root -g root "$DIR/deploy/hunao-sports.nginx.conf" /etc/nginx/sites-available/hunao-sports.conf
 if local-nginx-sites list | grep -q '^hunao-sports[[:space:]]enabled'; then sudo local-nginx-sites reload; else sudo local-nginx-sites enable hunao-sports; fi
 sleep 1
-curl -fsS http://127.0.0.1:18160/healthz && echo && echo "已启动：http://dev-host:18160/"
+curl -fsS http://127.0.0.1:18160/healthz && echo && echo "已启动：http://$(hostname -f):18160/"
